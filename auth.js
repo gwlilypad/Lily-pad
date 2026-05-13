@@ -176,13 +176,18 @@
       setLoading(signupBtn, true);
       try {
         const result = await signUp(email, password, name);
+        console.log('[Lily Pad Auth] Signup response:', JSON.stringify({ id: result.id, email: result.email, has_token: !!result.access_token }));
         if (result.access_token) {
           hideGate();
+        } else if (result.id) {
+          // User created but email confirmation required — stay on signup form and show success
+          setSuccess('signup-success', 'Account created! Check your inbox to confirm your email, then sign in.');
+          signupBtn.style.display = 'none';
         } else {
-          setSuccess('signup-error', 'Check your email to confirm your account, then sign in.');
-          showForm('form-login');
+          setError('signup-error', 'Something went wrong. Please try again.');
         }
       } catch (err) {
+        console.error('[Lily Pad Auth] Signup error:', err.message);
         setError('signup-error', err.message);
       } finally {
         setLoading(signupBtn, false);

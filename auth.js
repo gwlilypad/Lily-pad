@@ -149,7 +149,7 @@
     document.getElementById('goto-forgot').addEventListener('click', () => showForm('form-forgot'));
     document.getElementById('back-to-login').addEventListener('click', () => showForm('form-login'));
 
-    loginBtn.addEventListener('click', async () => {
+    document.getElementById('login-form').addEventListener('submit', async () => {
       const email = document.getElementById('login-email').value.trim();
       const password = document.getElementById('login-password').value;
       if (!email || !password) { setError('login-error', 'Please enter your email and password.'); return; }
@@ -165,7 +165,7 @@
       }
     });
 
-    signupBtn.addEventListener('click', async () => {
+    document.getElementById('signup-form').addEventListener('submit', async () => {
       const name = document.getElementById('signup-name').value.trim();
       const email = document.getElementById('signup-email').value.trim();
       const password = document.getElementById('signup-password').value;
@@ -189,7 +189,7 @@
       }
     });
 
-    forgotBtn.addEventListener('click', async () => {
+    document.getElementById('forgot-form').addEventListener('submit', async () => {
       const email = document.getElementById('forgot-email').value.trim();
       if (!email) { setError('forgot-error', 'Please enter your email address.'); return; }
       clearErrors();
@@ -202,19 +202,6 @@
       } finally {
         setLoading(forgotBtn, false);
       }
-    });
-
-    [
-      ['login-email', 'login-password'],
-      ['signup-name', 'signup-email', 'signup-password'],
-      ['forgot-email'],
-    ].forEach((fields, i) => {
-      const btns = [loginBtn, signupBtn, forgotBtn];
-      fields.forEach(id => {
-        document.getElementById(id).addEventListener('keydown', e => {
-          if (e.key === 'Enter') btns[i].click();
-        });
-      });
     });
   }
 

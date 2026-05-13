@@ -13,16 +13,18 @@
     <div id="form-login" class="auth-form active">
       <h2 class="auth-title">Welcome back.</h2>
       <p class="auth-subtitle">Sign in to your account.</p>
-      <div class="auth-field">
-        <label>Email</label>
-        <input type="email" id="login-email" placeholder="you@example.com" autocomplete="email" />
-      </div>
-      <div class="auth-field">
-        <label>Password</label>
-        <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" />
-      </div>
-      <div id="login-error" class="auth-error"></div>
-      <button id="login-btn" class="auth-btn-primary">Sign in</button>
+      <form id="login-form" onsubmit="return false;">
+        <div class="auth-field">
+          <label for="login-email">Email</label>
+          <input type="email" id="login-email" placeholder="you@example.com" autocomplete="email" />
+        </div>
+        <div class="auth-field">
+          <label for="login-password">Password</label>
+          <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" />
+        </div>
+        <div id="login-error" class="auth-error"></div>
+        <button id="login-btn" type="submit" class="auth-btn-primary">Sign in</button>
+      </form>
       <button id="goto-forgot" class="auth-link">Forgot password?</button>
       <p class="auth-switch">Don't have an account? <button id="goto-signup" class="auth-link-inline">Sign up</button></p>
     </div>
@@ -31,20 +33,22 @@
     <div id="form-signup" class="auth-form">
       <h2 class="auth-title">Create your account.</h2>
       <p class="auth-subtitle">Join Lily Pad today.</p>
-      <div class="auth-field">
-        <label>Full name</label>
-        <input type="text" id="signup-name" placeholder="Your name" autocomplete="name" />
-      </div>
-      <div class="auth-field">
-        <label>Email</label>
-        <input type="email" id="signup-email" placeholder="you@example.com" autocomplete="email" />
-      </div>
-      <div class="auth-field">
-        <label>Password</label>
-        <input type="password" id="signup-password" placeholder="Create a strong password" autocomplete="new-password" />
-      </div>
-      <div id="signup-error" class="auth-error"></div>
-      <button id="signup-btn" class="auth-btn-primary">Create account</button>
+      <form id="signup-form" onsubmit="return false;">
+        <div class="auth-field">
+          <label for="signup-name">Full name</label>
+          <input type="text" id="signup-name" placeholder="Your name" autocomplete="name" />
+        </div>
+        <div class="auth-field">
+          <label for="signup-email">Email</label>
+          <input type="email" id="signup-email" placeholder="you@example.com" autocomplete="email" />
+        </div>
+        <div class="auth-field">
+          <label for="signup-password">Password</label>
+          <input type="password" id="signup-password" placeholder="Create a strong password" autocomplete="new-password" />
+        </div>
+        <div id="signup-error" class="auth-error"></div>
+        <button id="signup-btn" type="submit" class="auth-btn-primary">Create account</button>
+      </form>
       <p class="auth-switch">Already have an account? <button id="goto-login" class="auth-link-inline">Sign in</button></p>
     </div>
 
@@ -52,13 +56,15 @@
     <div id="form-forgot" class="auth-form">
       <h2 class="auth-title">Forgot your password?</h2>
       <p class="auth-subtitle">Enter your email address and we'll send a reset link.</p>
-      <div class="auth-field">
-        <label>Email</label>
-        <input type="email" id="forgot-email" placeholder="you@example.com" autocomplete="email" />
-      </div>
-      <div id="forgot-error" class="auth-error"></div>
-      <div id="forgot-success" class="auth-success"></div>
-      <button id="forgot-btn" class="auth-btn-primary">Send reset link</button>
+      <form id="forgot-form" onsubmit="return false;">
+        <div class="auth-field">
+          <label for="forgot-email">Email</label>
+          <input type="email" id="forgot-email" placeholder="you@example.com" autocomplete="email" />
+        </div>
+        <div id="forgot-error" class="auth-error"></div>
+        <div id="forgot-success" class="auth-success"></div>
+        <button id="forgot-btn" type="submit" class="auth-btn-primary">Send reset link</button>
+      </form>
       <p class="auth-switch"><button id="back-to-login" class="auth-link-inline">Back to sign in</button></p>
     </div>
   </div>

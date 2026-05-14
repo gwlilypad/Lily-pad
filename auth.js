@@ -85,12 +85,14 @@
 
   // ── Element hiding ────────────────────────────────────────────────────────
   function hideUnwantedElements() {
+    const appRoot = document.getElementById('root');
+
     Array.from(document.querySelectorAll('button')).forEach(btn => {
       const text  = btn.textContent.trim();
-      const title = (btn.title || '').toLowerCase();
 
-      // Hide the Renter/Driver toggle pill and its parent container.
-      if (text === 'Renter' || text === 'Driver') {
+      // Hide the Renter/Driver toggle pill — only inside #root so we don't
+      // accidentally hide our own auth overlay's role-picker buttons.
+      if ((text === 'Renter' || text === 'Driver') && appRoot && appRoot.contains(btn)) {
         hide(btn);
         hide(btn.parentElement);
       }
@@ -102,10 +104,14 @@
         hide(btn);
         hide(btn.parentElement);
       }
+    });
 
-      // Hide 44×44 map overlay home button (title="Back to home" / "Back to admin")
-      if (title.includes('back to home') || title.includes('back to admin')) {
-        hide(btn);
+    // Hide the map "Back to home" / "Back to admin" button.
+    // Query ALL elements with a matching title — not just <button> tags.
+    document.querySelectorAll('[title]').forEach(el => {
+      const t = (el.title || '').toLowerCase();
+      if (t.includes('back to home') || t.includes('back to admin')) {
+        hide(el);
       }
     });
 
@@ -129,15 +135,23 @@
   function injectSignOutFab() {
     if (document.getElementById('lp-so-fab')) return;
 
-    // Find the app's outermost rendered div (first child of #root)
     const root = document.getElementById('root');
-    if (!root || !root.firstElementChild) return;
-    const container = root.firstElementChild;
+    if (!root) return;
 
-    // Ensure container can hold absolutely-positioned children
+    // The first child of #root is the React app's outermost div.
+    // After a route change it may not exist yet — retry until it appears.
+    const container = root.firstElementChild;
+    if (!container) {
+      setTimeout(injectSignOutFab, 120);
+      return;
+    }
+
+    // Ensure the container can hold absolutely-positioned children
+    // and that the FAB is never clipped by an overflow:hidden parent.
     if (getComputedStyle(container).position === 'static') {
       container.style.position = 'relative';
     }
+    container.style.setProperty('overflow', 'visible', 'important');
 
     const fab = document.createElement('button');
     fab.id = 'lp-so-fab';

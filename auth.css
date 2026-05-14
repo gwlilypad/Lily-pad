@@ -5,18 +5,26 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #fff;
+  background: #f0f2f5;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  transition: opacity 0.4s ease;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+/* Gate starts hidden; JS removes .hidden then adds .visible to fade in */
+#auth-gate.hidden {
+  display: none;
+}
+
+#auth-gate.visible {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 #auth-gate.hiding {
   opacity: 0;
   pointer-events: none;
-}
-
-#auth-gate.hidden {
-  display: none;
 }
 
 #auth-container {
@@ -29,7 +37,6 @@
   box-shadow: none;
 }
 
-/* On larger screens (tablet/desktop preview) keep the card look */
 @media (min-width: 480px) {
   #auth-gate {
     background: #f0f2f5;

@@ -4,7 +4,6 @@
 
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     console.warn('[Lily Pad] Supabase config missing.');
-    hideGate();
     return;
   }
 
@@ -83,21 +82,40 @@
     location.reload();
   }
 
+  // ── Gate show / hide ─────────────────────────────────────────────────────
+  function showGate() {
+    const gate = document.getElementById('auth-gate');
+    if (!gate) return;
+    gate.classList.remove('hidden', 'hiding');
+    void gate.offsetWidth;
+    gate.classList.add('visible');
+  }
+
+  function hideGate() {
+    const gate = document.getElementById('auth-gate');
+    if (!gate || gate.classList.contains('hidden')) return;
+    gate.classList.remove('visible');
+    gate.classList.add('hiding');
+    setTimeout(() => {
+      gate.classList.remove('hiding');
+      gate.classList.add('hidden');
+    }, 420);
+  }
+
   // ── Element hiding ────────────────────────────────────────────────────────
   function hideUnwantedElements() {
     const appRoot = document.getElementById('root');
 
     Array.from(document.querySelectorAll('button')).forEach(btn => {
-      const text  = btn.textContent.trim();
+      const text = btn.textContent.trim();
 
-      // Hide the Renter/Driver toggle pill — only inside #root so we don't
-      // accidentally hide our own auth overlay's role-picker buttons.
+      // Hide the Renter/Driver toggle pill — only inside #root
       if ((text === 'Renter' || text === 'Driver') && appRoot && appRoot.contains(btn)) {
         hide(btn);
         hide(btn.parentElement);
       }
 
-      // Hide 36×36 circular top-bar icon buttons (landing page nav/home icons)
+      // Hide 36×36 circular top-bar icon buttons
       const w = parseInt(btn.style.width);
       const h = parseInt(btn.style.height);
       if (w === 36 && h === 36) {
@@ -106,8 +124,7 @@
       }
     });
 
-    // Hide the map "Back to home" / "Back to admin" button.
-    // Query ALL elements with a matching title — not just <button> tags.
+    // Hide the map "Back to home" / "Back to admin" element
     document.querySelectorAll('[title]').forEach(el => {
       const t = (el.title || '').toLowerCase();
       if (t.includes('back to home') || t.includes('back to admin')) {
@@ -115,12 +132,46 @@
       }
     });
 
-    // Hide class-based home button (used inside step/booking flows)
     document.querySelectorAll('.home-icon-btn').forEach(hide);
   }
 
   function hide(el) {
     if (el) el.style.setProperty('display', 'none', 'important');
+  }
+
+  // ── Early guard: hides unwanted elements before and after auth ────────────
+  function startHidingGuard() {
+    const root = document.getElementById('root');
+    if (!root) return;
+    hideUnwantedElements();
+    const guard = new MutationObserver(hideUnwantedElements);
+    guard.observe(root, { childList: true, subtree: true });
+  }
+
+  // ── Full guard: hides + keeps sign-out FAB alive after auth ───────────────
+  function startGuard() {
+    const root = document.getElementById('root');
+    if (!root) return;
+    const guard = new MutationObserver(() => {
+      hideUnwantedElements();
+      injectSignOutButtons();
+    });
+    guard.observe(root, { childList: true, subtree: true });
+  }
+
+  // ── Intercept landing page CTA buttons → show sign-in gate ──────────────
+  function interceptLandingButtons() {
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('button');
+      if (!btn) return;
+      const text = btn.textContent.trim();
+      if (text === 'Find a pad' || text === 'List my lily pad') {
+        e.stopPropagation();
+        e.preventDefault();
+        showForm('form-login');
+        showGate();
+      }
+    }, true);
   }
 
   // ── Sign-out button injection ─────────────────────────────────────────────
@@ -129,25 +180,18 @@
     injectAdminSignOut();
   }
 
-  // Persistent "Sign out" pill injected into the app's own root container.
-  // Uses position:absolute inside #root so it stays within the phone frame
-  // in the Replit preview AND is correct in the deployed full-screen app.
   function injectSignOutFab() {
     if (document.getElementById('lp-so-fab')) return;
 
     const root = document.getElementById('root');
     if (!root) return;
 
-    // The first child of #root is the React app's outermost div.
-    // After a route change it may not exist yet — retry until it appears.
     const container = root.firstElementChild;
     if (!container) {
       setTimeout(injectSignOutFab, 120);
       return;
     }
 
-    // Ensure the container can hold absolutely-positioned children
-    // and that the FAB is never clipped by an overflow:hidden parent.
     if (getComputedStyle(container).position === 'static') {
       container.style.position = 'relative';
     }
@@ -182,12 +226,7 @@
     console.log('[Lily Pad] Sign-out FAB injected');
   }
 
-  // Inject a red "Sign out" button into the admin/staff preview banner.
-  // The banner: position:absolute; top:0; left:0; right:0; zIndex:600; background:#0E1F40
   function injectAdminSignOut() {
-    if (document.getElementById('lp-admin-so')) return;
-
-    // Find the banner by its unique combination of inline styles + text content
     const banner = Array.from(document.querySelectorAll('div')).find(div => {
       if (div.style.zIndex !== '600') return false;
       if (div.style.position !== 'absolute') return false;
@@ -196,7 +235,6 @@
     });
     if (!banner) return;
 
-    // Remove any existing injected button (React re-render guard)
     const old = document.getElementById('lp-admin-so');
     if (old) old.remove();
 
@@ -223,9 +261,6 @@
   }
 
   // ── Navigate to map after auth ────────────────────────────────────────────
-  // onNavDone is called as soon as the toggle is clicked (or tab-bar found).
-  // afterAuth() passes hideGate as onNavDone so the gate stays up until
-  // navigation happens — the user never sees the Renter/Driver toggle.
   function navigateToMap(role, onNavDone) {
     const targetLabel = (role === 'padRenter') ? 'Driver' : 'Renter';
     let done = false;
@@ -234,7 +269,7 @@
       if (done) return;
       done = true;
       console.log('[Lily Pad] Navigation complete:', reason);
-      if (onNavDone) onNavDone();     // hides the gate
+      if (onNavDone) onNavDone();
       hideUnwantedElements();
       startGuard();
       wireSignOut();
@@ -244,8 +279,6 @@
     function tryClick() {
       if (done) return;
 
-      // Primary: find the Renter/Driver toggle button by text content.
-      // The toggle has no class — match by exact text only (original reliable approach).
       const btn = Array.from(document.querySelectorAll('button'))
         .find(b => b.textContent.trim() === targetLabel);
       if (btn) {
@@ -255,7 +288,6 @@
         return;
       }
 
-      // Fallback A: any button that routes to "find" view (tab-bar "Find" button)
       const findTab = Array.from(document.querySelectorAll('.tab-bar button'))
         .find(b => b.textContent.includes('Find') || b.classList.contains('active-tab'));
       if (findTab) {
@@ -265,14 +297,12 @@
         return;
       }
 
-      // Fallback B: tab-bar exists but no toggle — we're already on map view
       if (document.querySelector('.tab-bar') &&
           !Array.from(document.querySelectorAll('button')).find(b => b.textContent.trim() === targetLabel)) {
         complete('already on map');
       }
     }
 
-    // MutationObserver: fires when React renders into #root
     const root = document.getElementById('root');
     const obs = new MutationObserver(() => {
       tryClick();
@@ -280,13 +310,11 @@
     });
     if (root) obs.observe(root, { childList: true, subtree: true });
 
-    // Polling as safety net (catches case where React already rendered)
     const poll = setInterval(() => {
       tryClick();
       if (done) clearInterval(poll);
     }, 80);
 
-    // Hard timeout: give up after 8s and just show+guard the app
     setTimeout(() => {
       clearInterval(poll);
       obs.disconnect();
@@ -302,17 +330,6 @@
     }, 8000);
   }
 
-  // ── Persistent guard: re-hide after every React re-render ────────────────
-  function startGuard() {
-    const root = document.getElementById('root');
-    if (!root) return;
-    const guard = new MutationObserver(() => {
-      hideUnwantedElements();
-      injectSignOutButtons();
-    });
-    guard.observe(root, { childList: true, subtree: true });
-  }
-
   // ── Sign-out intercept for existing account-screen rows ──────────────────
   function wireSignOut() {
     document.addEventListener('click', (e) => {
@@ -323,15 +340,7 @@
     }, true);
   }
 
-  // ── Gate ─────────────────────────────────────────────────────────────────
-  function hideGate() {
-    const gate = document.getElementById('auth-gate');
-    if (!gate) return;
-    gate.classList.add('hiding');
-    setTimeout(() => gate.classList.add('hidden'), 420);
-  }
-
-  // Gate stays visible until navigation completes — user never sees the toggle.
+  // ── After successful auth ─────────────────────────────────────────────────
   async function afterAuth(session) {
     const role = (session && session.access_token)
       ? await getUserRole(session.access_token)
@@ -339,7 +348,7 @@
     navigateToMap(role, () => hideGate());
   }
 
-  // ── Auth forms ───────────────────────────────────────────────────────────
+  // ── Auth form helpers ─────────────────────────────────────────────────────
   function showForm(id) {
     document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
     document.getElementById(id).classList.add('active');
@@ -355,19 +364,8 @@
     btn.textContent = on ? 'Please wait…' : btn.dataset.label;
   }
 
-  async function init() {
-    const session = getSession();
-    if (session) {
-      const nowSec = Date.now() / 1000;
-      if ((session.expires_at || 0) > nowSec + 60) { afterAuth(session); return; }
-      if (session.refresh_token) {
-        const r = await refreshSession(session.refresh_token).catch(() => null);
-        if (r) { afterAuth(r); return; }
-      }
-      clearSession();
-    }
-
-    // Wire role picker
+  // ── Wire auth forms ───────────────────────────────────────────────────────
+  function wireAuthForms() {
     document.querySelectorAll('.role-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
@@ -427,6 +425,31 @@
       catch (err) { setError('forgot-error', err.message); }
       finally { setLoading(forgotBtn, false); }
     });
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+  async function init() {
+    // Always start hiding the toggle & home button immediately
+    if (document.getElementById('root')) {
+      startHidingGuard();
+    } else {
+      document.addEventListener('DOMContentLoaded', startHidingGuard);
+    }
+
+    const session = getSession();
+    if (session) {
+      const nowSec = Date.now() / 1000;
+      if ((session.expires_at || 0) > nowSec + 60) { afterAuth(session); return; }
+      if (session.refresh_token) {
+        const r = await refreshSession(session.refresh_token).catch(() => null);
+        if (r) { afterAuth(r); return; }
+      }
+      clearSession();
+    }
+
+    // No valid session — let landing page show, intercept CTA taps
+    interceptLandingButtons();
+    wireAuthForms();
   }
 
   if (document.readyState === 'loading') {

@@ -90,9 +90,7 @@
       const title = (btn.title || '').toLowerCase();
 
       // Hide the Renter/Driver toggle pill and its parent container.
-      // Match by text AND borderRadius:20px (inline style) to avoid false positives
-      // in the signup role-picker which also has "Renter"/"Driver" text.
-      if ((text === 'Renter' || text === 'Driver') && parseInt(btn.style.borderRadius) === 20) {
+      if (text === 'Renter' || text === 'Driver') {
         hide(btn);
         hide(btn.parentElement);
       }
@@ -125,18 +123,28 @@
     injectAdminSignOut();
   }
 
-  // Persistent floating "Sign out" pill — always visible on authenticated views.
-  // No dependency on any app-rendered element. Uses max z-index.
+  // Persistent "Sign out" pill injected into the app's own root container.
+  // Uses position:absolute inside #root so it stays within the phone frame
+  // in the Replit preview AND is correct in the deployed full-screen app.
   function injectSignOutFab() {
     if (document.getElementById('lp-so-fab')) return;
+
+    // Find the app's outermost rendered div (first child of #root)
+    const root = document.getElementById('root');
+    if (!root || !root.firstElementChild) return;
+    const container = root.firstElementChild;
+
+    // Ensure container can hold absolutely-positioned children
+    if (getComputedStyle(container).position === 'static') {
+      container.style.position = 'relative';
+    }
 
     const fab = document.createElement('button');
     fab.id = 'lp-so-fab';
     fab.textContent = 'Sign out';
     fab.addEventListener('click', doSignOut);
-    // Top-right corner so it's always visible regardless of drawer/tab-bar position
     fab.setAttribute('style', [
-      'position:fixed',
+      'position:absolute',
       'top:14px',
       'right:14px',
       'z-index:2147483647',
@@ -156,7 +164,7 @@
       'line-height:1.2',
       'pointer-events:auto',
     ].join(';'));
-    document.body.appendChild(fab);
+    container.appendChild(fab);
     console.log('[Lily Pad] Sign-out FAB injected');
   }
 
@@ -222,10 +230,10 @@
     function tryClick() {
       if (done) return;
 
-      // Primary: find the Renter/Driver toggle button (borderRadius:20 inline style)
-      const btn = Array.from(document.querySelectorAll('button')).find(b => {
-        return b.textContent.trim() === targetLabel && parseInt(b.style.borderRadius) === 20;
-      });
+      // Primary: find the Renter/Driver toggle button by text content.
+      // The toggle has no class — match by exact text only (original reliable approach).
+      const btn = Array.from(document.querySelectorAll('button'))
+        .find(b => b.textContent.trim() === targetLabel);
       if (btn) {
         console.log('[Lily Pad] Clicking toggle "' + targetLabel + '" to navigate to map');
         btn.click();

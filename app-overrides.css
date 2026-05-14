@@ -1,15 +1,10 @@
-/* ── Landing page: hide Renter/Driver toggle + top nav buttons ──────── */
-.home-topbar { display: none !important; }
+/* ── Elements confirmed in bundle with these class names ─────────────── */
 
-/* ── Landing page: hide entire home content area as safety net ──────── */
-.home-center  { display: none !important; }
-.home-driver  { display: none !important; }
-.home-host    { display: none !important; }
-
-/* ── Remove home buttons everywhere in the app ──────────────────────── */
-.home-btn-driver,
-.home-btn-host,
+/* Home icon button (appears in step/booking flows) */
 .home-icon-btn { display: none !important; }
 
-/* ── Smooth fade-in after auth navigation ───────────────────────────── */
+/* Renter/Driver type toggle buttons */
+.type-btn { display: none !important; }
+
+/* Smooth root fade */
 #root { transition: opacity 0.3s ease; }

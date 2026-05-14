@@ -66,56 +66,108 @@
     return data;
   }
 
-  // ── Navigate to map after auth ───────────────────────────────────────────
+  // ── Hide unwanted top-bar elements via JS (they use inline styles, no classes) ──
+  function hideUnwantedElements() {
+    // Hide the type-btn container (Renter/Driver toggle parent wrapper)
+    document.querySelectorAll('.type-btn').forEach(btn => {
+      // Walk up to hide the entire toggle pill container
+      const parent = btn.parentElement;
+      if (parent) parent.style.setProperty('display', 'none', 'important');
+    });
+
+    // Hide the top-bar icon buttons: they live in a flex div (gap:8) sibling to the toggle
+    // Find buttons with 36x36 inline style (the nav/home icon buttons)
+    document.querySelectorAll('button').forEach(btn => {
+      const s = btn.style;
+      if (s.width === '36px' && s.height === '36px' && s.borderRadius === '50%') {
+        btn.style.setProperty('display', 'none', 'important');
+      }
+    });
+
+    // Hide .home-icon-btn (appears in step/booking flows)
+    document.querySelectorAll('.home-icon-btn').forEach(el => {
+      el.style.setProperty('display', 'none', 'important');
+    });
+  }
+
+  // ── Navigate to map via "Find a pad" button ──────────────────────────────
   function navigateToMap() {
     const root = document.getElementById('root');
-    if (root) root.style.opacity = '0';
 
-    let attempts = 0;
+    // Use MutationObserver to detect when React renders content into #root
+    const observer = new MutationObserver(() => {
+      // Try to find the "Find a pad" button
+      const buttons = Array.from(document.querySelectorAll('button'));
+      const findBtn = buttons.find(b => b.textContent.trim() === 'Find a pad');
 
-    function tryNavigate() {
-      attempts++;
+      if (findBtn) {
+        observer.disconnect();
+        findBtn.click();
+        console.log('[Lily Pad] Navigated to map via "Find a pad"');
+        setTimeout(() => {
+          if (root) root.style.opacity = '1';
+          hideUnwantedElements();
+          startElementGuard();
+          wireSignOut();
+        }, 150);
+        return;
+      }
 
-      // Strategy 1: click the first tab in .tab-bar (the find/map tab)
+      // If tab bar already exists (role already selected), click first tab
       const tabBar = document.querySelector('.tab-bar');
       if (tabBar) {
         const firstTab = tabBar.querySelector('button');
         if (firstTab) {
+          observer.disconnect();
           firstTab.click();
-          setTimeout(() => { if (root) root.style.opacity = '1'; }, 100);
           console.log('[Lily Pad] Navigated to map via tab-bar');
-          wireSignOut();
-          return;
+          setTimeout(() => {
+            if (root) root.style.opacity = '1';
+            hideUnwantedElements();
+            startElementGuard();
+            wireSignOut();
+          }, 150);
         }
       }
+    });
 
-      // Strategy 2: find "Find a pad" button by text
+    if (root) {
+      root.style.opacity = '0';
+      observer.observe(root, { childList: true, subtree: true });
+    }
+
+    // Fallback: if root already has content (React already mounted)
+    setTimeout(() => {
       const buttons = Array.from(document.querySelectorAll('button'));
       const findBtn = buttons.find(b => b.textContent.trim() === 'Find a pad');
       if (findBtn) {
+        observer.disconnect();
         findBtn.click();
-        setTimeout(() => { if (root) root.style.opacity = '1'; }, 100);
-        console.log('[Lily Pad] Navigated to map via Find a pad button');
-        wireSignOut();
-        return;
-      }
-
-      // Retry up to 5 seconds
-      if (attempts < 50) {
-        setTimeout(tryNavigate, 100);
+        setTimeout(() => {
+          if (root) root.style.opacity = '1';
+          hideUnwantedElements();
+          startElementGuard();
+          wireSignOut();
+        }, 150);
       } else {
-        // Fallback: show whatever state the app is in
+        // Last resort: show the app and guard elements
         if (root) root.style.opacity = '1';
-        console.warn('[Lily Pad] Could not navigate to map after 5s — showing app as-is');
+        hideUnwantedElements();
+        startElementGuard();
         wireSignOut();
       }
-    }
-
-    // Start after a short delay to allow React to mount
-    setTimeout(tryNavigate, 200);
+    }, 3000);
   }
 
-  // ── Intercept app's Sign Out to also clear Supabase session ─────────────
+  // ── Keep hiding elements on every React re-render ────────────────────────
+  function startElementGuard() {
+    const root = document.getElementById('root');
+    if (!root) return;
+    const guard = new MutationObserver(() => hideUnwantedElements());
+    guard.observe(root, { childList: true, subtree: true });
+  }
+
+  // ── Intercept Sign Out to clear Supabase session ─────────────────────────
   function wireSignOut() {
     document.addEventListener('click', function (e) {
       const row = e.target.closest('.thumb-nav-row');
@@ -130,8 +182,9 @@
   function hideGate() {
     const gate = document.getElementById('auth-gate');
     if (!gate) return;
-    gate.classList.add('hiding');
-    setTimeout(() => gate.classList.add('hidden'), 420);
+    gate.style.opacity = '0';
+    gate.style.pointerEvents = 'none';
+    setTimeout(() => { gate.style.display = 'none'; }, 420);
   }
 
   function afterAuth() {
@@ -166,7 +219,6 @@
 
   // ── Initialise ───────────────────────────────────────────────────────────
   async function init() {
-    // Check existing session
     const session = getSession();
     if (session) {
       const nowSec = Date.now() / 1000;
@@ -195,7 +247,8 @@
     document.getElementById('back-to-login').addEventListener('click', () => showForm('form-login'));
 
     // Login
-    document.getElementById('login-form').addEventListener('submit', async () => {
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
       const email    = document.getElementById('login-email').value.trim();
       const password = document.getElementById('login-password').value;
       if (!email || !password) { setError('login-error', 'Please enter your email and password.'); return; }
@@ -206,18 +259,18 @@
         afterAuth();
       } catch (err) {
         setError('login-error', err.message);
-      } finally {
         setLoading(loginBtn, false);
       }
     });
 
     // Signup
-    document.getElementById('signup-form').addEventListener('submit', async () => {
+    document.getElementById('signup-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
       const name     = document.getElementById('signup-name').value.trim();
       const email    = document.getElementById('signup-email').value.trim();
       const password = document.getElementById('signup-password').value;
-      if (!name)                        { setError('signup-error', 'Please enter your full name.'); return; }
-      if (!email)                       { setError('signup-error', 'Please enter your email address.'); return; }
+      if (!name)                             { setError('signup-error', 'Please enter your full name.'); return; }
+      if (!email)                            { setError('signup-error', 'Please enter your email address.'); return; }
       if (!password || password.length < 6) { setError('signup-error', 'Password must be at least 6 characters.'); return; }
       clearMsgs();
       setLoading(signupBtn, true);
@@ -230,16 +283,17 @@
           signupBtn.style.display = 'none';
         } else {
           setError('signup-error', 'Something went wrong. Please try again.');
+          setLoading(signupBtn, false);
         }
       } catch (err) {
         setError('signup-error', err.message);
-      } finally {
         setLoading(signupBtn, false);
       }
     });
 
     // Forgot password
-    document.getElementById('forgot-form').addEventListener('submit', async () => {
+    document.getElementById('forgot-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
       const email = document.getElementById('forgot-email').value.trim();
       if (!email) { setError('forgot-error', 'Please enter your email address.'); return; }
       clearMsgs();

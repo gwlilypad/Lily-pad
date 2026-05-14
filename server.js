@@ -14,7 +14,8 @@ app.get('/', (req, res) => {
     window.__SUPABASE_URL__ = "${SUPABASE_URL}";
     window.__SUPABASE_ANON_KEY__ = "${SUPABASE_ANON_KEY}";
   </script>
-  <link rel="stylesheet" href="/auth.css">`;
+  <link rel="stylesheet" href="/auth.css">
+  <link rel="stylesheet" href="/app-overrides.css">`;
   html = html.replace('</head>', `${injection}</head>`);
   const authOverlay = fs.readFileSync(path.join(__dirname, 'auth-overlay.html'), 'utf8');
   html = html.replace('<div id="root"></div>', `${authOverlay}<div id="root"></div>`);

@@ -13,10 +13,6 @@
     'Content-Type': 'application/json',
   };
 
-  function authHeader(token) {
-    return { ...HEADERS, 'Authorization': `Bearer ${token}` };
-  }
-
   function getSession() {
     try {
       const raw = localStorage.getItem('lily_pad_session');
@@ -56,9 +52,7 @@
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error_description || data.msg || 'Sign up failed.');
-    if (data.access_token) {
-      saveSession(data);
-    }
+    if (data.access_token) saveSession(data);
     return data;
   }
 
@@ -84,6 +78,55 @@
     if (!res.ok) return null;
     saveSession(data);
     return data;
+  }
+
+  // ── Navigate to map after auth ───────────────────────────────────────────
+  function navigateToMap() {
+    const root = document.getElementById('root');
+    // Keep root invisible during navigation to avoid landing-page flash
+    if (root) root.style.opacity = '0';
+
+    let attempts = 0;
+    const maxAttempts = 40; // 4 seconds total
+
+    const tryClick = () => {
+      attempts++;
+      const buttons = Array.from(document.querySelectorAll('button'));
+      const findBtn = buttons.find(b => b.textContent.trim() === 'Find a pad');
+      if (findBtn) {
+        findBtn.click();
+        setTimeout(() => {
+          if (root) root.style.opacity = '1';
+        }, 80);
+        return;
+      }
+      if (attempts < maxAttempts) {
+        setTimeout(tryClick, 100);
+      } else {
+        // Fallback: just reveal the app as-is
+        if (root) root.style.opacity = '1';
+      }
+    };
+
+    setTimeout(tryClick, 150);
+  }
+
+  // ── Wire existing app Sign Out to clear Supabase session ─────────────────
+  function wireSignOut() {
+    document.addEventListener('click', function (e) {
+      const row = e.target.closest('.thumb-nav-row');
+      if (row && row.textContent.includes('Sign out')) {
+        clearSession();
+        setTimeout(() => location.reload(), 120);
+      }
+    }, true);
+  }
+
+  // ── Called on every successful auth (login, token refresh, new session) ──
+  function afterAuth() {
+    hideGate();
+    navigateToMap();
+    wireSignOut();
   }
 
   function hideGate() {
@@ -119,24 +162,26 @@
   }
 
   async function init() {
+    // Check for existing valid session first
     const session = getSession();
     if (session) {
       const expiry = session.expires_at || 0;
       const nowSec = Date.now() / 1000;
       if (expiry > nowSec + 60) {
-        hideGate();
+        afterAuth();
         return;
       }
       if (session.refresh_token) {
         const refreshed = await refreshSession(session.refresh_token).catch(() => null);
         if (refreshed) {
-          hideGate();
+          afterAuth();
           return;
         }
       }
       clearSession();
     }
 
+    // No valid session — show auth gate
     const loginBtn = document.getElementById('login-btn');
     const signupBtn = document.getElementById('signup-btn');
     const forgotBtn = document.getElementById('forgot-btn');
@@ -157,7 +202,7 @@
       setLoading(loginBtn, true);
       try {
         await signIn(email, password);
-        hideGate();
+        afterAuth();
       } catch (err) {
         setError('login-error', err.message);
       } finally {
@@ -176,18 +221,16 @@
       setLoading(signupBtn, true);
       try {
         const result = await signUp(email, password, name);
-        console.log('[Lily Pad Auth] Signup response:', JSON.stringify({ id: result.id, email: result.email, has_token: !!result.access_token }));
         if (result.access_token) {
-          hideGate();
+          afterAuth();
         } else if (result.id) {
-          // User created but email confirmation required — stay on signup form and show success
+          // Email confirmation required — stay on form, show message
           setSuccess('signup-success', 'Account created! Check your inbox to confirm your email, then sign in.');
           signupBtn.style.display = 'none';
         } else {
           setError('signup-error', 'Something went wrong. Please try again.');
         }
       } catch (err) {
-        console.error('[Lily Pad Auth] Signup error:', err.message);
         setError('signup-error', err.message);
       } finally {
         setLoading(signupBtn, false);

@@ -1,0 +1,12 @@
+/* ── Remove Renter/Driver toggle + nav buttons from landing ─────────── */
+.home-topbar { display: none !important; }
+
+/* ── Remove home buttons from map and step flows ────────────────────── */
+.home-btn-driver,
+.home-btn-host,
+.home-icon-btn { display: none !important; }
+
+/* ── Smooth transition when revealing app after auth ────────────────── */
+#root {
+  transition: opacity 0.25s ease;
+}

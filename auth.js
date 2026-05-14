@@ -83,6 +83,7 @@
   function hideUnwantedElements() {
     Array.from(document.querySelectorAll('button')).forEach(btn => {
       const text = btn.textContent.trim();
+      const title = (btn.title || '').toLowerCase();
 
       // Hide the Renter/Driver toggle pill and its container
       if (text === 'Renter' || text === 'Driver') {
@@ -90,12 +91,18 @@
         hide(btn.parentElement);
       }
 
-      // Hide 36×36 circular top-bar icon buttons
+      // Hide 36×36 circular top-bar icon buttons (landing page nav/home icons)
       const w = parseInt(btn.style.width);
       const h = parseInt(btn.style.height);
       if (w === 36 && h === 36) {
         hide(btn);
         hide(btn.parentElement);
+      }
+
+      // Hide 44×44 map overlay home button (title="Back to home" / "Back to admin")
+      // These are inline-styled with no class name — target by title attribute
+      if (title.includes('back to home') || title.includes('back to admin')) {
+        hide(btn);
       }
     });
 
@@ -123,12 +130,11 @@
       if (btn) {
         done = true;
         console.log('[Lily Pad] Clicking toggle "' + targetLabel + '" to navigate to map');
+        hideUnwantedElements();   // hide immediately before click
         btn.click();
-        setTimeout(() => {
-          hideUnwantedElements();
-          startGuard();
-          wireSignOut();
-        }, 300);
+        hideUnwantedElements();   // hide again right after click
+        startGuard();
+        wireSignOut();
         return;
       }
 
@@ -137,12 +143,11 @@
       if (tab) {
         done = true;
         console.log('[Lily Pad] Navigating via tab-bar fallback');
+        hideUnwantedElements();
         tab.click();
-        setTimeout(() => {
-          hideUnwantedElements();
-          startGuard();
-          wireSignOut();
-        }, 300);
+        hideUnwantedElements();
+        startGuard();
+        wireSignOut();
       }
     }
 
@@ -297,6 +302,20 @@
       catch (err) { setError('forgot-error', err.message); }
       finally { setLoading(forgotBtn, false); }
     });
+  }
+
+  // Debug bypass: skip auth and go straight to map
+  if (window.__LP_DEBUG__) {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        hideGate();
+        navigateToMap('renter');
+      });
+    } else {
+      hideGate();
+      navigateToMap('renter');
+    }
+    return;
   }
 
   if (document.readyState === 'loading') {

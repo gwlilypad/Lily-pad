@@ -415,20 +415,6 @@
     });
   }
 
-  // ── Debug bypass ─────────────────────────────────────────────────────────
-  if (window.__LP_DEBUG__) {
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', () => {
-        hideGate();
-        navigateToMap('renter');
-      });
-    } else {
-      hideGate();
-      navigateToMap('renter');
-    }
-    return;
-  }
-
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {

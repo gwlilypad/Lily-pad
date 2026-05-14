@@ -27,9 +27,7 @@ app.get('/', (req, res) => {
 
   html = html.replace('</head>', `${headInjection}</head>`);
   html = html.replace('<div id="root"></div>', `${authOverlay}<div id="root"></div>`);
-  const debugMode = req.query.debug === '1';
-  const debugScript = debugMode ? `<script>window.__LP_DEBUG__ = true;</script>` : '';
-  html = html.replace('</body>', `${debugScript}<script>${authJS}</script></body>`);
+  html = html.replace('</body>', `<script>${authJS}</script></body>`);
 
   // No caching on the main page
   res.setHeader('Cache-Control', 'no-store');

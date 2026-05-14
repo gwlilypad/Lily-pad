@@ -77,16 +77,22 @@
     } catch { return 'renter'; }
   }
 
+  // ── Sign-out ─────────────────────────────────────────────────────────────
+  function doSignOut() {
+    clearSession();
+    location.reload();
+  }
+
   // ── Element hiding ────────────────────────────────────────────────────────
-  // The landing toggle ("Renter"/"Driver") and top icon buttons have NO CSS classes —
-  // they are pure inline-styled elements. We find them by text / inline dimensions.
   function hideUnwantedElements() {
     Array.from(document.querySelectorAll('button')).forEach(btn => {
-      const text = btn.textContent.trim();
+      const text  = btn.textContent.trim();
       const title = (btn.title || '').toLowerCase();
 
-      // Hide the Renter/Driver toggle pill and its container
-      if (text === 'Renter' || text === 'Driver') {
+      // Hide the Renter/Driver toggle pill and its parent container.
+      // Match by text AND borderRadius:20px (inline style) to avoid false positives
+      // in the signup role-picker which also has "Renter"/"Driver" text.
+      if ((text === 'Renter' || text === 'Driver') && parseInt(btn.style.borderRadius) === 20) {
         hide(btn);
         hide(btn.parentElement);
       }
@@ -100,7 +106,6 @@
       }
 
       // Hide 44×44 map overlay home button (title="Back to home" / "Back to admin")
-      // These are inline-styled with no class name — target by title attribute
       if (title.includes('back to home') || title.includes('back to admin')) {
         hide(btn);
       }
@@ -114,40 +119,134 @@
     if (el) el.style.setProperty('display', 'none', 'important');
   }
 
+  // ── Sign-out button injection ─────────────────────────────────────────────
+  function injectSignOutButtons() {
+    injectSignOutFab();
+    injectAdminSignOut();
+  }
+
+  // Persistent floating "Sign out" pill — always visible on authenticated views.
+  // No dependency on any app-rendered element. Uses max z-index.
+  function injectSignOutFab() {
+    if (document.getElementById('lp-so-fab')) return;
+
+    const fab = document.createElement('button');
+    fab.id = 'lp-so-fab';
+    fab.textContent = 'Sign out';
+    fab.addEventListener('click', doSignOut);
+    // Top-right corner so it's always visible regardless of drawer/tab-bar position
+    fab.setAttribute('style', [
+      'position:fixed',
+      'top:14px',
+      'right:14px',
+      'z-index:2147483647',
+      'background:rgba(14,31,64,0.88)',
+      'color:#fff',
+      'border:none',
+      'border-radius:18px',
+      'padding:7px 15px',
+      'font-size:12px',
+      'font-weight:700',
+      'font-family:"DM Sans",sans-serif',
+      'cursor:pointer',
+      'box-shadow:0 2px 10px rgba(0,0,0,0.28)',
+      'backdrop-filter:blur(10px)',
+      '-webkit-backdrop-filter:blur(10px)',
+      'letter-spacing:-0.1px',
+      'line-height:1.2',
+      'pointer-events:auto',
+    ].join(';'));
+    document.body.appendChild(fab);
+    console.log('[Lily Pad] Sign-out FAB injected');
+  }
+
+  // Inject a red "Sign out" button into the admin/staff preview banner.
+  // The banner: position:absolute; top:0; left:0; right:0; zIndex:600; background:#0E1F40
+  function injectAdminSignOut() {
+    if (document.getElementById('lp-admin-so')) return;
+
+    // Find the banner by its unique combination of inline styles + text content
+    const banner = Array.from(document.querySelectorAll('div')).find(div => {
+      if (div.style.zIndex !== '600') return false;
+      if (div.style.position !== 'absolute') return false;
+      const t = (div.textContent || '').trim();
+      return t.includes('Admin view') || t.includes('Staff view');
+    });
+    if (!banner) return;
+
+    // Remove any existing injected button (React re-render guard)
+    const old = document.getElementById('lp-admin-so');
+    if (old) old.remove();
+
+    const btn = document.createElement('button');
+    btn.id = 'lp-admin-so';
+    btn.textContent = 'Sign out';
+    btn.addEventListener('click', doSignOut);
+    btn.setAttribute('style', [
+      'background:rgba(229,57,53,0.90)',
+      'color:#fff',
+      'border:none',
+      'border-radius:14px',
+      'padding:5px 13px',
+      'font-size:11.5px',
+      'font-weight:700',
+      'font-family:"DM Sans",sans-serif',
+      'cursor:pointer',
+      'margin-left:8px',
+      'flex-shrink:0',
+      'pointer-events:auto',
+    ].join(';'));
+    banner.appendChild(btn);
+    console.log('[Lily Pad] Admin sign-out button injected');
+  }
+
   // ── Navigate to map after auth ────────────────────────────────────────────
-  // The Renter/Driver toggle buttons call d("find") → go to map.
-  // "Renter" button  → accountType:"renter"    (driver looking for parking)
-  // "Driver" button  → accountType:"padRenter" (pad host)
-  function navigateToMap(role) {
-    // Target label: "Renter" for drivers, "Driver" for pad hosts
+  // onNavDone is called as soon as the toggle is clicked (or tab-bar found).
+  // afterAuth() passes hideGate as onNavDone so the gate stays up until
+  // navigation happens — the user never sees the Renter/Driver toggle.
+  function navigateToMap(role, onNavDone) {
     const targetLabel = (role === 'padRenter') ? 'Driver' : 'Renter';
     let done = false;
 
+    function complete(reason) {
+      if (done) return;
+      done = true;
+      console.log('[Lily Pad] Navigation complete:', reason);
+      if (onNavDone) onNavDone();     // hides the gate
+      hideUnwantedElements();
+      startGuard();
+      wireSignOut();
+      injectSignOutButtons();
+    }
+
     function tryClick() {
       if (done) return;
-      const btn = Array.from(document.querySelectorAll('button'))
-        .find(b => b.textContent.trim() === targetLabel);
+
+      // Primary: find the Renter/Driver toggle button (borderRadius:20 inline style)
+      const btn = Array.from(document.querySelectorAll('button')).find(b => {
+        return b.textContent.trim() === targetLabel && parseInt(b.style.borderRadius) === 20;
+      });
       if (btn) {
-        done = true;
         console.log('[Lily Pad] Clicking toggle "' + targetLabel + '" to navigate to map');
-        hideUnwantedElements();   // hide immediately before click
         btn.click();
-        hideUnwantedElements();   // hide again right after click
-        startGuard();
-        wireSignOut();
+        complete('toggle clicked');
         return;
       }
 
-      // Fallback: tab-bar first button
-      const tab = document.querySelector('.tab-bar button');
-      if (tab) {
-        done = true;
-        console.log('[Lily Pad] Navigating via tab-bar fallback');
-        hideUnwantedElements();
-        tab.click();
-        hideUnwantedElements();
-        startGuard();
-        wireSignOut();
+      // Fallback A: any button that routes to "find" view (tab-bar "Find" button)
+      const findTab = Array.from(document.querySelectorAll('.tab-bar button'))
+        .find(b => b.textContent.includes('Find') || b.classList.contains('active-tab'));
+      if (findTab) {
+        console.log('[Lily Pad] Navigating via Find tab fallback');
+        findTab.click();
+        complete('find-tab clicked');
+        return;
+      }
+
+      // Fallback B: tab-bar exists but no toggle — we're already on map view
+      if (document.querySelector('.tab-bar') &&
+          !Array.from(document.querySelectorAll('button')).find(b => b.textContent.trim() === targetLabel)) {
+        complete('already on map');
       }
     }
 
@@ -172,9 +271,11 @@
       if (!done) {
         done = true;
         console.warn('[Lily Pad] Navigation timeout — showing app as-is');
+        if (onNavDone) onNavDone();
         hideUnwantedElements();
         startGuard();
         wireSignOut();
+        injectSignOutButtons();
       }
     }, 8000);
   }
@@ -183,17 +284,19 @@
   function startGuard() {
     const root = document.getElementById('root');
     if (!root) return;
-    const guard = new MutationObserver(() => hideUnwantedElements());
+    const guard = new MutationObserver(() => {
+      hideUnwantedElements();
+      injectSignOutButtons();
+    });
     guard.observe(root, { childList: true, subtree: true });
   }
 
-  // ── Sign-out intercept ───────────────────────────────────────────────────
+  // ── Sign-out intercept for existing account-screen rows ──────────────────
   function wireSignOut() {
     document.addEventListener('click', (e) => {
       const row = e.target.closest('.thumb-nav-row');
       if (row && row.textContent.includes('Sign out')) {
-        clearSession();
-        setTimeout(() => location.reload(), 120);
+        doSignOut();
       }
     }, true);
   }
@@ -206,12 +309,12 @@
     setTimeout(() => gate.classList.add('hidden'), 420);
   }
 
+  // Gate stays visible until navigation completes — user never sees the toggle.
   async function afterAuth(session) {
-    hideGate();
-    const role = session && session.access_token
+    const role = (session && session.access_token)
       ? await getUserRole(session.access_token)
       : 'renter';
-    navigateToMap(role);
+    navigateToMap(role, () => hideGate());
   }
 
   // ── Auth forms ───────────────────────────────────────────────────────────
@@ -304,7 +407,7 @@
     });
   }
 
-  // Debug bypass: skip auth and go straight to map
+  // ── Debug bypass ─────────────────────────────────────────────────────────
   if (window.__LP_DEBUG__) {
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', () => {

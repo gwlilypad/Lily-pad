@@ -46,6 +46,21 @@
           <label for="signup-password">Password</label>
           <input type="password" id="signup-password" placeholder="Create a strong password" autocomplete="new-password" />
         </div>
+        <div class="auth-field">
+          <label>I am a…</label>
+          <div id="role-picker">
+            <button type="button" class="role-btn active" data-role="renter">
+              <span class="role-icon">🚗</span>
+              <span class="role-label">Driver</span>
+              <span class="role-sub">Looking for parking</span>
+            </button>
+            <button type="button" class="role-btn" data-role="padRenter">
+              <span class="role-icon">🏠</span>
+              <span class="role-label">Pad Renter</span>
+              <span class="role-sub">I have a spot to rent</span>
+            </button>
+          </div>
+        </div>
         <div id="signup-error" class="auth-error"></div>
         <div id="signup-success" class="auth-success"></div>
         <button id="signup-btn" type="submit" class="auth-btn-primary">Create account</button>
@@ -56,7 +71,7 @@
     <!-- Forgot Password Form -->
     <div id="form-forgot" class="auth-form">
       <h2 class="auth-title">Forgot your password?</h2>
-      <p class="auth-subtitle">Enter your email address and we'll send a reset link.</p>
+      <p class="auth-subtitle">Enter your email and we'll send a reset link.</p>
       <form id="forgot-form" onsubmit="return false;">
         <div class="auth-field">
           <label for="forgot-email">Email</label>

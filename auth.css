@@ -320,3 +320,36 @@ body.lp-photo-fs .canvas-wrap canvas {
   cursor: pointer;
   backdrop-filter: blur(4px);
 }
+
+/* ── Injected deep-page back button ─────────────────────────────────────── */
+/* Fallback styles in case the bundle's .s-nav / .back-btn CSS isn't applied */
+#lp-deep-back.s-nav {
+  display: flex;
+  align-items: center;
+  padding: 10px 16px 4px;
+  background: transparent;
+}
+
+#lp-deep-back .back-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: none;
+  padding: 6px 4px;
+  cursor: pointer;
+  color: #0E1F40;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  opacity: 0.75;
+  transition: opacity 0.15s;
+}
+
+#lp-deep-back .back-btn::before {
+  content: '←';
+  font-size: 17px;
+  margin-right: 2px;
+}
+
+#lp-deep-back .back-btn:hover { opacity: 1; }

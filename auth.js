@@ -924,6 +924,125 @@
     guard.observe(root, { childList: true, subtree: true });
   }
 
+  // ── Deep-page back button ─────────────────────────────────────────────────
+  // Pages like "availability" and "payment" are sub-pages of paddashboard but
+  // the bundle renders them without a back button. We inject one by reading the
+  // current page name from the React fiber tree and using the context's goTo().
+  const LP_BACK_TARGETS = {
+    availability : 'paddashboard',
+    payment      : 'paddashboard',
+    photo        : 'paddashboard',
+    photointro   : 'paddashboard',
+  };
+  const LP_ALL_PAGES = new Set([
+    'home','find','root','paddashboard','bookings','payment',
+    'availability','photo','photointro','addpad',
+    'signup','driversignup','bizsignup','padtype','admin',
+  ]);
+  let _lpGoToFn   = null;  // cached from fiber; invalidated on back-click
+  let _lpLastPage = null;
+  let _lpBackTmr  = null;
+
+  function lpGetGoTo() {
+    if (_lpGoToFn) return _lpGoToFn;
+    const root = document.getElementById('root');
+    if (!root) return null;
+    const fk = Object.keys(root).find(k => k.startsWith('__reactFiber$'));
+    if (!fk) return null;
+    const q = [root[fk]];
+    let n = 0;
+    while (q.length && n++ < 600) {
+      const f = q.shift();
+      if (!f) continue;
+      const v = f.memoizedProps && f.memoizedProps.value;
+      if (v && typeof v.goTo === 'function') { _lpGoToFn = v.goTo; return _lpGoToFn; }
+      if (f.child)   q.push(f.child);
+      if (f.sibling) q.push(f.sibling);
+    }
+    return null;
+  }
+
+  function lpGetCurrentPage() {
+    const root = document.getElementById('root');
+    if (!root) return null;
+    const fk = Object.keys(root).find(k => k.startsWith('__reactFiber$'));
+    if (!fk) return null;
+    const q = [root[fk]];
+    let n = 0;
+    while (q.length && n++ < 800) {
+      const f = q.shift();
+      if (!f) continue;
+      let s = f.memoizedState;
+      while (s) {
+        if (typeof s.memoizedState === 'string' && LP_ALL_PAGES.has(s.memoizedState))
+          return s.memoizedState;
+        s = s.next;
+      }
+      if (f.child)   q.push(f.child);
+      if (f.sibling) q.push(f.sibling);
+    }
+    return null;
+  }
+
+  function removeDeepBackBtn() {
+    const el = document.getElementById('lp-deep-back');
+    if (el) el.remove();
+  }
+
+  function injectDeepBackButton() {
+    const goTo = lpGetGoTo();
+    if (!goTo) return;
+
+    const page = lpGetCurrentPage();
+    if (!page) return;
+
+    // Clear stale button whenever the page has changed
+    if (page !== _lpLastPage) {
+      removeDeepBackBtn();
+      _lpLastPage = page;
+    }
+
+    const target = LP_BACK_TARGETS[page];
+    if (!target) return; // not a page that needs an injected back btn
+
+    // Honour native back button if the bundle already rendered one
+    if (document.querySelector('.s-nav:not(#lp-deep-back) .back-btn')) return;
+
+    // Already injected for this page
+    if (document.getElementById('lp-deep-back')) return;
+
+    // Find best anchor — prefer the active page container
+    const anchor = document.querySelector('.page.active') ||
+                   document.querySelector('.s-body') ||
+                   document.getElementById('root');
+    if (!anchor) return;
+
+    // Build an element that mirrors the bundle's native .s-nav / .back-btn structure
+    // so the bundle's own CSS styles it consistently with other back buttons.
+    const nav = document.createElement('div');
+    nav.id        = 'lp-deep-back';
+    nav.className = 's-nav';
+
+    const btn = document.createElement('button');
+    btn.className = 'back-btn';
+    btn.innerHTML = '<span class="back-lbl">Back</span>';
+    btn.addEventListener('click', () => {
+      _lpGoToFn = null; // invalidate cache — context may have been recreated
+      const fresh = lpGetGoTo();
+      if (fresh) fresh(target);
+      setTimeout(removeDeepBackBtn, 300);
+    });
+
+    nav.appendChild(btn);
+    anchor.insertBefore(nav, anchor.firstChild);
+    console.log('[Lily Pad] Deep back injected:', page, '→', target);
+  }
+
+  function scheduleDeepBack() {
+    clearTimeout(_lpBackTmr);
+    _lpBackTmr = setTimeout(injectDeepBackButton, 180);
+  }
+
   function startGuard() {
     if (window.__lpGuardObserver) return;
     const target = document.body;
@@ -932,7 +1051,7 @@
       injectPullDownSignOut();
       updateProfileDisplay();
       updatePhotoFullscreen();
-      injectPaddashboardBack();
+      scheduleDeepBack();
       removeFakeMapSpots();
       clearFakePads();
     });

@@ -891,11 +891,62 @@
     }, 8000);
   }
 
+  // ── Real-time wizard input capture ──────────────────────────────────────────
+  // Intercepts email + password as the user types in the native wizard forms.
+  // More reliable than reading from localStorage alone (password may be cleared).
+  const _wiz = { email: '', password: '', name: '' };
+
+  function _attachWizardInputListeners() {
+    document.querySelectorAll('input[type="email"]').forEach(el => {
+      if (el.__lpWired) return;
+      el.__lpWired = true;
+      const id = el.id || '';
+      if (id.startsWith('login') || id.startsWith('forgot')) return; // skip our overlay
+      el.addEventListener('input', () => {
+        if (el.value && !id.startsWith('login') && !id.startsWith('forgot')) {
+          _wiz.email = el.value.trim();
+          console.log('[Lily Pad] wizard email captured');
+        }
+      });
+    });
+    document.querySelectorAll('input[type="password"]').forEach(el => {
+      if (el.__lpWired) return;
+      el.__lpWired = true;
+      const id = el.id || '';
+      if (id.startsWith('login') || id.startsWith('forgot') || id.startsWith('signup')) return;
+      el.addEventListener('input', () => {
+        if (el.value) {
+          _wiz.password = el.value;
+          console.log('[Lily Pad] wizard password captured');
+        }
+      });
+    });
+    document.querySelectorAll('input[type="text"]').forEach(el => {
+      if (el.__lpWired) return;
+      el.__lpWired = true;
+      const id = el.id || '';
+      if (id.startsWith('login') || id.startsWith('signup') || id.startsWith('forgot')) return;
+      el.addEventListener('input', () => {
+        if (el.value) _wiz.name = (_wiz.name + ' ' + el.value.trim()).trim();
+      });
+    });
+  }
+
+  function startWizardInputCapture() {
+    _attachWizardInputListeners();
+    const obs = new MutationObserver(_attachWizardInputListeners);
+    const root = document.getElementById('root');
+    if (root) obs.observe(root, { childList: true, subtree: true });
+  }
+
   // ── Native auth completion watcher ────────────────────────────────────────
   function watchForNativeAuthComplete() {
     if (document.querySelector('.tab-bar')) { onNativeAuthComplete(); return; }
     const root = document.getElementById('root');
-    if (!root) return;
+    if (!root) {
+      console.warn('[Lily Pad] watchForNativeAuthComplete: no #root element');
+      return;
+    }
     const obs = new MutationObserver(() => {
       if (document.querySelector('.tab-bar')) {
         obs.disconnect();
@@ -903,55 +954,94 @@
       }
     });
     obs.observe(root, { childList: true, subtree: true });
+    console.log('[Lily Pad] Watching for native wizard completion…');
   }
 
-  // ── After native wizard: silently register with Supabase in background ───────
+  // ── After native wizard: register with Supabase using real credentials ────────
   function promptNativeUserToRegister() {
-    if (!SUPABASE_OK) return;
-    if (getSession()) return;
+    console.log('[Lily Pad] promptNativeUserToRegister called. SUPABASE_OK:', SUPABASE_OK, 'hasSession:', !!getSession());
+    if (!SUPABASE_OK) { console.warn('[Lily Pad] Skipping: SUPABASE_OK is false'); return; }
+    if (getSession()) { console.log('[Lily Pad] Skipping: session already exists'); return; }
 
-    let fullName = '', email = '';
+    // ── 1. Try to get credentials from the wizard state in localStorage ──────
+    let fullName = '', email = '', password = '', accountType = 'renter';
     try {
       const raw = localStorage.getItem('lilypad.appState.v1');
+      console.log('[Lily Pad] lilypad.appState.v1 present:', !!raw, raw ? raw.slice(0, 120) : '');
       if (raw) {
         const state = JSON.parse(raw);
-        const dr = state.drAns || {};
-        const su = state.suAns || {};
+        const dr  = state.drAns  || {};
+        const su  = state.suAns  || {};
         const biz = state.bizAns || {};
-        const first = dr[0] || su[0] || biz[5] || '';
-        const last  = dr[1] || su[1] || biz[6] || '';
-        email    = dr[2] || su[2] || biz[7] || '';
+
+        // Email: index 2 for driver/host, index 7 for business
+        email = (dr[2] || dr['2'] || su[2] || su['2'] || biz[7] || biz['7'] || '').trim();
+
+        // Password indices per wizard:
+        //   Driver  (Lr  array, X1=5): drAns[5]
+        //   Host    ($a  array, km=4): drAns[4] (set via ns())
+        //   Business        (wm=9)   : bizAns[9]
+        password = (dr[5] || dr['5'] || dr[4] || dr['4'] || su[4] || su['4'] || biz[9] || biz['9'] || '').trim();
+
+        // Name
+        const first = (dr[0] || dr['0'] || su[0] || su['0'] || biz[5] || biz['5'] || '').trim();
+        const last  = (dr[1] || dr['1'] || su[1] || su['1'] || biz[6] || biz['6'] || '').trim();
         fullName = (first + ' ' + last).trim();
+
+        accountType = (state.accountType === 'padRenter') ? 'padRenter' : 'renter';
+        console.log('[Lily Pad] From localStorage — email:', email || '(empty)', 'password:', password ? '(set)' : '(empty)', 'name:', fullName);
       }
-    } catch {}
+    } catch (e) {
+      console.warn('[Lily Pad] localStorage parse error:', e.message);
+    }
 
-    if (!email) return;
+    // ── 2. Fall back to real-time DOM-captured values ────────────────────────
+    if (!email && _wiz.email) {
+      console.log('[Lily Pad] Using DOM-captured email');
+      email = _wiz.email;
+    }
+    if (!password && _wiz.password) {
+      console.log('[Lily Pad] Using DOM-captured password');
+      password = _wiz.password;
+    }
+    if (!fullName && _wiz.name) fullName = _wiz.name;
 
-    // Generate a random password — user can reset via "Forgot password?" if needed
-    const tempPass = 'LP_' + Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 6).toUpperCase() + '!';
-    console.log('[Lily Pad] Silently registering native user:', email);
+    if (!email) {
+      console.warn('[Lily Pad] No email found — cannot create Supabase account');
+      return;
+    }
+    if (!password) {
+      console.warn('[Lily Pad] No password found — skipping Supabase account creation');
+      return;
+    }
+
+    console.log('[Lily Pad] Creating Supabase account for:', email, '| accountType:', accountType);
     fetch('/api/auth/signup', {
       method : 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body   : JSON.stringify({ email, password: tempPass, full_name: fullName, account_type: 'renter' }),
+      body   : JSON.stringify({ email, password, full_name: fullName || 'Lily Pad User', account_type: accountType }),
     })
       .then(r => r.json())
       .then(data => {
+        console.log('[Lily Pad] Signup API response:', JSON.stringify(data).slice(0, 200));
         if (data.session && data.session.access_token) {
           saveSession(data.session);
           saveProfileToServer(data.session);
-          console.log('[Lily Pad] Native user registered silently:', email);
+          console.log('[Lily Pad] Account created and session saved for:', email);
+        } else if (data.error) {
+          console.warn('[Lily Pad] Signup API error:', data.error);
         }
       })
-      .catch(() => {});
+      .catch(err => console.error('[Lily Pad] Signup fetch failed:', err.message));
   }
 
   function onNativeAuthComplete() {
-    console.log('[Lily Pad] Native auth complete');
+    console.log('[Lily Pad] Native wizard complete — tab-bar detected');
     hideUnwantedElements();
     startGuard();
     updateProfileDisplay();
-    promptNativeUserToRegister();
+    // Small delay to ensure the bundle has flushed its 250 ms debounce write to localStorage
+    setTimeout(promptNativeUserToRegister, 400);
   }
 
   async function afterAuth(session) {
@@ -982,6 +1072,7 @@
       }
     }
 
+    startWizardInputCapture();
     watchForNativeAuthComplete();
   }
 

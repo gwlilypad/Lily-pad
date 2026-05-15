@@ -3,6 +3,35 @@
   const SUPABASE_ANON_KEY = window.__SUPABASE_ANON_KEY__;
   const SUPABASE_OK = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
 
+  // ── Patch window.fetch to add missing apikey to all Supabase requests ────────
+  // The pre-built bundle's Supabase client has an empty key baked in at build
+  // time. This intercept fixes every fetch to *.supabase.co that lacks apikey.
+  if (SUPABASE_ANON_KEY && !window.__lpFetchPatched) {
+    window.__lpFetchPatched = true;
+    const _fetch = window.fetch.bind(window);
+    window.fetch = function (resource, init) {
+      const url = (typeof resource === 'string') ? resource
+                : (resource && resource.url) ? resource.url : '';
+      if (url.includes('supabase.co')) {
+        init = init ? Object.assign({}, init) : {};
+        // Normalise headers to a plain object
+        let headers = init.headers;
+        if (headers instanceof Headers) {
+          const plain = {};
+          headers.forEach((v, k) => { plain[k] = v; });
+          headers = plain;
+        } else {
+          headers = Object.assign({}, headers || {});
+        }
+        if (!headers['apikey'] && !headers['Apikey']) {
+          headers['apikey'] = SUPABASE_ANON_KEY;
+        }
+        init.headers = headers;
+      }
+      return _fetch(resource, init);
+    };
+  }
+
   if (!SUPABASE_OK) {
     console.warn('[Lily Pad] Supabase config missing — hiding guard still runs.');
   }

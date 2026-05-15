@@ -266,7 +266,7 @@
     }
   }
 
-  // ── Clear fake sample pads via React fiber dispatch ───────────────────────
+  // ── Clear fake admin users and driver spots from React state ─────────────
   // Clears hardcoded fake users from the lister admin state.
   // The bundle initialises "lilypad.admin.users.v1" with demo users whose ids
   // are plain numbers (1, 2, 3…).  Real Supabase users always have UUID strings.
@@ -473,7 +473,6 @@
         })(root2[fk], 0);
         if (forceRenderDispatch) {
           // flip and immediately restore to trigger re-render without visible change
-          const prev = forceRenderDispatch._lpVal;
           forceRenderDispatch(x => { const n = !x; forceRenderDispatch._lpVal = n; return n; });
           setTimeout(() => forceRenderDispatch(x => !x), 0);
         }
@@ -596,12 +595,11 @@
     // ── Form submits (delegation on document) ────────────────────────────────
     document.addEventListener('submit', (e) => {
       const id = e.target && e.target.id;
-      if (id === 'login-form'  || id === 'signup-form' || id === 'forgot-form') {
+      if (id === 'login-form' || id === 'forgot-form') {
         e.preventDefault();
         e.stopPropagation();
       }
       if (id === 'login-form')  handleLogin();
-      if (id === 'signup-form') handleSignup();
       if (id === 'forgot-form') handleForgot();
     }, true); // capture phase: fires before any child handler
 
@@ -1155,19 +1153,6 @@
     }
   }
 
-  // ── Account-page detector ─────────────────────────────────────────────────
-  // Returns true when the Account tab's menu items are present in the DOM.
-  function isOnAccountPage() {
-    const markers = ['My Bookings', 'Saved Spots', 'Customer Service'];
-    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-    let node;
-    while ((node = walker.nextNode())) {
-      const t = node.nodeValue.trim();
-      if (markers.includes(t)) return true;
-    }
-    return false;
-  }
-
   function injectPullDownSignOut() {
     if (document.getElementById('lp-pulldown-so')) return;
 
@@ -1248,13 +1233,6 @@
     row.addEventListener('click', doSignOut);
     menuCard.appendChild(row);
     console.log('[Lily Pad] Sign-out injected, container children:', menuCard.children.length);
-  }
-
-  // Poll for sign-out injection — retries every 300 ms until it lands
-  function pollSignOut() {
-    if (document.getElementById('lp-pulldown-so')) return;
-    injectPullDownSignOut();
-    if (!document.getElementById('lp-pulldown-so')) setTimeout(pollSignOut, 300);
   }
 
   // ── Fake spot coordinates baked into the read-only bundle (ar[] array) ───

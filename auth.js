@@ -663,8 +663,24 @@
     const cw = canvas.closest('.canvas-wrap') || canvas.parentElement;
     if (getComputedStyle(cw).position === 'static') cw.style.position = 'relative';
 
-    // ── Corner resize handles ───────────────────────────────────────────────
-    // Four small square handles at each corner of the drawn box.
+    // ── Build overlay controls ──────────────────────────────────────────────
+    // 1. Stem + drag-dot (move handle): line + circle extending above the box
+    const stemEl = document.createElement('div');
+    stemEl.className = 'lp-drag-stem';
+    stemEl.innerHTML =
+      '<div class="lp-drag-dot" title="Drag to move"></div>' +
+      '<div class="lp-stem-line"></div>';
+    cw.appendChild(stemEl);
+    const dragDot = stemEl.querySelector('.lp-drag-dot');
+
+    // 2. Delete (×) button – top-right, outside box
+    const delBtn = document.createElement('div');
+    delBtn.className = 'lp-box-delete';
+    delBtn.innerHTML = '&times;';
+    delBtn.title = 'Delete spot';
+    cw.appendChild(delBtn);
+
+    // 3. Corner handles
     const CORNER_DEFS = [
       { id: 'tl', cursor: 'nwse-resize' },
       { id: 'tr', cursor: 'nesw-resize' },
@@ -676,120 +692,129 @@
       const h = document.createElement('div');
       h.className = 'lp-corner';
       h.dataset.corner = id;
-      h.style.cssText =
-        'position:absolute;width:22px;height:22px;' +
-        'background:#8DD63F;border:2.5px solid rgba(255,255,255,0.92);border-radius:5px;' +
-        'cursor:' + cursor + ';z-index:20;' +
-        'transform:translate(-50%,-50%);touch-action:none;' +
-        'box-shadow:0 1px 6px rgba(0,0,0,0.45);display:none;';
+      h.style.cursor = cursor;
       cw.appendChild(h);
       handles[id] = h;
     });
 
-    function updateHandles(box) {
-      if (!box || box.w < 0.01) {
-        Object.values(handles).forEach(h => { h.style.display = 'none'; });
-        return;
-      }
+    // ── updateControls: sync all overlay positions from box state ───────────
+    function updateControls(box) {
+      const show = box && box.w > 0.01;
+      stemEl.style.display = show ? 'flex' : 'none';
+      delBtn.style.display  = show ? 'flex' : 'none';
+      Object.values(handles).forEach(h => { h.style.display = show ? 'block' : 'none'; });
+      if (!show) return;
+
+      const { cx, cy, w, h } = box;
+      // Stem anchors to top-center of box; CSS translates it upward via translateY(-100%)
+      stemEl.style.left = cx * 100 + '%';
+      stemEl.style.top  = (cy - h / 2) * 100 + '%';
+
+      // Delete button: top-right corner, offset outward
+      delBtn.style.left = (cx + w / 2) * 100 + '%';
+      delBtn.style.top  = (cy - h / 2) * 100 + '%';
+
+      // Corners
       const pos = {
-        tl: [box.cx - box.w / 2, box.cy - box.h / 2],
-        tr: [box.cx + box.w / 2, box.cy - box.h / 2],
-        bl: [box.cx - box.w / 2, box.cy + box.h / 2],
-        br: [box.cx + box.w / 2, box.cy + box.h / 2],
+        tl: [cx - w / 2, cy - h / 2],
+        tr: [cx + w / 2, cy - h / 2],
+        bl: [cx - w / 2, cy + h / 2],
+        br: [cx + w / 2, cy + h / 2],
       };
-      Object.entries(handles).forEach(([id, h]) => {
-        h.style.left    = pos[id][0] * 100 + '%';
-        h.style.top     = pos[id][1] * 100 + '%';
-        h.style.display = 'block';
+      Object.entries(handles).forEach(([id, el]) => {
+        el.style.left = pos[id][0] * 100 + '%';
+        el.style.top  = pos[id][1] * 100 + '%';
       });
     }
 
-    // Expose so updatePhotoFullscreen can refresh handles after React redraws
-    canvas._lpUpdateHandles = updateHandles;
+    // Expose so updatePhotoFullscreen can refresh after React redraws
+    canvas._lpUpdateHandles = updateControls;
 
-    // ── Shared drag state ───────────────────────────────────────────────────
+    // ── Helpers ─────────────────────────────────────────────────────────────
     let drag = null;
-    // mode: 'move' | 'resize'
-    // move:   { dispatch, origCx, origCy, startX, startY }
-    // resize: { dispatch, ax, ay, rect }   (ax/ay = anchor corner in norm coords)
 
-    // ── Coordinate helpers ──────────────────────────────────────────────────
-    function normXY(e, el) {
-      const r = (el || canvas).getBoundingClientRect();
+    function normXY(e) {
+      const r = canvas.getBoundingClientRect();
       const t = e.touches ? (e.touches[0] || e.changedTouches[0]) : e;
       return { x: (t.clientX - r.left) / r.width, y: (t.clientY - r.top) / r.height };
     }
 
-    function isInsideBox(box, x, y) {
-      if (!box || box.w < 0.01) return false;
-      return Math.abs(x - box.cx) < box.w / 2 + 0.04 &&
-             Math.abs(y - box.cy) < box.h / 2 + 0.04;
-    }
-
-    // ── Canvas: translate (move existing box) ───────────────────────────────
+    // ── Canvas: block new draws while a box exists ───────────────────────────
+    // When box is present, prevent the bundle's pointerdown from starting a
+    // fresh draw (which would overwrite the existing spot).
     canvas.addEventListener('pointerdown', e => {
       const hook = findH2BoxHook(canvas);
-      if (!hook || !hook.box || hook.box.w < 0.01) return;
-      const { x, y } = normXY(e);
-      if (!isInsideBox(hook.box, x, y)) return;
-      drag = { mode: 'move', dispatch: hook.dispatch,
-               origCx: hook.box.cx, origCy: hook.box.cy, startX: x, startY: y };
-      e.stopPropagation();
-      canvas.setPointerCapture(e.pointerId);
-      canvas.style.cursor = 'grabbing';
-    }, true);
-
-    canvas.addEventListener('pointermove', e => {
-      if (drag && drag.mode === 'move') {
-        e.stopPropagation();
-        const { x, y } = normXY(e);
-        const newCx = Math.max(0.04, Math.min(0.96, drag.origCx + x - drag.startX));
-        const newCy = Math.max(0.04, Math.min(0.96, drag.origCy + y - drag.startY));
-        drag.dispatch(prev => {
-          const u = { ...prev, cx: newCx, cy: newCy };
-          updateHandles(u);
-          return u;
-        });
-      } else if (!drag) {
-        const hook = findH2BoxHook(canvas);
-        if (hook?.box?.w > 0.01) {
-          const { x, y } = normXY(e);
-          canvas.style.cursor = isInsideBox(hook.box, x, y) ? 'grab' : 'crosshair';
-        }
+      if (hook && hook.box && hook.box.w > 0.01) {
+        e.stopPropagation(); // box exists – block bundle's draw-start handler
       }
     }, true);
 
-    canvas.addEventListener('pointerup', e => {
+    // ── Drag-dot: move entire box ────────────────────────────────────────────
+    dragDot.addEventListener('pointerdown', e => {
+      e.stopPropagation();
+      e.preventDefault();
+      dragDot.setPointerCapture(e.pointerId);
+      const hook = findH2BoxHook(canvas);
+      if (!hook) return;
+      const { x, y } = normXY(e);
+      drag = { mode: 'move', dispatch: hook.dispatch,
+               origCx: hook.box.cx, origCy: hook.box.cy, startX: x, startY: y };
+      dragDot.classList.add('grabbing');
+    });
+
+    dragDot.addEventListener('pointermove', e => {
+      if (!drag || drag.mode !== 'move') return;
+      e.stopPropagation();
+      const { x, y } = normXY(e);
+      const newCx = Math.max(0.04, Math.min(0.96, drag.origCx + x - drag.startX));
+      const newCy = Math.max(0.04, Math.min(0.96, drag.origCy + y - drag.startY));
+      drag.dispatch(prev => {
+        const u = { ...prev, cx: newCx, cy: newCy };
+        updateControls(u);
+        return u;
+      });
+    });
+
+    dragDot.addEventListener('pointerup', e => {
       if (!drag || drag.mode !== 'move') return;
       e.stopPropagation();
       drag = null;
-      canvas.style.cursor = 'crosshair';
-    }, true);
+      dragDot.classList.remove('grabbing');
+    });
 
-    canvas.addEventListener('pointercancel', () => {
-      if (drag?.mode === 'move') { drag = null; canvas.style.cursor = 'crosshair'; }
-    }, true);
+    dragDot.addEventListener('pointercancel', () => {
+      drag = null;
+      dragDot.classList.remove('grabbing');
+    });
 
-    // ── Corner handles: resize ──────────────────────────────────────────────
+    // ── Delete button ────────────────────────────────────────────────────────
+    delBtn.addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); });
+    delBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      const hook = findH2BoxHook(canvas);
+      if (!hook) return;
+      // Zero out the box so the bundle treats it as empty
+      hook.dispatch(prev => ({ ...prev, cx: 0, cy: 0, w: 0, h: 0, angle: 0 }));
+      updateControls(null);
+    });
+
+    // ── Corner handles: resize (drag corner; opposite corner stays fixed) ────
     Object.entries(handles).forEach(([id, handle]) => {
 
       handle.addEventListener('pointerdown', e => {
         e.stopPropagation();
         e.preventDefault();
         handle.setPointerCapture(e.pointerId);
-
         const hook = findH2BoxHook(canvas);
         if (!hook) return;
         const box = hook.box;
-
-        // Opposite (anchor) corner stays fixed during resize
+        // Anchor = diagonally opposite corner
         const ax = id.includes('r') ? box.cx - box.w / 2 : box.cx + box.w / 2;
         const ay = id.includes('b') ? box.cy - box.h / 2 : box.cy + box.h / 2;
-
         drag = { mode: 'resize', dispatch: hook.dispatch,
                  ax, ay, rect: canvas.getBoundingClientRect() };
-        handle.style.transform = 'translate(-50%,-50%) scale(1.25)';
-      }, true);
+        handle.classList.add('active');
+      });
 
       handle.addEventListener('pointermove', e => {
         if (!drag || drag.mode !== 'resize') return;
@@ -797,32 +822,32 @@
         e.preventDefault();
         const nx = Math.max(0.01, Math.min(0.99, (e.clientX - drag.rect.left) / drag.rect.width));
         const ny = Math.max(0.01, Math.min(0.99, (e.clientY - drag.rect.top)  / drag.rect.height));
+        const newW = Math.abs(nx - drag.ax);
+        const newH = Math.abs(ny - drag.ay);
+        if (newW < 0.03 || newH < 0.03) return;
         const newCx = (nx + drag.ax) / 2;
         const newCy = (ny + drag.ay) / 2;
-        const newW  = Math.abs(nx - drag.ax);
-        const newH  = Math.abs(ny - drag.ay);
-        if (newW < 0.03 || newH < 0.03) return; // enforce minimum box size
         drag.dispatch(prev => {
           const u = { ...prev, cx: newCx, cy: newCy, w: newW, h: newH };
-          updateHandles(u);
+          updateControls(u);
           return u;
         });
-      }, true);
+      });
 
       handle.addEventListener('pointerup', e => {
         if (!drag || drag.mode !== 'resize') return;
         e.stopPropagation();
         drag = null;
-        handle.style.transform = 'translate(-50%,-50%)';
-      }, true);
+        handle.classList.remove('active');
+      });
 
       handle.addEventListener('pointercancel', () => {
         if (drag?.mode === 'resize') drag = null;
-        handle.style.transform = 'translate(-50%,-50%)';
-      }, true);
+        handle.classList.remove('active');
+      });
     });
 
-    console.log('[Lily Pad] Pad move + corner-resize handlers installed');
+    console.log('[Lily Pad] Pad move + corner-resize + delete controls installed');
   }
 
   // ── Cancel button for the h2 pad-drawing editing modal ─────────────────────

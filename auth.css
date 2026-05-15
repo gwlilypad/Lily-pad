@@ -381,15 +381,96 @@ body.lp-photo-fs .canvas-wrap canvas {
 #lp-canvas-cancel:hover  { background: rgba(14, 31, 64, 0.95); }
 #lp-canvas-cancel:active { transform: scale(0.96); }
 
-/* ── Pad drawing — corner resize handles ─────────────────────────────────── */
+/* ── Pad drawing — overlay controls (stem/dot, corners, delete) ─────────── */
+
+/* Stem container: sits at top-centre of box, extends upward */
+.lp-drag-stem {
+  position: absolute;
+  flex-direction: column;
+  align-items: center;
+  transform: translate(-50%, -100%);   /* anchor bottom of stem to top edge of box */
+  pointer-events: none;
+  z-index: 22;
+  display: none;
+}
+
+/* Vertical line connecting dot to box */
+.lp-stem-line {
+  width: 2px;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.8);
+  pointer-events: none;
+}
+
+/* Draggable circle at the top of the stem */
+.lp-drag-dot {
+  width: 32px;
+  height: 32px;
+  background: rgba(14, 31, 64, 0.88);
+  border: 2.5px solid rgba(255, 255, 255, 0.95);
+  border-radius: 50%;
+  cursor: grab;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  transition: transform 0.1s, box-shadow 0.1s;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  /* four-direction arrow icon */
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.9);
+}
+.lp-drag-dot::before { content: '✥'; }
+.lp-drag-dot:hover    { transform: scale(1.12); box-shadow: 0 3px 12px rgba(0,0,0,0.55); }
+.lp-drag-dot.grabbing { cursor: grabbing; transform: scale(0.94); }
+
+/* Delete (×) button — red circle top-right of box */
+.lp-box-delete {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  background: #e74c3c;
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  border-radius: 50%;
+  cursor: pointer;
+  z-index: 24;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  color: #fff;
+  transform: translate(10px, -50%);  /* offset outside top-right corner */
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.4);
+  transition: transform 0.1s, background 0.1s;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+.lp-box-delete:hover  { background: #c0392b; transform: translate(10px, -50%) scale(1.12); }
+.lp-box-delete:active { transform: translate(10px, -50%) scale(0.94); }
+
+/* Corner resize handles */
 .lp-corner {
-  /* All sizing/position set inline via JS; these provide the active animation */
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  background: #8DD63F;
+  border: 2.5px solid rgba(255, 255, 255, 0.92);
+  border-radius: 5px;
+  z-index: 20;
+  transform: translate(-50%, -50%);
+  touch-action: none;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
+  display: none;
+  pointer-events: auto;
   transition: transform 0.08s ease, box-shadow 0.08s ease;
   user-select: none;
   -webkit-user-select: none;
 }
-
-.lp-corner:hover {
-  transform: translate(-50%, -50%) scale(1.2) !important;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.5) !important;
-}
+.lp-corner:hover       { transform: translate(-50%, -50%) scale(1.2);  box-shadow: 0 2px 10px rgba(0,0,0,0.5); }
+.lp-corner.active      { transform: translate(-50%, -50%) scale(1.25); box-shadow: 0 3px 14px rgba(0,0,0,0.55); }

@@ -557,31 +557,30 @@
   function injectPullDownSignOut() {
     if (document.getElementById('lp-pulldown-so')) return;
 
-    // Find the "Customer Service" text node (last menu item)
-    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-    let csNode = null, n;
-    while ((n = walker.nextNode())) {
-      if (n.nodeValue.trim() === 'Customer Service') { csNode = n; break; }
+    // Find innermost div whose direct children collectively cover 3+ of the 4
+    // account-menu labels. Iterating in DOM order means the last match is the
+    // deepest (most specific) container.
+    const LABELS = ['My Account', 'My Bookings', 'Saved Spots', 'Customer Service'];
+    let menuCard = null;
+    const divs = document.querySelectorAll('div');
+    for (let i = 0; i < divs.length; i++) {
+      const kids = divs[i].children;
+      if (kids.length < 2) continue;
+      let hits = 0;
+      for (let j = 0; j < LABELS.length; j++) {
+        for (let k = 0; k < kids.length; k++) {
+          if (kids[k].textContent.includes(LABELS[j])) { hits++; break; }
+        }
+      }
+      if (hits >= 3) menuCard = divs[i];
     }
-    if (!csNode) return;
 
-    // Walk up from the text to find the card container:
-    // the element whose direct children include all 4 menu rows
-    let el = csNode.parentElement;
-    let card = null;
-    while (el && el !== document.body) {
-      const p = el.parentElement;
-      if (!p) break;
-      if (
-        p.children.length >= 3 &&
-        p.textContent.includes('My Account') &&
-        p.textContent.includes('My Bookings')
-      ) { card = p; break; }
-      el = p;
+    if (!menuCard) {
+      const hasAny = document.body.textContent.includes('Customer Service');
+      console.warn('[Lily Pad] SO: menu card not found. CS in DOM:', hasAny);
+      return;
     }
-    if (!card) return;
 
-    // Build a row matching the app's dark-card style
     const row = document.createElement('div');
     row.id = 'lp-pulldown-so';
     row.style.cssText = [
@@ -609,8 +608,15 @@
         'color:rgba(229,57,53,0.9);font-family:\'DM Sans\',sans-serif;' +
         'letter-spacing:-0.01em">Sign out</span>';
     row.addEventListener('click', doSignOut);
-    card.appendChild(row);
-    console.log('[Lily Pad] Sign-out row injected into account menu');
+    menuCard.appendChild(row);
+    console.log('[Lily Pad] Sign-out injected, container children:', menuCard.children.length);
+  }
+
+  // Poll for sign-out injection — retries every 300 ms until it lands
+  function pollSignOut() {
+    if (document.getElementById('lp-pulldown-so')) return;
+    injectPullDownSignOut();
+    if (!document.getElementById('lp-pulldown-so')) setTimeout(pollSignOut, 300);
   }
 
   // ── Fake spot coordinates baked into the read-only bundle (ar[] array) ───
@@ -806,6 +812,7 @@
   function startGuard() {
     const root = document.getElementById('root');
     if (!root) return;
+    pollSignOut();
     const guard = new MutationObserver(() => {
       hideUnwantedElements();
       injectSignOutButtons();
@@ -893,6 +900,7 @@
     startGuard();
     injectSignOutButtons();
     injectPullDownSignOut();
+    pollSignOut();
     updateProfileDisplay();
   }
 

@@ -270,6 +270,115 @@
     walk(root[fk], 0);
   }
 
+  // ── Clear fake driver-side listings ──────────────────────────────────────
+  // The bundle ships with a hardcoded `ar` array of ~105 Houston parking spots.
+  // Drivers see these before any real Supabase listings are loaded.  We clear
+  // them by:
+  //   1. Patching the useMemo `Q` (nearby-pads array) to [] in the fiber tree
+  //   2. Clearing the fake saved-IDs Set (which triggers a React re-render,
+  //      causing React to use the [] we wrote into the useMemo cache)
+  //   3. DOM-hiding any listing-card component fiber whose memoizedProps carry
+  //      {addr:string, price:string, id:number} — the ea-rendered list items
+  let _clearListingsCooldown = 0;
+  function clearFakeListings() {
+    const now = Date.now();
+    if (now - _clearListingsCooldown < 400) return;
+
+    const root = document.getElementById('root');
+    if (!root) return;
+    const fk = Object.keys(root).find(k => k.startsWith('__reactFiber$'));
+    if (!fk) return;
+
+    // helpers
+    function isFakeArr(v) {
+      return Array.isArray(v) && v.length > 0 && v[0] &&
+             typeof v[0].addr === 'string' && typeof v[0].id === 'number';
+    }
+    function isFakeSet(v) {
+      if (!(v instanceof Set) || v.size === 0) return false;
+      for (const x of v) { if (typeof x !== 'number' || x > 500) return false; }
+      return true;
+    }
+
+    let forceRenderDispatch = null;
+
+    function walk(fiber, depth) {
+      if (!fiber || depth > 160) return;
+
+      // ── Check this fiber's hooks ────────────────────────────────────────
+      let s = fiber.memoizedState;
+      while (s) {
+        const v = s.memoizedState;
+
+        // useMemo hook: memoizedState = [value, deps]
+        if (Array.isArray(v) && v.length === 2 && isFakeArr(v[0])) {
+          v[0] = [];   // overwrite the cached memoized value
+          _clearListingsCooldown = now;
+        }
+
+        // useState Set of fake saved-listing IDs (Set([1,2,3,4,5,…]))
+        if (isFakeSet(v)) {
+          const dispatch = s.queue && s.queue.dispatch;
+          if (typeof dispatch === 'function') {
+            dispatch(new Set());
+            forceRenderDispatch = dispatch; // this re-render will pick up Q=[]
+            _clearListingsCooldown = now;
+          }
+        }
+
+        s = s.next;
+      }
+
+      // ── Check memoizedProps for listing-card component ──────────────────
+      // Function components spread ar-item props: {addr, price, id, meta, lat, lng}
+      const p = fiber.memoizedProps;
+      if (p && typeof p.addr === 'string' && typeof p.price === 'string' &&
+          typeof p.id === 'number') {
+        // Walk down to find the first host (DOM) element
+        let f = fiber;
+        while (f && !(f.stateNode instanceof HTMLElement)) f = f.child;
+        if (f && f.stateNode instanceof HTMLElement &&
+            f.stateNode.style.display !== 'none') {
+          f.stateNode.style.display = 'none';
+          _clearListingsCooldown = now;
+        }
+      }
+
+      walk(fiber.child,   depth + 1);
+      walk(fiber.sibling, depth + 1);
+    }
+
+    walk(root[fk], 0);
+
+    // If we patched useMemo values but the saved-Set dispatch wasn't found,
+    // force a re-render through any boolean useState to pick up the patched Q
+    if (!forceRenderDispatch) {
+      const root2 = document.getElementById('root');
+      if (root2 && root2[fk]) {
+        (function tryForce(fiber, depth) {
+          if (!fiber || depth > 80 || forceRenderDispatch) return;
+          let s = fiber.memoizedState;
+          while (s) {
+            if (typeof s.memoizedState === 'boolean' &&
+                s.queue && typeof s.queue.dispatch === 'function') {
+              forceRenderDispatch = s.queue.dispatch;
+              break;
+            }
+            s = s.next;
+          }
+          tryForce(fiber.child,   depth + 1);
+          tryForce(fiber.sibling, depth + 1);
+        })(root2[fk], 0);
+        if (forceRenderDispatch) {
+          // flip and immediately restore to trigger re-render without visible change
+          const prev = forceRenderDispatch._lpVal;
+          forceRenderDispatch(x => { const n = !x; forceRenderDispatch._lpVal = n; return n; });
+          setTimeout(() => forceRenderDispatch(x => !x), 0);
+        }
+      }
+    }
+  }
+
   // ── Update profile name/initials/email displayed in the pull-down ─────────
   function updateProfileDisplay() {
     const data = getUserData();
@@ -1612,6 +1721,7 @@
       scheduleDeepBack();
       removeFakeMapSpots();
       clearFakePads();
+      clearFakeListings();
       installPhotoClickHandlers();
       enlargePadCards();
     });

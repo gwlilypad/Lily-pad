@@ -974,11 +974,57 @@
     obs.observe(root, { childList: true, subtree: true });
   }
 
+  // ── After native wizard: prompt user to save real Supabase account ──────────
+  function promptNativeUserToRegister() {
+    if (!SUPABASE_OK) return;
+    if (getSession()) return; // already have a Supabase session
+
+    // Read name / email the native wizard collected
+    let fullName = '', email = '';
+    try {
+      const raw = localStorage.getItem('lilypad.appState.v1');
+      if (raw) {
+        const state = JSON.parse(raw);
+        const dr = state.drAns || {};
+        const su = state.suAns || {};
+        const biz = state.bizAns || {};
+        const first = dr[0] || su[0] || biz[5] || '';
+        const last  = dr[1] || su[1] || biz[6] || '';
+        email    = dr[2] || su[2] || biz[7] || '';
+        fullName = (first + ' ' + last).trim();
+      }
+    } catch {}
+
+    if (!email) return; // nothing to pre-fill — skip prompt
+
+    // Show the signup form pre-filled
+    setTimeout(() => {
+      showGate();
+      switchForm('form-signup');
+
+      const nameEl  = document.getElementById('signup-name');
+      const emailEl = document.getElementById('signup-email');
+      if (nameEl  && !nameEl.value)  nameEl.value  = fullName;
+      if (emailEl && !emailEl.value) emailEl.value = email;
+
+      // Add a friendly banner so they know why the modal appeared
+      const card = document.querySelector('#form-signup .auth-card');
+      if (card && !document.getElementById('native-reg-banner')) {
+        const banner = document.createElement('p');
+        banner.id = 'native-reg-banner';
+        banner.style.cssText = 'margin:0 0 12px;font-size:13px;color:rgba(255,255,255,0.7);text-align:center;line-height:1.45';
+        banner.textContent = 'Set a password to save your account and access it from any device.';
+        card.insertBefore(banner, card.firstChild);
+      }
+    }, 800);
+  }
+
   function onNativeAuthComplete() {
     console.log('[Lily Pad] Native auth complete');
     hideUnwantedElements();
     startGuard();
     updateProfileDisplay();
+    promptNativeUserToRegister();
   }
 
   async function afterAuth(session) {

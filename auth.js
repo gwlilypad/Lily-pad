@@ -3,6 +3,24 @@
   const SUPABASE_ANON_KEY = '%%SUPABASE_ANON_KEY%%' || window.__SUPABASE_ANON_KEY__;
   const SUPABASE_OK = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
 
+  // ── Block fake pad sample data from ever persisting ─────────────────────────
+  // The bundle's "My Pads" host view initialises from a hardcoded e2 array
+  // (sample pads like "142 Maple St"). Intercepting localStorage prevents the
+  // bundle from reading or re-writing those samples between sessions.
+  (function () {
+    const PADS_KEY = 'lilypad.pads.v1';
+    const _get = Storage.prototype.getItem;
+    const _set = Storage.prototype.setItem;
+    Storage.prototype.getItem = function (key) {
+      if (key === PADS_KEY) return null; // always look empty → bundle stays at []
+      return _get.call(this, key);
+    };
+    Storage.prototype.setItem = function (key, value) {
+      if (key === PADS_KEY) return; // block sample data from being stored
+      _set.call(this, key, value);
+    };
+  })();
+
   // ── Patch window.fetch to add missing apikey to all Supabase requests ────────
   // The pre-built bundle's Supabase client has an empty key baked in at build
   // time. This intercept fixes every fetch to *.supabase.co that lacks apikey.
@@ -129,6 +147,86 @@
     return null;
   }
 
+  // ── Write real user info into the native React app state ─────────────────
+  // The bundle derives the Account pull-down name from state.drAns[0,1,2].
+  // Calling setState via React fiber injects it without touching the bundle.
+  function writeUserToNativeState(firstName, lastName, email) {
+    if (!firstName && !email) return;
+    // Also persist to localStorage so the bundle picks it up on remount
+    try {
+      const raw = localStorage.getItem('lilypad.appState.v1');
+      const state = raw ? JSON.parse(raw) : {};
+      state.drAns = { ...(state.drAns || {}), 0: firstName, 1: lastName, 2: email };
+      state.suAns = { ...(state.suAns || {}), 0: firstName, 1: lastName, 2: email };
+      localStorage.setItem('lilypad.appState.v1', JSON.stringify(state));
+    } catch {}
+
+    // Walk fiber tree to find the global state context and update it live
+    const root = document.getElementById('root');
+    if (!root) return;
+    const fk = Object.keys(root).find(k => k.startsWith('__reactFiber$'));
+    if (!fk) return;
+    const queue = [root[fk]];
+    let checked = 0;
+    while (queue.length && checked < 600) {
+      const fiber = queue.shift();
+      if (!fiber) continue;
+      checked++;
+      const mp = fiber.memoizedProps;
+      if (mp && mp.value && typeof mp.value.setState === 'function') {
+        const v = mp.value;
+        if (v.state && typeof v.state === 'object' &&
+            ('drAns' in v.state || 'suAns' in v.state || 'accountType' in v.state)) {
+          v.setState(prev => ({
+            ...prev,
+            drAns: { ...(prev.drAns || {}), 0: firstName, 1: lastName, 2: email },
+            suAns: { ...(prev.suAns || {}), 0: firstName, 1: lastName, 2: email },
+          }));
+          console.log('[Lily Pad] Native state name written:', firstName, lastName, email);
+          return;
+        }
+      }
+      if (fiber.child)    queue.push(fiber.child);
+      if (fiber.sibling)  queue.push(fiber.sibling);
+    }
+  }
+
+  // ── Clear fake sample pads via React fiber dispatch ───────────────────────
+  // The bundle initialises "My Pads" with a hardcoded e2 array of sample pads
+  // (address "142 Maple Street" etc.). Walk the fiber tree to find that state
+  // and replace it with [] so no fake listings appear.
+  let _padsCleared = false;
+  function clearFakePads() {
+    if (_padsCleared) return;
+    const root = document.getElementById('root');
+    if (!root) return;
+    const fk = Object.keys(root).find(k => k.startsWith('__reactFiber$'));
+    if (!fk) return;
+
+    function walk(fiber, depth) {
+      if (!fiber || depth > 120) return false;
+      let s = fiber.memoizedState;
+      while (s) {
+        const v = s.memoizedState;
+        if (Array.isArray(v) && v.length > 0 && v[0] &&
+            (v[0].address === '142 Maple Street' || v[0].id === 1)) {
+          const dispatch = s.queue && s.queue.dispatch;
+          if (typeof dispatch === 'function') {
+            dispatch([]);
+            _padsCleared = true;
+            console.log('[Lily Pad] Fake sample pads cleared from My Pads');
+            return true;
+          }
+        }
+        s = s.next;
+      }
+      if (walk(fiber.child,   depth + 1)) return true;
+      if (walk(fiber.sibling, depth + 1)) return true;
+      return false;
+    }
+    walk(root[fk], 0);
+  }
+
   // ── Update profile name/initials/email displayed in the pull-down ─────────
   function updateProfileDisplay() {
     const data = getUserData();
@@ -202,6 +300,11 @@
       if (!res.ok) throw new Error(data.error || 'Sign-in failed');
       saveSession(data);
       saveProfileToServer(data);
+      // Write real name into native app state so pull-down shows correct name
+      const meta = (data.user && data.user.user_metadata) || {};
+      const fullN = (meta.full_name || meta.name || '').trim();
+      const [fn = '', ...lnParts] = fullN.split(' ');
+      writeUserToNativeState(fn, lnParts.join(' '), email);
       hideGate();
       afterAuth(data);
     } catch (err) {
@@ -831,6 +934,7 @@
       updatePhotoFullscreen();
       injectPaddashboardBack();
       removeFakeMapSpots();
+      clearFakePads();
     });
     guard.observe(target, { childList: true, subtree: true });
     window.__lpGuardObserver = guard;
@@ -848,7 +952,6 @@
       if (onNavDone) onNavDone();
       hideUnwantedElements();
       startGuard();
-      injectSignOutButtons();
       injectPullDownSignOut();
       updateProfileDisplay();
     }
@@ -884,7 +987,6 @@
         if (onNavDone) onNavDone();
         hideUnwantedElements();
         startGuard();
-        injectSignOutButtons();
         injectPullDownSignOut();
         updateProfileDisplay();
       }
@@ -1026,6 +1128,11 @@
           if (data.session && data.session.access_token) {
             saveSession(data.session);
             saveProfileToServer(data.session);
+            // Write real name/email into native state for pull-down display
+            const [pfn = '', ...pln] = fullName.split(' ');
+            writeUserToNativeState(pfn, pln.join(' '), finalEmail);
+            setTimeout(updateProfileDisplay, 600);
+            setTimeout(clearFakePads, 800);
             console.log('[Lily Pad] poller: account created + session saved for', finalEmail);
           } else if (data.error) {
             console.warn('[Lily Pad] poller signup error:', data.error);
@@ -1043,6 +1150,26 @@
     const role = (session && session.access_token)
       ? await getUserRole(session.access_token)
       : 'renter';
+
+    // Write real name into native app state for the Account pull-down
+    const meta = (session && session.user_metadata) ||
+                 (session && session.user && session.user.user_metadata) || {};
+    const email = (session && session.email) ||
+                  (session && session.user && session.user.email) || '';
+    const fullN = (meta.full_name || meta.name || '').trim();
+    const [fn = '', ...lnParts] = fullN.split(' ');
+    if (fn || email) {
+      // Retry until the React tree is ready (navigation may still be in progress)
+      let tries = 0;
+      const tryWrite = () => {
+        writeUserToNativeState(fn, lnParts.join(' '), email);
+        updateProfileDisplay();
+        clearFakePads();
+        if (++tries < 6) setTimeout(tryWrite, 800);
+      };
+      setTimeout(tryWrite, 400);
+    }
+
     navigateToMap(role, () => {});
   }
 

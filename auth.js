@@ -234,9 +234,13 @@
   // The bundle initialises "My Pads" with a hardcoded e2 array of sample pads
   // (address "142 Maple Street" etc.). Walk the fiber tree to find that state
   // and replace it with [] so no fake listings appear.
-  let _padsCleared = false;
+  // No once-only flag — clearFakePads must re-run after navigation because React
+  // remounts the My-Pads component and resets state to the hardcoded e2 array.
+  // The address check makes it safe to call repeatedly; it never touches real pads.
+  let _clearPadsCooldown = 0;
   function clearFakePads() {
-    if (_padsCleared) return;
+    const now = Date.now();
+    if (now - _clearPadsCooldown < 800) return; // throttle: max once per 800 ms
     const root = document.getElementById('root');
     if (!root) return;
     const fk = Object.keys(root).find(k => k.startsWith('__reactFiber$'));
@@ -252,7 +256,7 @@
           const dispatch = s.queue && s.queue.dispatch;
           if (typeof dispatch === 'function') {
             dispatch([]);
-            _padsCleared = true;
+            _clearPadsCooldown = now;
             console.log('[Lily Pad] Fake sample pads cleared from My Pads');
             return true;
           }
@@ -1361,15 +1365,15 @@
   // native bundle flow via the p2 component's onEdit / onReplacePhoto props.
 
   function getPadPropsFromEl(el) {
-    // Walk fiber UP from el to find the p2 component's {pad, onEdit, onReplacePhoto} props
+    // Walk fiber UP from el to find the p2 component's {pad, onEdit, onReplacePhoto} props.
+    // Only require photoUrl — box may be absent for pads that haven't had a spot drawn yet.
     const fk = Object.keys(el).find(k => k.startsWith('__reactFiber$'));
     if (!fk) return null;
     let f = el[fk];
     let depth = 0;
-    while (f && !(f.stateNode instanceof Document) && depth++ < 60) {
+    while (f && !(f.stateNode instanceof Document) && depth++ < 80) {
       const p = f.memoizedProps;
-      if (p && p.pad && p.pad.photoUrl &&
-          p.pad.box && typeof p.pad.box.cx === 'number') {
+      if (p && p.pad && typeof p.pad.photoUrl === 'string' && p.pad.photoUrl) {
         return { pad: p.pad, onEdit: p.onEdit || null, onReplacePhoto: p.onReplacePhoto || null };
       }
       f = f.return;
@@ -1523,31 +1527,33 @@
   }
 
   function installPhotoClickHandlers() {
-    document.querySelectorAll('img[src]').forEach(img => {
-      if (img.dataset.lpLb) return;
-      // Only target pad photos — must have an accessible p2 pad prop via fiber
+    // Use the same SVG selector as enlargePadCards — it is unique to p2 pad-card
+    // photo containers and avoids false positives on unrelated img elements.
+    document.querySelectorAll('svg[viewBox="0 0 100 70"]').forEach(svg => {
+      const wrap = svg.parentElement;
+      if (!wrap || wrap.dataset.lpLb) return;
+      const img = wrap.querySelector('img');
+      if (!img) return;
       const data = getPadPropsFromEl(img);
       if (!data) return;
-      img.dataset.lpLb = '1';
-      // Make the photo container show a zoom cursor
-      const container = img.closest('[style]') || img.parentElement;
-      if (container) container.style.cursor = 'zoom-in';
-      img.style.cursor = 'zoom-in';
+      wrap.dataset.lpLb = '1';
+      wrap.style.cursor = 'zoom-in';
 
-      img.addEventListener('click', e => {
+      wrap.addEventListener('click', e => {
         e.stopPropagation();
-        // Re-read fiber for latest state (photo/box may have been updated)
+        // Re-read fiber for latest state (photo/box may have changed since mount)
         const latest = getPadPropsFromEl(img) || data;
         const page = lpGetCurrentPage();
-        const isLister = page === 'paddashboard' || page === 'addpad' || page === 'photo' || page === 'photointro';
+        const isLister = page === 'paddashboard' || page === 'addpad' ||
+                         page === 'photo'        || page === 'photointro';
         openPhotoLightbox({
-          photoUrl:        latest.pad.photoUrl,
-          box:             latest.pad.box,
-          color:           latest.pad.color,
-          name:            latest.pad.name,
+          photoUrl:       latest.pad.photoUrl,
+          box:            latest.pad.box,
+          color:          latest.pad.color,
+          name:           latest.pad.name,
           isLister,
-          onEdit:          latest.onEdit,
-          onReplacePhoto:  latest.onReplacePhoto,
+          onEdit:         latest.onEdit,
+          onReplacePhoto: latest.onReplacePhoto,
         });
       });
     });

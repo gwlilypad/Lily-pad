@@ -1,6 +1,6 @@
 (function () {
-  const SUPABASE_URL = window.__SUPABASE_URL__;
-  const SUPABASE_ANON_KEY = window.__SUPABASE_ANON_KEY__;
+  const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
+  const SUPABASE_ANON_KEY = '%%SUPABASE_ANON_KEY%%' || window.__SUPABASE_ANON_KEY__;
   const SUPABASE_OK = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
 
   // ── Patch window.fetch to add missing apikey to all Supabase requests ────────

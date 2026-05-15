@@ -225,9 +225,14 @@ app.get('/', (req, res) => {
     window.__SUPABASE_ANON_KEY__ = "${SUPABASE_ANON}";
   </script>`;
 
-  html = html.replace('</head>',            () => `${headInjection}</head>`);
+  // Bake credentials directly into auth.js — no window variable dependency
+  const authJSFinal = authJS
+    .replace(/%%SUPABASE_URL%%/g,      SUPABASE_URL)
+    .replace(/%%SUPABASE_ANON_KEY%%/g, SUPABASE_ANON);
+
+  html = html.replace('</head>',             () => `${headInjection}</head>`);
   html = html.replace('<div id="root"></div>', () => `${authOverlay}<div id="root"></div>`);
-  html = html.replace('</body>',            () => `<script>${authJS}</script></body>`);
+  html = html.replace('</body>',             () => `<script>${authJSFinal}</script></body>`);
 
   res.setHeader('Cache-Control', 'no-store');
   res.send(html);

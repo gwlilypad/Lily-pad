@@ -585,29 +585,53 @@
   function injectPullDownSignOut() {
     if (document.getElementById('lp-pulldown-so')) return;
 
-    // Find innermost div whose direct children collectively cover 3+ of the 4
-    // account-menu labels. Iterating in DOM order means the last match is the
-    // deepest (most specific) container.
     const LABELS = ['My Account', 'My Bookings', 'Saved Spots', 'Customer Service'];
+
+    // Strategy 1: walk UP from the "Customer Service" leaf node to the first
+    // ancestor whose textContent contains 3+ of the 4 menu labels.
+    // This works regardless of how deeply nested the label text is.
     let menuCard = null;
-    const divs = document.querySelectorAll('div');
-    for (let i = 0; i < divs.length; i++) {
-      const kids = divs[i].children;
-      if (kids.length < 2) continue;
-      let hits = 0;
-      for (let j = 0; j < LABELS.length; j++) {
-        for (let k = 0; k < kids.length; k++) {
-          if (kids[k].textContent.includes(LABELS[j])) { hits++; break; }
+    const allNodes = document.querySelectorAll('*');
+    let csNode = null;
+    for (let i = 0; i < allNodes.length; i++) {
+      const n = allNodes[i];
+      if (n.children.length === 0 && n.textContent.trim() === 'Customer Service') {
+        csNode = n; break;
+      }
+    }
+    // Looser fallback: smallest element that contains ONLY "Customer Service"
+    if (!csNode) {
+      for (let i = allNodes.length - 1; i >= 0; i--) {
+        const n = allNodes[i];
+        if (n.textContent.includes('Customer Service') && !n.textContent.includes('My Account')) {
+          csNode = n; break;
         }
       }
-      if (hits >= 3) menuCard = divs[i];
     }
 
-    if (!menuCard) {
-      const hasAny = document.body.textContent.includes('Customer Service');
-      console.warn('[Lily Pad] SO: menu card not found. CS in DOM:', hasAny);
-      return;
+    if (csNode) {
+      let node = csNode.parentElement;
+      while (node && node !== document.body) {
+        const txt = node.textContent;
+        let hits = 0;
+        for (let j = 0; j < LABELS.length; j++) { if (txt.includes(LABELS[j])) hits++; }
+        if (hits >= 3) { menuCard = node; break; }
+        node = node.parentElement;
+      }
     }
+
+    // Strategy 2: fallback — scan divs whose children collectively cover labels
+    if (!menuCard) {
+      const divs = document.querySelectorAll('div');
+      for (let i = 0; i < divs.length; i++) {
+        const txt = divs[i].textContent;
+        let hits = 0;
+        for (let j = 0; j < LABELS.length; j++) { if (txt.includes(LABELS[j])) hits++; }
+        if (hits >= 3 && divs[i].children.length >= 2) menuCard = divs[i];
+      }
+    }
+
+    if (!menuCard) return; // menu panel not open yet — observer will retry
 
     const row = document.createElement('div');
     row.id = 'lp-pulldown-so';
@@ -838,19 +862,18 @@
   }
 
   function startGuard() {
-    const root = document.getElementById('root');
-    if (!root) return;
-    pollSignOut();
+    if (window.__lpGuardObserver) return;
+    const target = document.body;
     const guard = new MutationObserver(() => {
       hideUnwantedElements();
-      injectSignOutButtons();
       injectPullDownSignOut();
       updateProfileDisplay();
       updatePhotoFullscreen();
       injectPaddashboardBack();
       removeFakeMapSpots();
     });
-    guard.observe(root, { childList: true, subtree: true });
+    guard.observe(target, { childList: true, subtree: true });
+    window.__lpGuardObserver = guard;
   }
 
   // ── Navigate to map ───────────────────────────────────────────────────────
@@ -926,32 +949,23 @@
     console.log('[Lily Pad] Native auth complete');
     hideUnwantedElements();
     startGuard();
-    injectSignOutButtons();
-    injectPullDownSignOut();
-    pollSignOut();
     updateProfileDisplay();
   }
 
   async function afterAuth(session) {
+    startGuard();
     const role = (session && session.access_token)
       ? await getUserRole(session.access_token)
       : 'renter';
     navigateToMap(role, () => {});
   }
 
-  // ── Sign-out button injections ────────────────────────────────────────────
-  function injectSignOutButtons() { injectSignOut(); }
-
-  function injectSignOut() { injectPullDownSignOut(); }
-
   // ── Init ──────────────────────────────────────────────────────────────────
   async function init() {
-    // Always hide unwanted elements + inject landing sign-in button
     startHidingGuard();
-    // Always wire sign-out intercept from startup
     wireSignOut();
-    // Wire auth modal forms
     wireAuthForms();
+    startGuard();
 
     if (SUPABASE_OK) {
       const session = getSession();

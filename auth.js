@@ -161,6 +161,81 @@
       });
     }
 
+    // Sign-up
+    const signupForm = document.getElementById('signup-form');
+    if (signupForm && !signupForm.dataset.wired) {
+      signupForm.dataset.wired = '1';
+      signupForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const name   = (document.getElementById('signup-name')?.value || '').trim();
+        const email  = (document.getElementById('signup-email')?.value || '').trim();
+        const pass   = (document.getElementById('signup-password')?.value || '');
+        const errEl  = document.getElementById('signup-error');
+        const succEl = document.getElementById('signup-success');
+        const btn    = document.getElementById('signup-btn');
+
+        // Basic validation
+        if (errEl) errEl.textContent = '';
+        if (succEl) succEl.textContent = '';
+        if (!name)  { if (errEl) errEl.textContent = 'Please enter your name.'; return; }
+        if (!email) { if (errEl) errEl.textContent = 'Please enter your email.'; return; }
+        if (pass.length < 6) { if (errEl) errEl.textContent = 'Password must be at least 6 characters.'; return; }
+
+        // Read selected role from the role picker
+        const activeRole = document.querySelector('#role-picker .role-btn.active');
+        const accountType = (activeRole && activeRole.dataset.role) || 'renter';
+
+        if (btn) { btn.disabled = true; btn.textContent = 'Creating account…'; }
+
+        try {
+          const res = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
+            method: 'POST',
+            headers: HEADERS,
+            body: JSON.stringify({
+              email,
+              password: pass,
+              data: {
+                full_name: name,
+                account_type: accountType,
+              },
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            throw new Error(data.error_description || data.msg || data.message || 'Sign-up failed');
+          }
+
+          // If Supabase returned a session (email confirmation disabled) — log in directly
+          if (data.access_token) {
+            saveSession(data);
+            hideGate();
+            afterAuth(data);
+          } else {
+            // Email confirmation required — show success message
+            if (succEl) succEl.textContent = 'Account created! Check your email to confirm, then sign in.';
+            if (btn) { btn.disabled = false; btn.textContent = 'Create account'; }
+            // Switch to login form after 3 s so they can sign in after confirming
+            setTimeout(() => switchForm('form-login'), 3000);
+          }
+        } catch (err) {
+          if (errEl) errEl.textContent = err.message;
+          if (btn) { btn.disabled = false; btn.textContent = 'Create account'; }
+        }
+      });
+
+      // Role picker button toggling
+      const roleBtns = document.querySelectorAll('#role-picker .role-btn');
+      roleBtns.forEach(rb => {
+        if (!rb.dataset.wired) {
+          rb.dataset.wired = '1';
+          rb.addEventListener('click', () => {
+            roleBtns.forEach(b => b.classList.remove('active'));
+            rb.classList.add('active');
+          });
+        }
+      });
+    }
+
     // Forgot password
     const forgotForm = document.getElementById('forgot-form');
     if (forgotForm && !forgotForm.dataset.wired) {

@@ -187,172 +187,141 @@
     });
   }
 
+  // ── Auth form handlers (document-level delegation — works regardless of timing) ──
+  async function handleLogin() {
+    const email = (document.getElementById('login-email')?.value || '').trim();
+    const pass  = document.getElementById('login-password')?.value || '';
+    const errEl = document.getElementById('login-error');
+    const btn   = document.getElementById('login-btn');
+    if (errEl) errEl.textContent = '';
+    if (!email || !pass) { if (errEl) errEl.textContent = 'Please enter your email and password.'; return; }
+    if (btn) { btn.disabled = true; btn.textContent = 'Signing in…'; }
+    try {
+      const res  = await fetch('/api/auth/signin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password: pass }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Sign-in failed');
+      saveSession(data);
+      saveProfileToServer(data);
+      hideGate();
+      afterAuth(data);
+    } catch (err) {
+      if (errEl) errEl.textContent = err.message;
+      if (btn) { btn.disabled = false; btn.textContent = 'Sign in'; }
+    }
+  }
+
+  async function handleSignup() {
+    const name   = (document.getElementById('signup-name')?.value || '').trim();
+    const email  = (document.getElementById('signup-email')?.value || '').trim();
+    const pass   = document.getElementById('signup-password')?.value || '';
+    const errEl  = document.getElementById('signup-error');
+    const succEl = document.getElementById('signup-success');
+    const btn    = document.getElementById('signup-btn');
+    if (errEl)  errEl.textContent  = '';
+    if (succEl) succEl.textContent = '';
+    if (!name)         { if (errEl) errEl.textContent = 'Please enter your name.'; return; }
+    if (!email)        { if (errEl) errEl.textContent = 'Please enter your email.'; return; }
+    if (pass.length < 6) { if (errEl) errEl.textContent = 'Password must be at least 6 characters.'; return; }
+    const accountType = document.querySelector('#role-picker .role-btn.active')?.dataset.role || 'renter';
+    if (btn) { btn.disabled = true; btn.textContent = 'Creating account…'; }
+    console.log('[Lily Pad] Signup attempt:', email);
+    try {
+      const res  = await fetch('/api/auth/signup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password: pass, full_name: name, account_type: accountType }) });
+      const data = await res.json();
+      console.log('[Lily Pad] Signup response:', res.status, JSON.stringify(data).slice(0, 200));
+      if (!res.ok) throw new Error(data.error || 'Sign-up failed');
+      if (data.session && data.session.access_token) {
+        saveSession(data.session);
+        saveProfileToServer(data.session);
+        hideGate();
+        afterAuth(data.session);
+      } else if (data.confirm_email) {
+        if (succEl) succEl.textContent = 'Check your email for a confirmation link, then sign in.';
+        if (btn) { btn.disabled = false; btn.textContent = 'Create account'; }
+        setTimeout(() => switchForm('form-login'), 2500);
+      } else {
+        if (succEl) succEl.textContent = 'Account created! Please sign in.';
+        if (btn) { btn.disabled = false; btn.textContent = 'Create account'; }
+        setTimeout(() => switchForm('form-login'), 1500);
+      }
+    } catch (err) {
+      console.error('[Lily Pad] Signup error:', err.message);
+      if (errEl) errEl.textContent = err.message;
+      if (btn) { btn.disabled = false; btn.textContent = 'Create account'; }
+    }
+  }
+
+  async function handleForgot() {
+    const email  = (document.getElementById('forgot-email')?.value || '').trim();
+    const errEl  = document.getElementById('forgot-error');
+    const succEl = document.getElementById('forgot-success');
+    const btn    = document.getElementById('forgot-btn');
+    if (errEl)  errEl.textContent  = '';
+    if (succEl) succEl.textContent = '';
+    if (!email) { if (errEl) errEl.textContent = 'Please enter your email.'; return; }
+    if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+    try {
+      const res = await fetch('/api/auth/forgot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
+      const d   = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Request failed');
+      if (succEl) succEl.textContent = 'Reset link sent — check your inbox.';
+    } catch (err) {
+      if (errEl) errEl.textContent = err.message;
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Send reset link'; }
+    }
+  }
+
   function wireAuthForms() {
-    // Login
-    const loginForm = document.getElementById('login-form');
-    if (loginForm && !loginForm.dataset.wired) {
-      loginForm.dataset.wired = '1';
-      loginForm.addEventListener('submit', async (e) => {
+    // Guard: attach to document exactly once — works regardless of DOM timing
+    if (document.__lpFormsWired) return;
+    document.__lpFormsWired = true;
+
+    // ── Form submits (delegation on document) ────────────────────────────────
+    document.addEventListener('submit', (e) => {
+      const id = e.target && e.target.id;
+      if (id === 'login-form'  || id === 'signup-form' || id === 'forgot-form') {
         e.preventDefault();
-        const email = document.getElementById('login-email').value.trim();
-        const pass  = document.getElementById('login-password').value;
-        const errEl = document.getElementById('login-error');
-        const btn   = document.getElementById('login-btn');
-        if (errEl) errEl.textContent = '';
-        if (btn) { btn.disabled = true; btn.textContent = 'Signing in…'; }
+        e.stopPropagation();
+      }
+      if (id === 'login-form')  handleLogin();
+      if (id === 'signup-form') handleSignup();
+      if (id === 'forgot-form') handleForgot();
+    }, true); // capture phase: fires before any child handler
 
-        try {
-          const res = await fetch('/api/auth/signin', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password: pass }),
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || 'Sign-in failed');
-          saveSession(data);
-          saveProfileToServer(data);
-          hideGate();
-          afterAuth(data);
-        } catch (err) {
-          if (errEl) errEl.textContent = err.message;
-        } finally {
-          if (btn) { btn.disabled = false; btn.textContent = 'Sign in'; }
-        }
-      });
-    }
+    // ── Button clicks (delegation on document) ───────────────────────────────
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('button');
+      if (!btn) return;
+      const id = btn.id;
 
-    // Sign-up
-    const signupForm = document.getElementById('signup-form');
-    if (signupForm && !signupForm.dataset.wired) {
-      signupForm.dataset.wired = '1';
-      signupForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const name   = (document.getElementById('signup-name')?.value || '').trim();
-        const email  = (document.getElementById('signup-email')?.value || '').trim();
-        const pass   = (document.getElementById('signup-password')?.value || '');
-        const errEl  = document.getElementById('signup-error');
-        const succEl = document.getElementById('signup-success');
-        const btn    = document.getElementById('signup-btn');
+      // Primary action buttons — trigger handlers directly in case submit doesn't fire
+      if (id === 'login-btn')  { e.preventDefault(); handleLogin();  return; }
+      if (id === 'signup-btn') { e.preventDefault(); handleSignup(); return; }
+      if (id === 'forgot-btn') { e.preventDefault(); handleForgot(); return; }
 
-        // Basic validation
-        if (errEl) errEl.textContent = '';
-        if (succEl) succEl.textContent = '';
-        if (!name)  { if (errEl) errEl.textContent = 'Please enter your name.'; return; }
-        if (!email) { if (errEl) errEl.textContent = 'Please enter your email.'; return; }
-        if (pass.length < 6) { if (errEl) errEl.textContent = 'Password must be at least 6 characters.'; return; }
+      // Form switchers
+      if (id === 'goto-forgot')    switchForm('form-forgot');
+      if (id === 'goto-signup')    switchForm('form-signup');
+      if (id === 'goto-login')     switchForm('form-login');
+      if (id === 'back-to-login')  switchForm('form-login');
 
-        // Read selected role from the role picker
-        const activeRole = document.querySelector('#role-picker .role-btn.active');
-        const accountType = (activeRole && activeRole.dataset.role) || 'renter';
+      // Role picker
+      if (btn.closest('#role-picker')) {
+        document.querySelectorAll('#role-picker .role-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      }
 
-        if (btn) { btn.disabled = true; btn.textContent = 'Creating account…'; }
+      // Backdrop close
+      if (btn.id === '' && e.target.id === 'auth-gate') hideGate();
+    }, false);
 
-        try {
-          console.log('[Lily Pad] Signup attempt for:', email);
-          const res = await fetch('/api/auth/signup', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              email,
-              password: pass,
-              full_name: name,
-              account_type: accountType,
-            }),
-          });
-          const data = await res.json();
-          console.log('[Lily Pad] Signup response:', res.status, JSON.stringify(data).slice(0, 200));
-          if (!res.ok) {
-            throw new Error(data.error || 'Sign-up failed');
-          }
+    // Backdrop click (not on a button)
+    document.addEventListener('click', (e) => {
+      if (e.target && e.target.id === 'auth-gate') hideGate();
+    }, false);
 
-          if (data.session && data.session.access_token) {
-            console.log('[Lily Pad] Signup success — session received, logging in');
-            saveSession(data.session);
-            saveProfileToServer(data.session);
-            hideGate();
-            afterAuth(data.session);
-          } else if (data.confirm_email) {
-            if (succEl) succEl.textContent = 'Check your email for a confirmation link, then sign in.';
-            if (btn) { btn.disabled = false; btn.textContent = 'Create account'; }
-            setTimeout(() => switchForm('form-login'), 2500);
-          } else {
-            console.log('[Lily Pad] Signup success — no session, redirecting to sign-in');
-            if (succEl) succEl.textContent = 'Account created! Please sign in.';
-            if (btn) { btn.disabled = false; btn.textContent = 'Create account'; }
-            setTimeout(() => switchForm('form-login'), 1500);
-          }
-        } catch (err) {
-          console.error('[Lily Pad] Signup error:', err.message);
-          if (errEl) errEl.textContent = err.message;
-          if (btn) { btn.disabled = false; btn.textContent = 'Create account'; }
-        }
-      });
-
-      // Role picker button toggling
-      const roleBtns = document.querySelectorAll('#role-picker .role-btn');
-      roleBtns.forEach(rb => {
-        if (!rb.dataset.wired) {
-          rb.dataset.wired = '1';
-          rb.addEventListener('click', () => {
-            roleBtns.forEach(b => b.classList.remove('active'));
-            rb.classList.add('active');
-          });
-        }
-      });
-    }
-
-    // Forgot password
-    const forgotForm = document.getElementById('forgot-form');
-    if (forgotForm && !forgotForm.dataset.wired) {
-      forgotForm.dataset.wired = '1';
-      forgotForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const email  = document.getElementById('forgot-email').value.trim();
-        const errEl  = document.getElementById('forgot-error');
-        const succEl = document.getElementById('forgot-success');
-        const btn    = document.getElementById('forgot-btn');
-        if (errEl) errEl.textContent = '';
-        if (succEl) succEl.textContent = '';
-        if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
-
-        try {
-          const res = await fetch('/api/auth/forgot', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email }),
-          });
-          const d = await res.json();
-          if (!res.ok) throw new Error(d.error || 'Request failed');
-          if (succEl) succEl.textContent = 'Reset link sent — check your inbox.';
-        } catch (err) {
-          if (errEl) errEl.textContent = err.message;
-        } finally {
-          if (btn) { btn.disabled = false; btn.textContent = 'Send reset link'; }
-        }
-      });
-    }
-
-    // Form switchers
-    const gotoForgot = document.getElementById('goto-forgot');
-    const gotoSignup = document.getElementById('goto-signup');
-    const gotoLogin  = document.getElementById('goto-login');
-    const backLogin  = document.getElementById('back-to-login');
-    if (gotoForgot && !gotoForgot.dataset.wired) { gotoForgot.dataset.wired = '1'; gotoForgot.addEventListener('click', () => switchForm('form-forgot')); }
-    if (gotoSignup && !gotoSignup.dataset.wired) {
-      gotoSignup.dataset.wired = '1';
-      gotoSignup.addEventListener('click', () => switchForm('form-signup'));
-    }
-    if (gotoLogin  && !gotoLogin.dataset.wired)  { gotoLogin.dataset.wired  = '1'; gotoLogin.addEventListener('click',  () => switchForm('form-login'));  }
-    if (backLogin  && !backLogin.dataset.wired)  { backLogin.dataset.wired  = '1'; backLogin.addEventListener('click',  () => switchForm('form-login'));  }
-
-    // Close gate on backdrop click
-    const gate = document.getElementById('auth-gate');
-    if (gate && !gate.dataset.wired) {
-      gate.dataset.wired = '1';
-      gate.addEventListener('click', (e) => {
-        if (e.target === gate) hideGate();
-      });
-    }
+    console.log('[Lily Pad] Auth forms wired via document delegation');
   }
 
   // ── Sign-out ──────────────────────────────────────────────────────────────

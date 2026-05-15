@@ -3,6 +3,42 @@
   const SUPABASE_ANON_KEY = '%%SUPABASE_ANON_KEY%%' || window.__SUPABASE_ANON_KEY__;
   const SUPABASE_OK = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
 
+  // ── Block fake admin-users data from localStorage ────────────────────────
+  // The bundle persists all users (including the hardcoded demo users with
+  // numeric ids 1-N) to "lilypad.admin.users.v1".  Intercept reads/writes to
+  // strip any user whose id is a plain number; real Supabase users have UUID
+  // strings.  This runs before React hydrates so no fake pads ever load.
+  (function patchAdminUsersStorage() {
+    const KEY = 'lilypad.admin.users.v1';
+    function isFake(u) { return u && typeof u.id === 'number'; }
+    function clean(arr) { return Array.isArray(arr) ? arr.filter(u => !isFake(u)) : arr; }
+
+    // Clean existing entry immediately
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (raw) {
+        const data = JSON.parse(raw);
+        if (Array.isArray(data) && data.some(isFake)) {
+          localStorage.setItem(KEY, JSON.stringify(clean(data)));
+        }
+      }
+    } catch (_) {}
+
+    // Intercept future writes
+    const _origSet = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (key === KEY) {
+        try {
+          const data = JSON.parse(value);
+          if (Array.isArray(data) && data.some(isFake)) {
+            return _origSet.call(this, key, JSON.stringify(clean(data)));
+          }
+        } catch (_) {}
+      }
+      return _origSet.call(this, key, value);
+    };
+  })();
+
   // ── Auto-recover from the bundle's ErrorBoundary ────────────────────────────
   // After a deep-page save (e.g. pad drawing) the Leaflet map sometimes throws
   // "Invalid LatLng (NaN, NaN)" which is caught by the bundle's ErrorBoundary.
@@ -231,41 +267,61 @@
   }
 
   // ── Clear fake sample pads via React fiber dispatch ───────────────────────
-  // The bundle initialises "My Pads" with a hardcoded e2 array of sample pads
-  // (address "142 Maple Street" etc.). Walk the fiber tree to find that state
-  // and replace it with [] so no fake listings appear.
-  // No once-only flag — clearFakePads must re-run after navigation because React
-  // remounts the My-Pads component and resets state to the hardcoded e2 array.
-  // The address check makes it safe to call repeatedly; it never touches real pads.
+  // Clears hardcoded fake users from the lister admin state.
+  // The bundle initialises "lilypad.admin.users.v1" with demo users whose ids
+  // are plain numbers (1, 2, 3…).  Real Supabase users always have UUID strings.
+  // We dispatch a reducer that keeps only UUID-id'd users, leaving the signed-in
+  // user's entry (and their real pads) untouched.
   let _clearPadsCooldown = 0;
   function clearFakePads() {
     const now = Date.now();
-    if (now - _clearPadsCooldown < 800) return; // throttle: max once per 800 ms
+    if (now - _clearPadsCooldown < 400) return;
+
     const root = document.getElementById('root');
     if (!root) return;
     const fk = Object.keys(root).find(k => k.startsWith('__reactFiber$'));
     if (!fk) return;
 
+    // A fake-user array: items have numeric ids AND firstName or type fields
+    function isFakeUserArr(v) {
+      return Array.isArray(v) && v.length > 0 && v[0] &&
+             typeof v[0].id === 'number' &&
+             (v[0].firstName || v[0].type === 'host' || v[0].type === 'driver');
+    }
+    // The e2 driver-spot array (flat pad objects with string addresses)
+    function isFakeSpotArr(v) {
+      return Array.isArray(v) && v.length > 0 && v[0] &&
+             typeof v[0].id === 'number' && typeof v[0].address === 'string' &&
+             (v[0].address === '142 Maple Street' || v[0].address === '880 Oak Lane');
+    }
+
     function walk(fiber, depth) {
-      if (!fiber || depth > 120) return false;
+      if (!fiber || depth > 160) return;
       let s = fiber.memoizedState;
       while (s) {
         const v = s.memoizedState;
-        if (Array.isArray(v) && v.length > 0 && v[0] &&
-            (v[0].address === '142 Maple Street' || v[0].id === 1)) {
-          const dispatch = s.queue && s.queue.dispatch;
-          if (typeof dispatch === 'function') {
+        const dispatch = s.queue && s.queue.dispatch;
+        if (typeof dispatch === 'function') {
+          if (isFakeUserArr(v)) {
+            // Keep only real UUID-string users; remove all numeric-id demo users
+            dispatch(prev => {
+              if (!Array.isArray(prev)) return prev;
+              const cleaned = prev.filter(u => u && typeof u.id !== 'number');
+              if (cleaned.length === prev.length) return prev;
+              console.log('[Lily Pad] Fake demo users removed from My Pads state');
+              _clearPadsCooldown = now;
+              return cleaned;
+            });
+          }
+          if (isFakeSpotArr(v)) {
             dispatch([]);
             _clearPadsCooldown = now;
-            console.log('[Lily Pad] Fake sample pads cleared from My Pads');
-            return true;
           }
         }
         s = s.next;
       }
-      if (walk(fiber.child,   depth + 1)) return true;
-      if (walk(fiber.sibling, depth + 1)) return true;
-      return false;
+      walk(fiber.child,   depth + 1);
+      walk(fiber.sibling, depth + 1);
     }
     walk(root[fk], 0);
   }
@@ -1350,6 +1406,7 @@
   // the bundle renders them without a back button. We inject one by reading the
   // current page name from the React fiber tree and using the context's goTo().
   const LP_BACK_TARGETS = {
+    paddashboard   : 'find',          // lister My Pads → back to map
     availability   : 'paddashboard',
     payment        : 'paddashboard',
     photo          : 'paddashboard',
@@ -1674,6 +1731,17 @@
       const photoUrl  = (data && data.pad && data.pad.photoUrl) || img.src;
       if (!photoUrl) return;
 
+      // DOM fallback for onEdit: find the native p2 "Edit" button on this card.
+      // The fiber walk can occasionally return onEdit:null if React hasn't
+      // committed memoizedProps yet; clicking the native button is 100% reliable.
+      let nativeEditBtn = null;
+      let el = wrap.parentElement;
+      for (let i = 0; i < 10 && el; i++, el = el.parentElement) {
+        const btn = Array.from(el.querySelectorAll('button'))
+          .find(b => b.textContent.trim() === 'Edit');
+        if (btn) { nativeEditBtn = btn; break; }
+      }
+
       wrap.dataset.lpLb = '1';
       wrap.style.cursor = 'zoom-in';
       if (getComputedStyle(wrap).position === 'static') wrap.style.position = 'relative';
@@ -1686,13 +1754,17 @@
         const page      = lpGetCurrentPage();
         const isLister  = page === 'paddashboard' || page === 'addpad' ||
                           page === 'photo'        || page === 'photointro';
+        // Prefer fiber-sourced onEdit; fall back to clicking the native Edit btn
+        const resolvedOnEdit = (typeof latest.onEdit === 'function')
+          ? latest.onEdit
+          : (nativeEditBtn ? () => nativeEditBtn.click() : null);
         openPhotoLightbox({
           photoUrl:       pad.photoUrl || img.src,
           box:            pad.box,
           color:          pad.color,
           name:           pad.name,
           isLister,
-          onEdit:         latest.onEdit  || null,
+          onEdit:         resolvedOnEdit,
           onReplacePhoto: latest.onReplacePhoto || null,
         });
       });
@@ -1753,6 +1825,7 @@
       updateProfileDisplay();
       updatePhotoFullscreen();
       scheduleDeepBack();
+      injectPaddashboardBack();
       removeFakeMapSpots();
       clearFakePads();
       clearFakeListings();

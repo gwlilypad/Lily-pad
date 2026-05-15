@@ -244,35 +244,34 @@
         if (btn) { btn.disabled = true; btn.textContent = 'Creating account…'; }
 
         try {
-          const res = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
+          // Use server-side route: creates user with email_confirm=true (no confirmation email)
+          const res = await fetch('/api/auth/signup', {
             method: 'POST',
-            headers: HEADERS,
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               email,
               password: pass,
-              data: {
-                full_name: name,
-                account_type: accountType,
-              },
+              full_name: name,
+              account_type: accountType,
             }),
           });
           const data = await res.json();
           if (!res.ok) {
-            throw new Error(data.error_description || data.msg || data.message || 'Sign-up failed');
+            throw new Error(data.error || 'Sign-up failed');
           }
 
-          // If Supabase returned a session (email confirmation disabled) — log in directly
-          if (data.access_token) {
-            saveSession(data);
-            saveProfileToServer(data);
+          if (data.session && data.session.access_token) {
+            saveSession(data.session);
+            saveProfileToServer(data.session);
             hideGate();
-            afterAuth(data);
-          } else {
-            // Email confirmation required — show success message
-            if (succEl) succEl.textContent = 'Account created! Check your email to confirm, then sign in.';
+            afterAuth(data.session);
+          } else if (data.confirm_email) {
+            if (succEl) succEl.textContent = 'Check your email for a confirmation link, then sign in.';
             if (btn) { btn.disabled = false; btn.textContent = 'Create account'; }
-            // Switch to login form after 3 s so they can sign in after confirming
-            setTimeout(() => switchForm('form-login'), 3000);
+            setTimeout(() => switchForm('form-login'), 2500);
+          } else {
+            if (succEl) succEl.textContent = 'Account created! Signing you in…';
+            setTimeout(() => switchForm('form-login'), 1200);
           }
         } catch (err) {
           if (errEl) errEl.textContent = err.message;

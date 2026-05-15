@@ -110,6 +110,81 @@ app.get('/setup', (req, res) => {
   res.send(SETUP_SQL);
 });
 
+// ── Auth: signup — uses admin API when service role key is available ──────────
+app.post('/api/auth/signup', async (req, res) => {
+  const { email, password, full_name, account_type } = req.body || {};
+  if (!email || !password) return res.status(400).json({ error: 'email and password required' });
+
+  // Detect whether we have a real service role key (role=service_role in JWT)
+  let hasServiceRole = false;
+  try {
+    const p = JSON.parse(Buffer.from(SVC_KEY.split('.')[1], 'base64url').toString());
+    hasServiceRole = p.role === 'service_role';
+  } catch {}
+
+  try {
+    if (hasServiceRole) {
+      // ── Admin path: create confirmed user immediately, no email sent ──────
+      const r = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
+        method : 'POST',
+        headers: SVC_HEADERS,
+        body   : JSON.stringify({
+          email, password,
+          email_confirm: true,
+          user_metadata: { full_name: full_name || '', account_type: account_type || 'renter' },
+        }),
+      });
+      const user = await r.json();
+      if (!r.ok) throw new Error(user.message || user.msg || JSON.stringify(user));
+
+      // Sign in immediately
+      const sr = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+        method : 'POST',
+        headers: { 'apikey': SUPABASE_ANON, 'Content-Type': 'application/json' },
+        body   : JSON.stringify({ email, password }),
+      });
+      const session = await sr.json();
+
+      // Create profile row
+      await fetch(`${SUPABASE_URL}/rest/v1/profiles`, {
+        method : 'POST',
+        headers: { ...SVC_HEADERS, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+        body   : JSON.stringify({ id: user.id, email, full_name: full_name || '', account_type: account_type || 'renter' }),
+      });
+
+      return res.json({ created: true, session: sr.ok ? session : null });
+    }
+
+    // ── Fallback: standard signup (email confirmation may be required) ──────
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
+      method : 'POST',
+      headers: { 'apikey': SUPABASE_ANON, 'Content-Type': 'application/json' },
+      body   : JSON.stringify({
+        email, password,
+        data: { full_name: full_name || '', account_type: account_type || 'renter' },
+      }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error_description || data.message || JSON.stringify(data));
+
+    // If Supabase returned a session (email confirmation is OFF in dashboard) log in now
+    if (data.access_token) {
+      // Try to save profile
+      if (data.user) {
+        await fetch(`${SUPABASE_URL}/rest/v1/profiles`, {
+          method : 'POST',
+          headers: { ...SVC_HEADERS, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+          body   : JSON.stringify({ id: data.user.id, email, full_name: full_name || '', account_type: account_type || 'renter' }),
+        }).catch(() => {});
+      }
+      return res.json({ created: true, session: data });
+    }
+
+    // Email confirmation required
+    return res.json({ created: true, session: null, confirm_email: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Profile: upsert (service key stays server-side) ───────────────────────────
 app.post('/api/profile', async (req, res) => {
   const { id, email, full_name, account_type } = req.body || {};

@@ -605,7 +605,7 @@
     if (!document.getElementById('lp-fs-hint')) {
       const hint = document.createElement('div');
       hint.id = 'lp-fs-hint';
-      hint.textContent = 'Select pad colour then drag to mark your spot';
+      hint.textContent = 'Drag to draw your spot — then drag it again to reposition';
       document.body.appendChild(hint);
       setTimeout(() => {
         if (hint.parentNode) hint.classList.add('fade');
@@ -627,6 +627,95 @@
       if (el) el.remove();
     });
     console.log('[Lily Pad] Photo drawing: fullscreen exited');
+  }
+
+  // ── Drag-to-reposition existing pad box ──────────────────────────────────────
+  // The bundle's h2 component stores the drawn box as a flat
+  // {cx, cy, w, h, angle} normalized (0-1) object in its k useState hook.
+  // We intercept canvas pointer events (capture phase, before React) and move
+  // the box by dispatching updated cx/cy to the same hook.
+
+  function findH2BoxHook(canvas) {
+    const fk = Object.keys(canvas).find(k => k.startsWith('__reactFiber$'));
+    if (!fk) return null;
+    let f = canvas[fk];
+    while (f && !(f.stateNode instanceof Document)) {
+      let s = f.memoizedState;
+      while (s) {
+        const v = s.memoizedState;
+        // h2's k state: plain object with cx/cy/w/h (not a ref, not array, not bool/number)
+        if (v !== null && typeof v === 'object' && !Array.isArray(v) && !('current' in v) &&
+            'cx' in v && 'cy' in v && 'w' in v && 'h' in v &&
+            s.queue && typeof s.queue.dispatch === 'function') {
+          return { box: v, dispatch: s.queue.dispatch };
+        }
+        s = s.next;
+      }
+      f = f.return;
+    }
+    return null;
+  }
+
+  function installPadMoveHandlers(canvas) {
+    if (canvas.dataset.lpMove) return;
+    canvas.dataset.lpMove = '1';
+
+    let drag = null; // {dispatch, origCx, origCy, startX, startY}
+
+    function normXY(e) {
+      const r = canvas.getBoundingClientRect();
+      const t = e.touches ? (e.touches[0] || e.changedTouches[0]) : e;
+      return { x: (t.clientX - r.left) / r.width, y: (t.clientY - r.top) / r.height };
+    }
+
+    function isInsideBox(box, x, y) {
+      if (!box || box.w < 0.01) return false;
+      // Use half-dimensions + small margin for easier grabbing
+      return Math.abs(x - box.cx) < box.w / 2 + 0.04 &&
+             Math.abs(y - box.cy) < box.h / 2 + 0.04;
+    }
+
+    canvas.addEventListener('pointerdown', e => {
+      const hook = findH2BoxHook(canvas);
+      if (!hook || !hook.box || hook.box.w < 0.01) return;
+      const { x, y } = normXY(e);
+      if (!isInsideBox(hook.box, x, y)) return;
+      drag = { dispatch: hook.dispatch, origCx: hook.box.cx, origCy: hook.box.cy, startX: x, startY: y };
+      e.stopPropagation();
+      canvas.setPointerCapture(e.pointerId);
+      canvas.style.cursor = 'grabbing';
+    }, true);
+
+    canvas.addEventListener('pointermove', e => {
+      if (drag) {
+        e.stopPropagation();
+        const { x, y } = normXY(e);
+        const newCx = Math.max(0.04, Math.min(0.96, drag.origCx + x - drag.startX));
+        const newCy = Math.max(0.04, Math.min(0.96, drag.origCy + y - drag.startY));
+        drag.dispatch(prev => ({ ...prev, cx: newCx, cy: newCy }));
+      } else {
+        // Cursor hint when hovering over the box
+        const hook = findH2BoxHook(canvas);
+        if (hook?.box?.w > 0.01) {
+          const { x, y } = normXY(e);
+          canvas.style.cursor = isInsideBox(hook.box, x, y) ? 'grab' : 'crosshair';
+        }
+      }
+    }, true);
+
+    canvas.addEventListener('pointerup', e => {
+      if (!drag) return;
+      e.stopPropagation();
+      drag = null;
+      canvas.style.cursor = 'crosshair';
+    }, true);
+
+    canvas.addEventListener('pointercancel', () => {
+      drag = null;
+      canvas.style.cursor = 'crosshair';
+    }, true);
+
+    console.log('[Lily Pad] Pad move handlers installed');
   }
 
   // ── Cancel button for the h2 pad-drawing editing modal ─────────────────────
@@ -682,9 +771,11 @@
     const drawCanvas = canvasWrap.querySelector('canvas');
 
     if (img && drawCanvas) {
-      // Photo + drawing canvas present — enter fullscreen and inject cancel btn
+      // Photo + drawing canvas present — enter fullscreen, inject cancel btn,
+      // and install drag-to-reposition handlers on the canvas element.
       enterPhotoFullscreen();
       injectCanvasCancel();
+      installPadMoveHandlers(drawCanvas);
     } else {
       // Photo removed or changed step — exit fullscreen and show expand btn
       if (document.body.classList.contains('lp-photo-fs')) exitPhotoFullscreen();

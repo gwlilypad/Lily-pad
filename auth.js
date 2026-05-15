@@ -373,9 +373,93 @@
     console.log('[Lily Pad] Sign-in button injected on landing page');
   }
 
-  // ── Pull-down sign-out injection ──────────────────────────────────────────
-  // Injects a dedicated sign-out card into the account pull-down whenever
-  // thumb-nav-cards are present and our row isn't already there.
+  // ── Photo drawing fullscreen ──────────────────────────────────────────────
+  // When the lister sign-up reaches the spot-drawing step and a photo has been
+  // selected, expand the canvas-wrap to near-fullscreen so the user can see
+  // and draw over the complete image comfortably.
+  function enterPhotoFullscreen() {
+    if (document.body.classList.contains('lp-photo-fs')) return;
+    document.body.classList.add('lp-photo-fs');
+
+    // "Done" button — collapses fullscreen
+    if (!document.getElementById('lp-fs-done')) {
+      const done = document.createElement('button');
+      done.id = 'lp-fs-done';
+      done.textContent = 'Done';
+      done.addEventListener('click', exitPhotoFullscreen);
+      document.body.appendChild(done);
+    }
+
+    // Brief hint label
+    if (!document.getElementById('lp-fs-hint')) {
+      const hint = document.createElement('div');
+      hint.id = 'lp-fs-hint';
+      hint.textContent = 'Select pad colour then drag to mark your spot';
+      document.body.appendChild(hint);
+      setTimeout(() => {
+        if (hint.parentNode) hint.classList.add('fade');
+        setTimeout(() => hint.remove(), 600);
+      }, 3000);
+    }
+
+    // Remove the small expand button from the canvas-wrap if present
+    const exp = document.getElementById('lp-fs-expand');
+    if (exp) exp.remove();
+
+    console.log('[Lily Pad] Photo drawing: fullscreen entered');
+  }
+
+  function exitPhotoFullscreen() {
+    document.body.classList.remove('lp-photo-fs');
+    ['lp-fs-done', 'lp-fs-hint', 'lp-fs-expand'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.remove();
+    });
+    console.log('[Lily Pad] Photo drawing: fullscreen exited');
+  }
+
+  function updatePhotoFullscreen() {
+    const canvasWrap = document.querySelector('.canvas-wrap');
+
+    // No canvas-wrap in view — clean up
+    if (!canvasWrap) {
+      if (document.body.classList.contains('lp-photo-fs')) exitPhotoFullscreen();
+      return;
+    }
+
+    const img = canvasWrap.querySelector('img[src]');
+    const drawCanvas = canvasWrap.querySelector('canvas');
+
+    if (img && drawCanvas) {
+      // Photo + drawing canvas present — enter fullscreen
+      enterPhotoFullscreen();
+    } else {
+      // Photo removed or changed step — exit fullscreen and show expand btn
+      if (document.body.classList.contains('lp-photo-fs')) exitPhotoFullscreen();
+
+      // Show a small expand icon when photo is loaded but not yet fullscreen
+      if (img && !document.getElementById('lp-fs-expand')) {
+        // canvas-wrap must be position:relative for the icon to anchor correctly
+        if (getComputedStyle(canvasWrap).position === 'static') {
+          canvasWrap.style.position = 'relative';
+        }
+        const exp = document.createElement('button');
+        exp.id = 'lp-fs-expand';
+        exp.title = 'View fullscreen';
+        exp.innerHTML =
+          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" ' +
+          'stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
+          '<polyline points="15 3 21 3 21 9"/>' +
+          '<polyline points="9 21 3 21 3 15"/>' +
+          '<line x1="21" y1="3" x2="14" y2="10"/>' +
+          '<line x1="3" y1="21" x2="10" y2="14"/>' +
+          '</svg>';
+        exp.addEventListener('click', enterPhotoFullscreen);
+        canvasWrap.appendChild(exp);
+      }
+    }
+  }
+
   function injectPullDownSignOut() {
     // Re-check: if our element still exists in the DOM, skip
     if (document.getElementById('lp-pulldown-so')) return;
@@ -455,6 +539,7 @@
       injectSignOutButtons();
       injectPullDownSignOut();
       updateProfileDisplay();
+      updatePhotoFullscreen();
     });
     guard.observe(root, { childList: true, subtree: true });
   }

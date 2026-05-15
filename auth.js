@@ -3,6 +3,45 @@
   const SUPABASE_ANON_KEY = '%%SUPABASE_ANON_KEY%%' || window.__SUPABASE_ANON_KEY__;
   const SUPABASE_OK = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
 
+  // ── Auto-recover from the bundle's ErrorBoundary ────────────────────────────
+  // After a deep-page save (e.g. pad drawing) the Leaflet map sometimes throws
+  // "Invalid LatLng (NaN, NaN)" which is caught by the bundle's ErrorBoundary.
+  // Intercept the console.error it emits and navigate to paddashboard so the
+  // user sees a working screen instead of an error message.
+  (function () {
+    const _ce = console.error.bind(console);
+    console.error = function (...args) {
+      _ce(...args);
+      const msg = String(args[0] || '');
+      if (msg.includes('[ErrorBoundary] Caught') || msg.includes('Invalid LatLng')) {
+        clearTimeout(window.__lpErrRecoverTimer);
+        window.__lpErrRecoverTimer = setTimeout(() => {
+          try {
+            // Walk fiber to get goTo and navigate to a safe page
+            const root = document.getElementById('root');
+            if (!root) return;
+            const fk = Object.keys(root).find(k => k.startsWith('__reactFiber$'));
+            if (!fk) return;
+            const q = [root[fk]];
+            let n = 0;
+            while (q.length && n++ < 600) {
+              const f = q.shift();
+              if (!f) continue;
+              const v = f.memoizedProps && f.memoizedProps.value;
+              if (v && typeof v.goTo === 'function') {
+                v.goTo('paddashboard');
+                console.log('[Lily Pad] ErrorBoundary recovery: navigated to paddashboard');
+                return;
+              }
+              if (f.child)   q.push(f.child);
+              if (f.sibling) q.push(f.sibling);
+            }
+          } catch {}
+        }, 400);
+      }
+    };
+  })();
+
   // ── Block fake pad sample data from ever persisting ─────────────────────────
   // The bundle's "My Pads" host view initialises from a hardcoded e2 array
   // (sample pads like "142 Maple St"). Intercepting localStorage prevents the
@@ -590,12 +629,52 @@
     console.log('[Lily Pad] Photo drawing: fullscreen exited');
   }
 
+  // ── Cancel button for the h2 pad-drawing editing modal ─────────────────────
+  // The h2 component receives an onClose prop but renders no visible cancel UI.
+  // Walk the fiber tree UP from canvas-wrap to find that prop and call it.
+  function injectCanvasCancel() {
+    if (document.getElementById('lp-canvas-cancel')) return;
+    const cw = document.querySelector('.canvas-wrap');
+    if (!cw || !cw.querySelector('canvas')) return;
+
+    // Walk UP the fiber tree from canvas-wrap to find onClose
+    let onClose = null;
+    const cwKey = Object.keys(cw).find(k => k.startsWith('__reactFiber$'));
+    if (cwKey) {
+      let f = cw[cwKey];
+      let steps = 0;
+      while (f && steps++ < 40) {
+        const mp = f.memoizedProps;
+        if (mp && typeof mp.onClose === 'function') { onClose = mp.onClose; break; }
+        f = f.return;
+      }
+    }
+
+    // Only inject when we found an onClose (i.e. we're in the editing modal,
+    // not the wizard photo step which has its own wizard-back navigation).
+    if (!onClose) return;
+
+    const btn = document.createElement('button');
+    btn.id = 'lp-canvas-cancel';
+    btn.textContent = '← Back';
+    btn.addEventListener('click', () => {
+      exitPhotoFullscreen();
+      onClose();
+      const el = document.getElementById('lp-canvas-cancel');
+      if (el) el.remove();
+    });
+    document.body.appendChild(btn);
+    console.log('[Lily Pad] Canvas cancel button injected');
+  }
+
   function updatePhotoFullscreen() {
     const canvasWrap = document.querySelector('.canvas-wrap');
 
     // No canvas-wrap in view — clean up
     if (!canvasWrap) {
       if (document.body.classList.contains('lp-photo-fs')) exitPhotoFullscreen();
+      const cc = document.getElementById('lp-canvas-cancel');
+      if (cc) cc.remove();
       return;
     }
 
@@ -603,8 +682,9 @@
     const drawCanvas = canvasWrap.querySelector('canvas');
 
     if (img && drawCanvas) {
-      // Photo + drawing canvas present — enter fullscreen
+      // Photo + drawing canvas present — enter fullscreen and inject cancel btn
       enterPhotoFullscreen();
+      injectCanvasCancel();
     } else {
       // Photo removed or changed step — exit fullscreen and show expand btn
       if (document.body.classList.contains('lp-photo-fs')) exitPhotoFullscreen();
@@ -933,6 +1013,9 @@
     payment      : 'paddashboard',
     photo        : 'paddashboard',
     photointro   : 'paddashboard',
+    addpad       : 'paddashboard',
+    bookings     : 'find',
+    admin        : 'find',
   };
   const LP_ALL_PAGES = new Set([
     'home','find','root','paddashboard','bookings','payment',

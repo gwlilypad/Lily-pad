@@ -353,3 +353,30 @@ body.lp-photo-fs .canvas-wrap canvas {
 }
 
 #lp-deep-back .back-btn:hover { opacity: 1; }
+
+/* ── Canvas drawing modal — cancel / back button ─────────────────────────── */
+#lp-canvas-cancel {
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  z-index: 100001;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 9px 16px;
+  background: rgba(14, 31, 64, 0.82);
+  border: none;
+  border-radius: 20px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+  transition: background 0.15s, transform 0.1s;
+}
+
+#lp-canvas-cancel:hover  { background: rgba(14, 31, 64, 0.95); }
+#lp-canvas-cancel:active { transform: scale(0.96); }

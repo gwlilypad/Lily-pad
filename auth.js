@@ -1354,6 +1354,217 @@
     _lpBackTmr = setTimeout(injectDeepBackButton, 180);
   }
 
+  // ── Photo lightbox: full-size pad photo + box drawing ───────────────────────
+  // Clicking any pad-photo thumbnail (lister dashboard or driver listing view)
+  // opens a modal with the full image and the drawn spot overlaid on a canvas.
+  // On the lister side, "Redraw" and "Change Photo" buttons hook back into the
+  // native bundle flow via the p2 component's onEdit / onReplacePhoto props.
+
+  function getPadPropsFromEl(el) {
+    // Walk fiber UP from el to find the p2 component's {pad, onEdit, onReplacePhoto} props
+    const fk = Object.keys(el).find(k => k.startsWith('__reactFiber$'));
+    if (!fk) return null;
+    let f = el[fk];
+    let depth = 0;
+    while (f && !(f.stateNode instanceof Document) && depth++ < 60) {
+      const p = f.memoizedProps;
+      if (p && p.pad && p.pad.photoUrl &&
+          p.pad.box && typeof p.pad.box.cx === 'number') {
+        return { pad: p.pad, onEdit: p.onEdit || null, onReplacePhoto: p.onReplacePhoto || null };
+      }
+      f = f.return;
+    }
+    return null;
+  }
+
+  function drawBoxOnLightboxCanvas(canvas, box, color, name) {
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    if (!box || box.w < 0.01 || box.h < 0.01) return;
+
+    const cx = box.cx * W, cy = box.cy * H;
+    const bw = box.w * W, bh = box.h * H;
+    const angle = box.angle || 0;
+    const r = parseInt(color.slice(1, 3), 16) || 141;
+    const g = parseInt(color.slice(3, 5), 16) || 214;
+    const b = parseInt(color.slice(5, 7), 16) || 63;
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(angle);
+
+    // Box fill + border
+    ctx.fillStyle = `rgba(${r},${g},${b},0.22)`;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = Math.max(2.5, W * 0.004);
+    const rad = 6;
+    ctx.beginPath();
+    ctx.moveTo(-bw/2 + rad, -bh/2);
+    ctx.lineTo(bw/2 - rad, -bh/2);
+    ctx.arcTo(bw/2, -bh/2, bw/2, -bh/2 + rad, rad);
+    ctx.lineTo(bw/2, bh/2 - rad);
+    ctx.arcTo(bw/2, bh/2, bw/2 - rad, bh/2, rad);
+    ctx.lineTo(-bw/2 + rad, bh/2);
+    ctx.arcTo(-bw/2, bh/2, -bw/2, bh/2 - rad, rad);
+    ctx.lineTo(-bw/2, -bh/2 + rad);
+    ctx.arcTo(-bw/2, -bh/2, -bw/2 + rad, -bh/2, rad);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Name badge
+    const badgeW = Math.min(120, bw * 0.65), badgeH = 22;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.roundRect(-bw/2, -bh/2, badgeW, badgeH, 3);
+    ctx.fill();
+    const fs = Math.max(12, W * 0.022);
+    ctx.fillStyle = '#142A52';
+    ctx.font = `bold ${fs}px "DM Sans", sans-serif`;
+    ctx.fillText(name || 'Pad', -bw/2 + 6, -bh/2 + fs * 0.88);
+
+    ctx.restore();
+  }
+
+  function closeLightbox() {
+    const lb = document.getElementById('lp-lightbox');
+    if (lb) { lb.classList.remove('open'); setTimeout(() => lb.remove(), 220); }
+  }
+
+  function openPhotoLightbox({ photoUrl, box, color, name, isLister, onEdit, onReplacePhoto }) {
+    closeLightbox();
+    const lb = document.createElement('div');
+    lb.id = 'lp-lightbox';
+    lb.innerHTML = `
+      <div id="lp-lb-backdrop"></div>
+      <div id="lp-lb-modal">
+        <div id="lp-lb-header">
+          <span id="lp-lb-title">${name || ''}</span>
+          <button id="lp-lb-x" aria-label="Close">✕</button>
+        </div>
+        <div id="lp-lb-wrap">
+          <img id="lp-lb-img" src="${photoUrl}" alt="${name || 'Pad photo'}" />
+          <canvas id="lp-lb-canvas"></canvas>
+        </div>
+        <div id="lp-lb-actions">
+          ${isLister ? `
+            <button class="lp-lb-btn lp-lb-primary" id="lp-lb-redraw">✎ Redraw spot</button>
+            <button class="lp-lb-btn lp-lb-secondary" id="lp-lb-newphoto">📷 Change photo</button>
+          ` : ''}
+          <button class="lp-lb-btn lp-lb-ghost" id="lp-lb-close">Close</button>
+        </div>
+        ${isLister ? '<input type="file" id="lp-lb-file" accept="image/*" style="display:none">' : ''}
+      </div>`;
+    document.body.appendChild(lb);
+    requestAnimationFrame(() => lb.classList.add('open'));
+
+    // Close handlers
+    lb.querySelector('#lp-lb-backdrop').addEventListener('click', closeLightbox);
+    lb.querySelector('#lp-lb-x').addEventListener('click', closeLightbox);
+    lb.querySelector('#lp-lb-close').addEventListener('click', closeLightbox);
+
+    // Draw box after image loads — canvas matched to the displayed 3:2 area
+    const img = lb.querySelector('#lp-lb-img');
+    const canvas = lb.querySelector('#lp-lb-canvas');
+    function render() {
+      const wrap = lb.querySelector('#lp-lb-wrap');
+      if (!wrap) return;
+      canvas.width  = wrap.offsetWidth  || img.naturalWidth  || 360;
+      canvas.height = wrap.offsetHeight || img.naturalHeight || 240;
+      drawBoxOnLightboxCanvas(canvas, box, color || '#8DD63F', name);
+    }
+    if (img.complete && img.naturalWidth) render();
+    else img.addEventListener('load', render);
+    const ro = new ResizeObserver(render);
+    ro.observe(img);
+    lb._ro = ro;
+
+    // Lister actions
+    if (isLister) {
+      const redrawBtn  = lb.querySelector('#lp-lb-redraw');
+      const photoBtn   = lb.querySelector('#lp-lb-newphoto');
+      const fileInput  = lb.querySelector('#lp-lb-file');
+
+      if (redrawBtn && typeof onEdit === 'function') {
+        redrawBtn.addEventListener('click', () => { closeLightbox(); setTimeout(onEdit, 150); });
+      }
+
+      if (photoBtn && fileInput) {
+        photoBtn.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', e => {
+          const file = e.target.files && e.target.files[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = () => {
+            const dataUrl = reader.result;
+            // Resize to max 1200px before handing off (matches p2's ce() function)
+            const tmpImg = new Image();
+            tmpImg.onload = () => {
+              let w = tmpImg.naturalWidth, h = tmpImg.naturalHeight;
+              if (w > 1200 || h > 1200) {
+                const s = Math.min(1200 / w, 1200 / h);
+                w = Math.round(w * s); h = Math.round(h * s);
+              }
+              const c = document.createElement('canvas');
+              c.width = w; c.height = h;
+              c.getContext('2d').drawImage(tmpImg, 0, 0, w, h);
+              const out = (() => { try { return c.toDataURL('image/jpeg', 0.82); } catch { return dataUrl; } })();
+              if (typeof onReplacePhoto === 'function') onReplacePhoto(out);
+              closeLightbox();
+            };
+            tmpImg.onerror = () => { if (typeof onReplacePhoto === 'function') onReplacePhoto(dataUrl); closeLightbox(); };
+            tmpImg.src = dataUrl;
+          };
+          reader.readAsDataURL(file);
+        });
+      }
+    }
+  }
+
+  function installPhotoClickHandlers() {
+    document.querySelectorAll('img[src]').forEach(img => {
+      if (img.dataset.lpLb) return;
+      // Only target pad photos — must have an accessible p2 pad prop via fiber
+      const data = getPadPropsFromEl(img);
+      if (!data) return;
+      img.dataset.lpLb = '1';
+      // Make the photo container show a zoom cursor
+      const container = img.closest('[style]') || img.parentElement;
+      if (container) container.style.cursor = 'zoom-in';
+      img.style.cursor = 'zoom-in';
+
+      img.addEventListener('click', e => {
+        e.stopPropagation();
+        // Re-read fiber for latest state (photo/box may have been updated)
+        const latest = getPadPropsFromEl(img) || data;
+        const page = lpGetCurrentPage();
+        const isLister = page === 'paddashboard' || page === 'addpad' || page === 'photo' || page === 'photointro';
+        openPhotoLightbox({
+          photoUrl:        latest.pad.photoUrl,
+          box:             latest.pad.box,
+          color:           latest.pad.color,
+          name:            latest.pad.name,
+          isLister,
+          onEdit:          latest.onEdit,
+          onReplacePhoto:  latest.onReplacePhoto,
+        });
+      });
+    });
+  }
+
+  function enlargePadCards() {
+    // The p2 component renders pad photo containers with viewBox="0 0 100 70"
+    // SVGs (10:7 ratio).  Bump them to 3:2 by widening the parent container's
+    // aspect-ratio so the thumbnails are noticeably larger and easier to read.
+    document.querySelectorAll('svg[viewBox="0 0 100 70"]').forEach(svg => {
+      const wrap = svg.parentElement;
+      if (!wrap || wrap.dataset.lpEnlarged) return;
+      wrap.dataset.lpEnlarged = '1';
+      wrap.style.aspectRatio = '3 / 2';
+    });
+  }
+
   function startGuard() {
     if (window.__lpGuardObserver) return;
     const target = document.body;
@@ -1365,6 +1576,8 @@
       scheduleDeepBack();
       removeFakeMapSpots();
       clearFakePads();
+      installPhotoClickHandlers();
+      enlargePadCards();
     });
     guard.observe(target, { childList: true, subtree: true });
     window.__lpGuardObserver = guard;

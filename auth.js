@@ -939,109 +939,103 @@
     if (root) obs.observe(root, { childList: true, subtree: true });
   }
 
-  // ── Native auth completion watcher ────────────────────────────────────────
-  function watchForNativeAuthComplete() {
-    if (document.querySelector('.tab-bar')) { onNativeAuthComplete(); return; }
-    const root = document.getElementById('root');
-    if (!root) {
-      console.warn('[Lily Pad] watchForNativeAuthComplete: no #root element');
+  // ── Poll localStorage every 500 ms for completed wizard state ──────────────
+  // Replaces the MutationObserver approach which did not fire on Railway.
+  function startWizardPoller() {
+    if (!SUPABASE_OK) {
+      console.warn('[Lily Pad] poller: SUPABASE_OK false, skipping');
       return;
     }
-    const obs = new MutationObserver(() => {
-      if (document.querySelector('.tab-bar')) {
-        obs.disconnect();
-        onNativeAuthComplete();
+
+    let attempts = 0;
+    const MAX_ATTEMPTS = 720; // 6 minutes max
+
+    const iv = setInterval(() => {
+      attempts++;
+
+      // Stop if we already have a session
+      if (getSession()) {
+        console.log('[Lily Pad] poller: session found, stopping');
+        clearInterval(iv);
+        return;
       }
-    });
-    obs.observe(root, { childList: true, subtree: true });
-    console.log('[Lily Pad] Watching for native wizard completion…');
-  }
 
-  // ── After native wizard: register with Supabase using real credentials ────────
-  function promptNativeUserToRegister() {
-    console.log('[Lily Pad] promptNativeUserToRegister called. SUPABASE_OK:', SUPABASE_OK, 'hasSession:', !!getSession());
-    if (!SUPABASE_OK) { console.warn('[Lily Pad] Skipping: SUPABASE_OK is false'); return; }
-    if (getSession()) { console.log('[Lily Pad] Skipping: session already exists'); return; }
-
-    // ── 1. Try to get credentials from the wizard state in localStorage ──────
-    let fullName = '', email = '', password = '', accountType = 'renter';
-    try {
-      const raw = localStorage.getItem('lilypad.appState.v1');
-      console.log('[Lily Pad] lilypad.appState.v1 present:', !!raw, raw ? raw.slice(0, 120) : '');
-      if (raw) {
-        const state = JSON.parse(raw);
-        const dr  = state.drAns  || {};
-        const su  = state.suAns  || {};
-        const biz = state.bizAns || {};
-
-        // Email: index 2 for driver/host, index 7 for business
-        email = (dr[2] || dr['2'] || su[2] || su['2'] || biz[7] || biz['7'] || '').trim();
-
-        // Password indices per wizard:
-        //   Driver  (Lr  array, X1=5): drAns[5]
-        //   Host    ($a  array, km=4): drAns[4] (set via ns())
-        //   Business        (wm=9)   : bizAns[9]
-        password = (dr[5] || dr['5'] || dr[4] || dr['4'] || su[4] || su['4'] || biz[9] || biz['9'] || '').trim();
-
-        // Name
-        const first = (dr[0] || dr['0'] || su[0] || su['0'] || biz[5] || biz['5'] || '').trim();
-        const last  = (dr[1] || dr['1'] || su[1] || su['1'] || biz[6] || biz['6'] || '').trim();
-        fullName = (first + ' ' + last).trim();
-
-        accountType = (state.accountType === 'padRenter') ? 'padRenter' : 'renter';
-        console.log('[Lily Pad] From localStorage — email:', email || '(empty)', 'password:', password ? '(set)' : '(empty)', 'name:', fullName);
+      // Stop after timeout
+      if (attempts >= MAX_ATTEMPTS) {
+        console.warn('[Lily Pad] poller: timed out after 6 min');
+        clearInterval(iv);
+        return;
       }
-    } catch (e) {
-      console.warn('[Lily Pad] localStorage parse error:', e.message);
-    }
 
-    // ── 2. Fall back to real-time DOM-captured values ────────────────────────
-    if (!email && _wiz.email) {
-      console.log('[Lily Pad] Using DOM-captured email');
-      email = _wiz.email;
-    }
-    if (!password && _wiz.password) {
-      console.log('[Lily Pad] Using DOM-captured password');
-      password = _wiz.password;
-    }
-    if (!fullName && _wiz.name) fullName = _wiz.name;
+      // Read state
+      let raw;
+      try { raw = localStorage.getItem('lilypad.appState.v1'); } catch { return; }
+      if (!raw) return;
 
-    if (!email) {
-      console.warn('[Lily Pad] No email found — cannot create Supabase account');
-      return;
-    }
-    if (!password) {
-      console.warn('[Lily Pad] No password found — skipping Supabase account creation');
-      return;
-    }
+      let state;
+      try { state = JSON.parse(raw); } catch { return; }
 
-    console.log('[Lily Pad] Creating Supabase account for:', email, '| accountType:', accountType);
-    fetch('/api/auth/signup', {
-      method : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body   : JSON.stringify({ email, password, full_name: fullName || 'Lily Pad User', account_type: accountType }),
-    })
-      .then(r => r.json())
-      .then(data => {
-        console.log('[Lily Pad] Signup API response:', JSON.stringify(data).slice(0, 200));
-        if (data.session && data.session.access_token) {
-          saveSession(data.session);
-          saveProfileToServer(data.session);
-          console.log('[Lily Pad] Account created and session saved for:', email);
-        } else if (data.error) {
-          console.warn('[Lily Pad] Signup API error:', data.error);
-        }
+      const dr  = state.drAns  || {};
+      const su  = state.suAns  || {};
+      const biz = state.bizAns || {};
+
+      // Email at index 2 for driver/host, index 7 for business
+      const email = (
+        dr[2] || dr['2'] || su[2] || su['2'] || biz[7] || biz['7'] || ''
+      ).trim();
+
+      // Password indices per wizard:
+      //   Driver   (Lr array,  X1=5): drAns[5]
+      //   Host     ($a array,  km=4): drAns[4]  (set via ns())
+      //   Business (wm=9)           : bizAns[9]
+      const password = (
+        dr[5] || dr['5'] || dr[4] || dr['4'] ||
+        su[5] || su['5'] || su[4] || su['4'] ||
+        biz[9] || biz['9'] || ''
+      ).trim();
+
+      // Fall back to DOM-captured credentials
+      const finalEmail    = email    || _wiz.email;
+      const finalPassword = password || _wiz.password;
+
+      if (!finalEmail || !finalPassword) return; // wizard not finished yet
+
+      // We have what we need — stop polling and register
+      clearInterval(iv);
+
+      const first = (dr[0] || dr['0'] || su[0] || su['0'] || biz[5] || biz['5'] || '').trim();
+      const last  = (dr[1] || dr['1'] || su[1] || su['1'] || biz[6] || biz['6'] || '').trim();
+      const fullName    = ((first + ' ' + last).trim() || _wiz.name || 'Lily Pad User');
+      const accountType = (state.accountType === 'padRenter') ? 'padRenter' : 'renter';
+
+      console.log('[Lily Pad] poller: wizard complete — email:', finalEmail, '| accountType:', accountType, '| attempt:', attempts);
+
+      fetch('/api/auth/signup', {
+        method : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body   : JSON.stringify({
+          email       : finalEmail,
+          password    : finalPassword,
+          full_name   : fullName,
+          account_type: accountType,
+        }),
       })
-      .catch(err => console.error('[Lily Pad] Signup fetch failed:', err.message));
-  }
+        .then(r => r.json())
+        .then(data => {
+          console.log('[Lily Pad] poller signup response:', JSON.stringify(data).slice(0, 200));
+          if (data.session && data.session.access_token) {
+            saveSession(data.session);
+            saveProfileToServer(data.session);
+            console.log('[Lily Pad] poller: account created + session saved for', finalEmail);
+          } else if (data.error) {
+            console.warn('[Lily Pad] poller signup error:', data.error);
+          }
+        })
+        .catch(err => console.error('[Lily Pad] poller fetch failed:', err.message));
 
-  function onNativeAuthComplete() {
-    console.log('[Lily Pad] Native wizard complete — tab-bar detected');
-    hideUnwantedElements();
-    startGuard();
-    updateProfileDisplay();
-    // Small delay to ensure the bundle has flushed its 250 ms debounce write to localStorage
-    setTimeout(promptNativeUserToRegister, 400);
+    }, 500);
+
+    console.log('[Lily Pad] poller started (500 ms interval)');
   }
 
   async function afterAuth(session) {
@@ -1073,7 +1067,7 @@
     }
 
     startWizardInputCapture();
-    watchForNativeAuthComplete();
+    startWizardPoller();
   }
 
   if (document.readyState === 'loading') {

@@ -12,6 +12,31 @@
     'Content-Type': 'application/json',
   };
 
+  // ── Save / update profile via our own server (keeps service key off client) ─
+  async function saveProfileToServer(session) {
+    if (!session) return;
+    const user = session.user || {};
+    const meta = user.user_metadata || session.user_metadata || {};
+    const id   = user.id || (session.user && session.user.id) || session.user_id;
+    if (!id) return;
+    try {
+      const r = await fetch('/api/profile', {
+        method : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body   : JSON.stringify({
+          id,
+          email       : user.email || session.email || meta.email || '',
+          full_name   : meta.full_name || meta.name  || '',
+          account_type: meta.account_type || 'renter',
+        }),
+      });
+      if (r.ok) console.log('[Lily Pad] Profile saved to Supabase');
+      else      console.warn('[Lily Pad] Profile save failed:', r.status, await r.text());
+    } catch (e) {
+      console.warn('[Lily Pad] Profile save error:', e.message);
+    }
+  }
+
   // ── Session ───────────────────────────────────────────────────────────────
   function getSession() {
     try { return JSON.parse(localStorage.getItem('lily_pad_session') || 'null'); }
@@ -28,6 +53,7 @@
     const data = await res.json();
     if (!res.ok) return null;
     saveSession(data);
+    saveProfileToServer(data);
     return data;
   }
 
@@ -151,6 +177,7 @@
           const data = await res.json();
           if (!res.ok) throw new Error(data.error_description || data.message || 'Sign-in failed');
           saveSession(data);
+          saveProfileToServer(data);
           hideGate();
           afterAuth(data);
         } catch (err) {
@@ -208,6 +235,7 @@
           // If Supabase returned a session (email confirmation disabled) — log in directly
           if (data.access_token) {
             saveSession(data);
+            saveProfileToServer(data);
             hideGate();
             afterAuth(data);
           } else {

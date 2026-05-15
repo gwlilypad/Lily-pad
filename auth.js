@@ -330,11 +330,13 @@
   // The bundle ships with a hardcoded `ar` array of ~105 Houston parking spots.
   // Drivers see these before any real Supabase listings are loaded.  We clear
   // them by:
-  //   1. Patching the useMemo `Q` (nearby-pads array) to [] in the fiber tree
-  //   2. Clearing the fake saved-IDs Set (which triggers a React re-render,
+  //   1. Dispatching [] to any useState that directly holds the fake array
+  //      (memoizedState is the array itself — this is the permanent fix)
+  //   2. Patching the useMemo `Q` (nearby-pads array) to [] in the fiber tree
+  //   3. Clearing the fake saved-IDs Set (which triggers a React re-render,
   //      causing React to use the [] we wrote into the useMemo cache)
-  //   3. DOM-hiding any listing-card component fiber whose memoizedProps carry
-  //      {addr:string, price:string, id:number} — the ea-rendered list items
+  //   4. DOM-hiding any listing-card component fiber whose memoizedProps carry
+  //      {addr:string, price:string, id:number} — the already-rendered list items
   let _clearListingsCooldown = 0;
   function clearFakeListings() {
     const now = Date.now();
@@ -384,6 +386,17 @@
       let s = fiber.memoizedState;
       while (s) {
         const v = s.memoizedState;
+
+        // useState hook whose value IS the fake listings array directly.
+        // Dispatching [] here is permanent — React will re-render with an empty
+        // list and won't restore the fakes because the state itself has changed.
+        if (isFakeArr(v)) {
+          const dispatch = s.queue && s.queue.dispatch;
+          if (typeof dispatch === 'function') {
+            dispatch([]);
+            _clearListingsCooldown = now;
+          }
+        }
 
         // useMemo hook: memoizedState = [value, deps]
         if (Array.isArray(v) && v.length === 2 && isFakeArr(v[0])) {

@@ -1463,8 +1463,8 @@
     document.body.appendChild(lb);
     requestAnimationFrame(() => lb.classList.add('open'));
 
-    // Close handlers
-    lb.querySelector('#lp-lb-backdrop').addEventListener('click', closeLightbox);
+    // Close via explicit buttons only — backdrop tap intentionally does NOT close
+    // (avoids accidental dismissal when the user taps around the photo)
     lb.querySelector('#lp-lb-x').addEventListener('click', closeLightbox);
     lb.querySelector('#lp-lb-close').addEventListener('click', closeLightbox);
 
@@ -1538,6 +1538,19 @@
       if (!data) return;
       wrap.dataset.lpLb = '1';
       wrap.style.cursor = 'zoom-in';
+
+      // Zoom-in badge — small persistent icon so the photo looks tappable
+      const badge = document.createElement('div');
+      badge.className = 'lp-zoom-badge';
+      badge.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+        fill="none" stroke="white" stroke-width="2.5"
+        stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+        <circle cx="10" cy="10" r="6"/>
+        <line x1="21" y1="21" x2="14.5" y2="14.5"/>
+        <line x1="12.5" y1="10" x2="7.5" y2="10"/>
+        <line x1="10" y1="7.5" x2="10" y2="12.5"/>
+      </svg>`;
+      wrap.appendChild(badge);
 
       wrap.addEventListener('click', e => {
         e.stopPropagation();

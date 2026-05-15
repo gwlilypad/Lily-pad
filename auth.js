@@ -42,6 +42,68 @@
     } catch { return 'renter'; }
   }
 
+  // ── Read real user data from native app state or Supabase session ──────────
+  function getUserData() {
+    try {
+      const raw = localStorage.getItem('lilypad.appState.v1');
+      if (raw) {
+        const state = JSON.parse(raw);
+        const dr = state.drAns || {};
+        const su = state.suAns || {};
+        const biz = state.bizAns || {};
+        const firstName = dr[0] || su[0] || biz[5] || '';
+        const lastName  = dr[1] || su[1] || biz[6] || '';
+        const email     = dr[2] || su[2] || biz[7] || '';
+        if (firstName || email) {
+          return { firstName, lastName, fullName: `${firstName} ${lastName}`.trim(), email };
+        }
+      }
+    } catch {}
+    // Fallback: Supabase session
+    const session = getSession();
+    if (session) {
+      const meta = session.user_metadata || {};
+      const email = session.email || (session.user && session.user.email) || '';
+      const name = meta.full_name || meta.name || '';
+      const [firstName = '', ...rest] = name.split(' ');
+      return { firstName, lastName: rest.join(' '), fullName: name, email };
+    }
+    return null;
+  }
+
+  // ── Update profile name/initials/email displayed in the pull-down ─────────
+  function updateProfileDisplay() {
+    const data = getUserData();
+    if (!data) return;
+
+    // Update name
+    document.querySelectorAll('.profile-name').forEach(el => {
+      if (data.fullName) el.textContent = data.fullName;
+    });
+
+    // Update avatar initials
+    document.querySelectorAll('.avatar-initials').forEach(el => {
+      const initials = [data.firstName[0], data.lastName[0]]
+        .filter(Boolean).join('').toUpperCase();
+      if (initials) el.textContent = initials;
+    });
+
+    // Update any element near .profile-name that looks like an email address
+    // (contains '@') — this is the email sub-line in the pull-down header
+    if (data.email) {
+      document.querySelectorAll('.profile-name').forEach(nameEl => {
+        // Check siblings and nearby elements for an email-looking node
+        const parent = nameEl.parentElement;
+        if (!parent) return;
+        Array.from(parent.querySelectorAll('*')).forEach(el => {
+          if (el.children.length === 0 && el.textContent.includes('@')) {
+            el.textContent = data.email;
+          }
+        });
+      });
+    }
+  }
+
   // ── Auth gate (sign-in modal) ──────────────────────────────────────────────
   function showGate() {
     const gate = document.getElementById('auth-gate');
@@ -252,9 +314,10 @@
   // Injects a dedicated sign-out card into the account pull-down whenever
   // thumb-nav-cards are present and our row isn't already there.
   function injectPullDownSignOut() {
+    // Re-check: if our element still exists in the DOM, skip
     if (document.getElementById('lp-pulldown-so')) return;
 
-    // ── Strategy A: standard renter/pad-renter pull-down (.thumb-nav-card rows) ──
+    // ── Strategy A: standard renter/pad-renter pull-down (.thumb-nav-card) ──
     const cards = document.querySelectorAll('.thumb-nav-card');
     if (cards.length > 0) {
       const lastCard = cards[cards.length - 1];
@@ -275,24 +338,18 @@
       return;
     }
 
-    // ── Strategy B: admin/custom view — locate via "Customer Service" text ──
-    // The account panel items (My Account, My Bookings, Saved Spots, Customer Service)
-    // use inline styles with no stable class names. We find the last item by text,
-    // walk up to the list container, and append a sign-out row.
-    const allEls = Array.from(document.querySelectorAll('*'));
-    const lastItemEl = allEls.find(el =>
-      el.children.length === 0 &&
-      el.textContent.trim() === 'Customer Service'
-    );
-    if (!lastItemEl) return;
+    // ── Strategy B: all other views (admin, staff, custom account panels) ──
+    // Find the div whose DIRECT children contain all known menu item labels.
+    // This is reliable across admin view, staff view, and any future variant.
+    const MENU_LABELS = ['My Account', 'My Bookings'];
+    const allDivs = Array.from(document.querySelectorAll('div'));
+    const menuContainer = allDivs.find(div => {
+      if (div.children.length < 3) return false;
+      const childTexts = Array.from(div.children).map(c => c.textContent);
+      return MENU_LABELS.every(label => childTexts.some(t => t.includes(label)));
+    });
 
-    // Walk up until we reach a container with 4+ children (the menu list)
-    let listContainer = lastItemEl.parentElement;
-    for (let i = 0; i < 10 && listContainer && listContainer !== document.body; i++) {
-      if (listContainer.children.length >= 4) break;
-      listContainer = listContainer.parentElement;
-    }
-    if (!listContainer || listContainer === document.body) return;
+    if (!menuContainer) return;
 
     const soRow = document.createElement('div');
     soRow.id = 'lp-pulldown-so';
@@ -301,15 +358,16 @@
       'align-items:center',
       'padding:18px 20px',
       'cursor:pointer',
-      'border-top:1px solid rgba(255,255,255,0.07)',
-      'margin-top:4px',
+      'border-top:1px solid rgba(255,255,255,0.08)',
+      'margin-top:8px',
+      'gap:10px',
     ].join(';');
     soRow.innerHTML =
-      '<span style="font-size:16px;font-weight:600;color:rgba(229,57,53,0.9);' +
+      '<span style="font-size:16px;font-weight:700;color:rgba(229,57,53,0.9);' +
       'font-family:\'DM Sans\',sans-serif;letter-spacing:-0.01em">Sign out</span>';
     soRow.addEventListener('click', doSignOut);
-    listContainer.appendChild(soRow);
-    console.log('[Lily Pad] Pull-down sign-out injected (admin/custom view)');
+    menuContainer.appendChild(soRow);
+    console.log('[Lily Pad] Pull-down sign-out injected (admin/staff/custom view)');
   }
 
   // ── Guards ────────────────────────────────────────────────────────────────
@@ -332,6 +390,7 @@
       hideUnwantedElements();
       injectSignOutButtons();
       injectPullDownSignOut();
+      updateProfileDisplay();
     });
     guard.observe(root, { childList: true, subtree: true });
   }
@@ -350,6 +409,7 @@
       startGuard();
       injectSignOutButtons();
       injectPullDownSignOut();
+      updateProfileDisplay();
     }
 
     function tryClick() {
@@ -385,6 +445,7 @@
         startGuard();
         injectSignOutButtons();
         injectPullDownSignOut();
+        updateProfileDisplay();
       }
     }, 8000);
   }
@@ -409,6 +470,7 @@
     startGuard();
     injectSignOutButtons();
     injectPullDownSignOut();
+    updateProfileDisplay();
   }
 
   async function afterAuth(session) {

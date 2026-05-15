@@ -541,62 +541,20 @@
     }
   }
 
-  function injectPullDownSignOut() {
-    // Re-check: if our element still exists in the DOM, skip
-    if (document.getElementById('lp-pulldown-so')) return;
-
-    // ── Strategy A: standard renter/pad-renter pull-down (.thumb-nav-card) ──
-    const cards = document.querySelectorAll('.thumb-nav-card');
-    if (cards.length > 0) {
-      const lastCard = cards[cards.length - 1];
-      const row = document.createElement('div');
-      row.id = 'lp-pulldown-so';
-      row.className = 'thumb-nav-row';
-      row.style.cursor = 'pointer';
-      row.innerHTML =
-        '<span class="thumb-nav-lbl" style="color:rgba(229,57,53,0.85);font-weight:700">Sign out</span>' +
-        '<span class="thumb-nav-arrow">›</span>';
-      row.addEventListener('click', doSignOut);
-      const wrapper = document.createElement('div');
-      wrapper.className = 'thumb-nav-card';
-      wrapper.style.marginTop = '8px';
-      wrapper.appendChild(row);
-      lastCard.parentNode.insertBefore(wrapper, lastCard.nextSibling);
-      console.log('[Lily Pad] Pull-down sign-out injected (standard)');
-      return;
+  // ── Account-page detector ─────────────────────────────────────────────────
+  // Returns true when the Account tab's menu items are present in the DOM.
+  function isOnAccountPage() {
+    const markers = ['My Bookings', 'Saved Spots', 'Customer Service'];
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode())) {
+      const t = node.nodeValue.trim();
+      if (markers.includes(t)) return true;
     }
-
-    // ── Strategy B: all other views (admin, staff, custom account panels) ──
-    // Find the div whose DIRECT children contain all known menu item labels.
-    // This is reliable across admin view, staff view, and any future variant.
-    const MENU_LABELS = ['My Account', 'My Bookings'];
-    const allDivs = Array.from(document.querySelectorAll('div'));
-    const menuContainer = allDivs.find(div => {
-      if (div.children.length < 3) return false;
-      const childTexts = Array.from(div.children).map(c => c.textContent);
-      return MENU_LABELS.every(label => childTexts.some(t => t.includes(label)));
-    });
-
-    if (!menuContainer) return;
-
-    const soRow = document.createElement('div');
-    soRow.id = 'lp-pulldown-so';
-    soRow.style.cssText = [
-      'display:flex',
-      'align-items:center',
-      'padding:18px 20px',
-      'cursor:pointer',
-      'border-top:1px solid rgba(255,255,255,0.08)',
-      'margin-top:8px',
-      'gap:10px',
-    ].join(';');
-    soRow.innerHTML =
-      '<span style="font-size:16px;font-weight:700;color:rgba(229,57,53,0.9);' +
-      'font-family:\'DM Sans\',sans-serif;letter-spacing:-0.01em">Sign out</span>';
-    soRow.addEventListener('click', doSignOut);
-    menuContainer.appendChild(soRow);
-    console.log('[Lily Pad] Pull-down sign-out injected (admin/staff/custom view)');
+    return false;
   }
+
+  function injectPullDownSignOut() { injectSignOut(); }
 
   // ── Fake spot coordinates baked into the read-only bundle (ar[] array) ───
   // Used to identify and remove hardcoded demo markers from the Leaflet map.
@@ -889,77 +847,44 @@
   }
 
   // ── Sign-out button injections ────────────────────────────────────────────
-  function injectSignOutButtons() {
-    injectSignOutFab();
-    injectAdminSignOut();
-  }
+  function injectSignOutButtons() { injectSignOut(); }
 
-  function injectSignOutFab() {
-    if (document.getElementById('lp-so-fab')) return;
-    const root = document.getElementById('root');
-    if (!root) return;
-    const container = root.firstElementChild;
-    if (!container) { setTimeout(injectSignOutFab, 120); return; }
-
-    if (getComputedStyle(container).position === 'static') container.style.position = 'relative';
-    container.style.setProperty('overflow', 'visible', 'important');
-
-    const fab = document.createElement('button');
-    fab.id = 'lp-so-fab';
-    fab.textContent = 'Sign out';
-    fab.addEventListener('click', doSignOut);
-    fab.setAttribute('style', [
-      'position:absolute',
-      'top:14px',
-      'right:14px',
-      'z-index:2147483647',
-      'background:rgba(14,31,64,0.88)',
-      'color:#fff',
-      'border:none',
-      'border-radius:18px',
-      'padding:7px 15px',
-      'font-size:12px',
-      'font-weight:700',
-      'font-family:"DM Sans",sans-serif',
-      'cursor:pointer',
-      'box-shadow:0 2px 10px rgba(0,0,0,0.28)',
-      'backdrop-filter:blur(10px)',
-      '-webkit-backdrop-filter:blur(10px)',
-      'letter-spacing:-0.1px',
-      'line-height:1.2',
-      'pointer-events:auto',
-    ].join(';'));
-    container.appendChild(fab);
-  }
-
-  function injectAdminSignOut() {
-    const banner = Array.from(document.querySelectorAll('div')).find(div => {
-      if (div.style.zIndex !== '600') return false;
-      if (div.style.position !== 'absolute') return false;
-      const t = (div.textContent || '').trim();
-      return t.includes('Admin view') || t.includes('Staff view');
-    });
-    if (!banner) return;
-    if (document.getElementById('lp-admin-so')) return;
-    const btn = document.createElement('button');
-    btn.id = 'lp-admin-so';
-    btn.textContent = 'Sign out';
-    btn.addEventListener('click', doSignOut);
-    btn.setAttribute('style', [
-      'background:rgba(229,57,53,0.90)',
-      'color:#fff',
-      'border:none',
-      'border-radius:14px',
-      'padding:5px 13px',
-      'font-size:11.5px',
-      'font-weight:700',
-      'font-family:"DM Sans",sans-serif',
-      'cursor:pointer',
-      'margin-left:8px',
-      'flex-shrink:0',
-      'pointer-events:auto',
-    ].join(';'));
-    banner.appendChild(btn);
+  // ── Single fixed-position sign-out button ─────────────────────────────────
+  // Lives on document.body so no overflow:hidden can clip it.
+  // Visible only when the Account page menu items are in the DOM.
+  function injectSignOut() {
+    let btn = document.getElementById('lp-so-fab');
+    if (!btn) {
+      btn = document.createElement('button');
+      btn.id = 'lp-so-fab';
+      btn.textContent = 'Sign out';
+      btn.addEventListener('click', doSignOut);
+      btn.setAttribute('style', [
+        'position:fixed',
+        'bottom:86px',
+        'left:50%',
+        'transform:translateX(-50%)',
+        'z-index:2147483647',
+        'background:rgba(14,31,64,0.82)',
+        'color:#fff',
+        'border:none',
+        'border-radius:100px',
+        'padding:12px 36px',
+        'font-size:15px',
+        'font-weight:700',
+        'font-family:"DM Sans",sans-serif',
+        'cursor:pointer',
+        'box-shadow:0 4px 20px rgba(0,0,0,0.30)',
+        'backdrop-filter:blur(14px)',
+        '-webkit-backdrop-filter:blur(14px)',
+        'letter-spacing:-0.02em',
+        'white-space:nowrap',
+        'pointer-events:auto',
+        'display:none',
+      ].join(';'));
+      document.body.appendChild(btn);
+    }
+    btn.style.display = isOnAccountPage() ? 'block' : 'none';
   }
 
   // ── Init ──────────────────────────────────────────────────────────────────

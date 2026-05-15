@@ -110,6 +110,59 @@ app.get('/setup', (req, res) => {
   res.send(SETUP_SQL);
 });
 
+// ── Health check — shows masked key status ────────────────────────────────────
+app.get('/api/health', (req, res) => {
+  let svcRole = 'missing';
+  let anonOk  = !!SUPABASE_ANON;
+  try {
+    const p = JSON.parse(Buffer.from(SVC_KEY.split('.')[1], 'base64url').toString());
+    svcRole = p.role;
+  } catch {}
+  res.json({
+    ok: true,
+    anon_key_set: anonOk,
+    anon_key_len: SUPABASE_ANON.length,
+    svc_role: svcRole,
+    supabase_url: SUPABASE_URL,
+  });
+});
+
+// ── Auth: server-side sign-in (keeps keys off the client) ─────────────────────
+app.post('/api/auth/signin', async (req, res) => {
+  const { email, password } = req.body || {};
+  if (!email || !password) return res.status(400).json({ error: 'email and password required' });
+  if (!SUPABASE_ANON) return res.status(500).json({ error: 'Server auth not configured (missing anon key)' });
+  try {
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+      method : 'POST',
+      headers: { 'apikey': SUPABASE_ANON, 'Content-Type': 'application/json' },
+      body   : JSON.stringify({ email, password }),
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      return res.status(r.status).json({ error: data.error_description || data.message || 'Invalid email or password' });
+    }
+    res.json(data);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Auth: server-side token refresh ───────────────────────────────────────────
+app.post('/api/auth/refresh', async (req, res) => {
+  const { refresh_token } = req.body || {};
+  if (!refresh_token) return res.status(400).json({ error: 'refresh_token required' });
+  if (!SUPABASE_ANON) return res.status(500).json({ error: 'Server auth not configured' });
+  try {
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method : 'POST',
+      headers: { 'apikey': SUPABASE_ANON, 'Content-Type': 'application/json' },
+      body   : JSON.stringify({ refresh_token }),
+    });
+    const data = await r.json();
+    if (!r.ok) return res.status(r.status).json({ error: data.error_description || data.message || 'Refresh failed' });
+    res.json(data);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Auth: signup — uses admin API when service role key is available ──────────
 app.post('/api/auth/signup', async (req, res) => {
   const { email, password, full_name, account_type } = req.body || {};

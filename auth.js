@@ -75,15 +75,18 @@
   function clearSession() { localStorage.removeItem('lily_pad_session'); }
 
   async function refreshSession(token) {
-    const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
-      method: 'POST', headers: HEADERS,
-      body: JSON.stringify({ refresh_token: token }),
-    });
-    const data = await res.json();
-    if (!res.ok) return null;
-    saveSession(data);
-    saveProfileToServer(data);
-    return data;
+    try {
+      const res = await fetch('/api/auth/refresh', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: token }),
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!data.access_token) return null;
+      saveSession(data);
+      saveProfileToServer(data);
+      return data;
+    } catch { return null; }
   }
 
   async function getUserRole(accessToken) {
@@ -199,12 +202,13 @@
         if (btn) { btn.disabled = true; btn.textContent = 'Signing in…'; }
 
         try {
-          const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
-            method: 'POST', headers: HEADERS,
+          const res = await fetch('/api/auth/signin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password: pass }),
           });
           const data = await res.json();
-          if (!res.ok) throw new Error(data.error_description || data.message || 'Sign-in failed');
+          if (!res.ok) throw new Error(data.error || 'Sign-in failed');
           saveSession(data);
           saveProfileToServer(data);
           hideGate();

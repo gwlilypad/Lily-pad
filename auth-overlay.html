@@ -1,18 +1,32 @@
 <div id="auth-gate" class="hidden">
+
+  <!-- Dark navy top band (mobile only — hidden on desktop via CSS) -->
+  <div id="auth-header">
+    <svg width="36" height="36" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="50" cy="50" r="50" fill="#8DD63F"/>
+      <ellipse cx="50" cy="58" rx="26" ry="17" fill="#0E1F40"/>
+      <circle cx="50" cy="37" rx="13" ry="13" fill="#0E1F40"/>
+    </svg>
+    <span id="auth-brand">lily pad</span>
+  </div>
+
+  <!-- White bottom sheet -->
   <div id="auth-container">
+
+    <!-- Logo row — shown on desktop inside the card -->
     <div id="auth-logo">
-      <svg width="44" height="44" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="50" cy="50" r="50" fill="#4ADE80"/>
+      <svg width="32" height="32" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="50" cy="50" r="50" fill="#8DD63F"/>
         <ellipse cx="50" cy="58" rx="26" ry="17" fill="#0E1F40"/>
         <circle cx="50" cy="37" rx="13" ry="13" fill="#0E1F40"/>
       </svg>
-      <span id="auth-brand">lily pad</span>
+      <span id="auth-logo-brand">lily pad</span>
     </div>
 
     <!-- Login Form -->
     <div id="form-login" class="auth-form active">
       <h2 class="auth-title">Welcome back.</h2>
-      <p class="auth-subtitle">Sign in to your account.</p>
+      <p class="auth-subtitle">Sign in to your Lily Pad account.</p>
       <form id="login-form" onsubmit="return false;">
         <div class="auth-field">
           <label for="login-email">Email</label>
@@ -26,12 +40,12 @@
         <button id="login-btn" type="submit" class="auth-btn-primary">Sign in</button>
       </form>
       <button id="goto-forgot" class="auth-link">Forgot password?</button>
-      <p class="auth-switch">Don't have an account? <button id="goto-signup" class="auth-link-inline">Sign up</button></p>
+      <p class="auth-switch">New to Lily Pad? <button id="goto-signup" class="auth-link-inline">Sign up</button></p>
     </div>
 
     <!-- Signup Form -->
     <div id="form-signup" class="auth-form">
-      <h2 class="auth-title">Create your account.</h2>
+      <h2 class="auth-title">Create account.</h2>
       <p class="auth-subtitle">Join Lily Pad today.</p>
       <form id="signup-form" onsubmit="return false;">
         <div class="auth-field">
@@ -70,12 +84,12 @@
 
     <!-- Forgot Password Form -->
     <div id="form-forgot" class="auth-form">
-      <h2 class="auth-title">Forgot your password?</h2>
+      <h2 class="auth-title">Reset password.</h2>
       <p class="auth-subtitle">Enter your email and we'll send a reset link.</p>
       <form id="forgot-form" onsubmit="return false;">
         <div class="auth-field">
           <label for="forgot-email">Email</label>
-          <input type="email" id="forgot-email" placeholder="you@example.com" autocomplete="email" />
+          <input type="forgot-email" id="forgot-email" placeholder="you@example.com" autocomplete="email" />
         </div>
         <div id="forgot-error" class="auth-error"></div>
         <div id="forgot-success" class="auth-success"></div>
@@ -83,5 +97,6 @@
       </form>
       <p class="auth-switch"><button id="back-to-login" class="auth-link-inline">Back to sign in</button></p>
     </div>
+
   </div>
 </div>

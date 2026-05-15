@@ -274,7 +274,13 @@
     const gotoLogin  = document.getElementById('goto-login');
     const backLogin  = document.getElementById('back-to-login');
     if (gotoForgot && !gotoForgot.dataset.wired) { gotoForgot.dataset.wired = '1'; gotoForgot.addEventListener('click', () => switchForm('form-forgot')); }
-    if (gotoSignup && !gotoSignup.dataset.wired) { gotoSignup.dataset.wired = '1'; gotoSignup.addEventListener('click', () => switchForm('form-signup')); }
+    if (gotoSignup && !gotoSignup.dataset.wired) {
+      gotoSignup.dataset.wired = '1';
+      gotoSignup.addEventListener('click', () => {
+        hideGate();
+        // Let the native app sign-up flow handle it from the home page
+      });
+    }
     if (gotoLogin  && !gotoLogin.dataset.wired)  { gotoLogin.dataset.wired  = '1'; gotoLogin.addEventListener('click',  () => switchForm('form-login'));  }
     if (backLogin  && !backLogin.dataset.wired)  { backLogin.dataset.wired  = '1'; backLogin.addEventListener('click',  () => switchForm('form-login'));  }
 

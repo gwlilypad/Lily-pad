@@ -107,11 +107,19 @@
   // ── Auth gate (sign-in modal) ──────────────────────────────────────────────
   function showGate() {
     const gate = document.getElementById('auth-gate');
-    if (gate) gate.classList.remove('hidden');
+    if (!gate) return;
+    gate.classList.remove('hidden', 'hiding');
+    gate.classList.add('visible');
   }
   function hideGate() {
     const gate = document.getElementById('auth-gate');
-    if (gate) gate.classList.add('hidden');
+    if (!gate) return;
+    gate.classList.add('hiding');
+    gate.classList.remove('visible');
+    setTimeout(() => {
+      gate.classList.remove('hiding');
+      gate.classList.add('hidden');
+    }, 300);
   }
 
   function switchForm(id) {

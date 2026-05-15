@@ -256,10 +256,9 @@
       }
     });
 
-    // Hide the lily pad logo button at the top of sign-up wizard screens (.s-header first button)
-    document.querySelectorAll('.s-header').forEach(header => {
-      const firstBtn = header.querySelector('button');
-      if (firstBtn) hide(firstBtn);
+    // Hide any standalone back-btn that goes directly home (not in .s-nav wizard nav)
+    document.querySelectorAll('.back-btn').forEach(btn => {
+      if (!btn.closest('.s-nav')) hide(btn);
     });
 
     // Hide "Back to home" / "Back to admin" nav elements
@@ -273,6 +272,62 @@
 
   function hide(el) {
     if (el) el.style.setProperty('display', 'none', 'important');
+  }
+
+  // ── Wizard step-by-step back navigation ──────────────────────────────────
+  // The .s-nav .back-btn already has step-back built into the driver wizard,
+  // but the pad renter wizard always goes to "padtype". We normalise both by
+  // intercepting every back-btn click in capture phase and using the React
+  // fiber tree to call dispatch(step - 1) directly.
+  function getWizardFiberStep() {
+    const sNav = document.querySelector('.s-nav');
+    if (!sNav) return null;
+
+    const fiberKey = Object.keys(sNav).find(k => k.startsWith('__reactFiber'));
+    if (!fiberKey) return null;
+
+    // Walk UP the fiber tree from div.s-nav until we find a function component
+    // whose first useState hook holds a non-negative integer (the step index).
+    let fiber = sNav[fiberKey];
+    const seen = new Set();
+    while (fiber && !seen.has(fiber)) {
+      seen.add(fiber);
+      // Function components expose hook state in memoizedState linked list.
+      // DOM node fibers have memoizedState === null.
+      if (fiber.memoizedState !== null && typeof fiber.memoizedState === 'object') {
+        const firstHook = fiber.memoizedState;
+        if (
+          typeof firstHook.memoizedState === 'number' &&
+          firstHook.memoizedState >= 0 &&
+          firstHook.queue &&
+          typeof firstHook.queue.dispatch === 'function'
+        ) {
+          return { step: firstHook.memoizedState, dispatch: firstHook.queue.dispatch };
+        }
+      }
+      fiber = fiber.return;
+      if (fiber && fiber.stateNode instanceof Document) break;
+    }
+    return null;
+  }
+
+  function interceptWizardBack() {
+    document.addEventListener('click', function (e) {
+      const btn = e.target.closest('.back-btn');
+      if (!btn) return;
+      if (!btn.closest('.s-nav')) return; // standalone home-back, let native fire
+
+      const state = getWizardFiberStep();
+      if (!state) return; // couldn't read fiber, fall through to native handler
+      const { step, dispatch } = state;
+
+      if (step > 0) {
+        e.stopPropagation(); // prevent React's onBack from firing
+        dispatch(step - 1);
+        console.log('[Lily Pad] Wizard back: step', step, '→', step - 1);
+      }
+      // step === 0: let native fire (driver → padtype, pad renter → padtype)
+    }, true /* capture phase */);
   }
 
   // ── Landing page: replace "Have a referral code?" with "Sign in" ──────────
@@ -382,6 +437,7 @@
   function startHidingGuard() {
     const root = document.getElementById('root');
     if (!root) return;
+    interceptWizardBack(); // one-time capture-phase listener for step-by-step back
     hideUnwantedElements();
     injectSignInButton();
     const guard = new MutationObserver(() => {

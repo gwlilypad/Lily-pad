@@ -19,11 +19,8 @@
             <circle cx="60" cy="60" r="56"/>
           </clipPath>
         </defs>
-        <!-- Base sphere -->
         <circle cx="60" cy="60" r="56" fill="url(#lp-sphere)"/>
-        <!-- Segment veins clipped to sphere -->
         <g clip-path="url(#lp-clip)" stroke="rgba(0,0,0,0.13)" stroke-width="1.4" fill="none">
-          <!-- 8 radial lines from centre -->
           <line x1="60" y1="60" x2="60"  y2="4"/>
           <line x1="60" y1="60" x2="100" y2="19.7"/>
           <line x1="60" y1="60" x2="116" y2="60"/>
@@ -32,13 +29,10 @@
           <line x1="60" y1="60" x2="20"  y2="100.3"/>
           <line x1="60" y1="60" x2="4"   y2="60"/>
           <line x1="60" y1="60" x2="20"  y2="19.7"/>
-          <!-- Concentric arc rings -->
           <circle cx="60" cy="60" r="20" stroke-opacity="0.18"/>
           <circle cx="60" cy="60" r="38" stroke-opacity="0.13"/>
         </g>
-        <!-- Specular highlight -->
         <circle cx="60" cy="60" r="56" fill="url(#lp-shine)"/>
-        <!-- Subtle dark rim -->
         <circle cx="60" cy="60" r="56" stroke="rgba(0,0,0,0.18)" stroke-width="1.5" fill="none"/>
       </svg>
     </div>
@@ -64,45 +58,6 @@
         </form>
         <button id="goto-forgot" class="auth-link">Forgot password?</button>
         <p class="auth-switch">New to Lily Pad? <button id="goto-signup" class="auth-link-inline">Sign up</button></p>
-      </div>
-
-      <!-- Signup Form -->
-      <div id="form-signup" class="auth-form">
-        <h2 class="auth-title">Create account.</h2>
-        <p class="auth-subtitle">Join Lily Pad today.</p>
-        <form id="signup-form">
-          <div class="auth-field">
-            <label for="signup-name">Full name</label>
-            <input type="text" id="signup-name" placeholder="Your name" autocomplete="name" />
-          </div>
-          <div class="auth-field">
-            <label for="signup-email">Email</label>
-            <input type="email" id="signup-email" placeholder="you@example.com" autocomplete="email" />
-          </div>
-          <div class="auth-field">
-            <label for="signup-password">Password</label>
-            <input type="password" id="signup-password" placeholder="Create a strong password" autocomplete="new-password" />
-          </div>
-          <div class="auth-field">
-            <label>I am a…</label>
-            <div id="role-picker">
-              <button type="button" class="role-btn active" data-role="renter">
-                <span class="role-icon">🚗</span>
-                <span class="role-label">Driver</span>
-                <span class="role-sub">Looking for parking</span>
-              </button>
-              <button type="button" class="role-btn" data-role="padRenter">
-                <span class="role-icon">🏠</span>
-                <span class="role-label">Pad Renter</span>
-                <span class="role-sub">I have a spot to rent</span>
-              </button>
-            </div>
-          </div>
-          <div id="signup-error" class="auth-error"></div>
-          <div id="signup-success" class="auth-success"></div>
-          <button id="signup-btn" type="submit" class="auth-btn-primary">Create account</button>
-        </form>
-        <p class="auth-switch">Already have an account? <button id="goto-login" class="auth-link-inline">Sign in</button></p>
       </div>
 
       <!-- Forgot Password Form -->

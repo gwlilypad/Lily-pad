@@ -210,47 +210,6 @@
     }
   }
 
-  async function handleSignup() {
-    const name   = (document.getElementById('signup-name')?.value || '').trim();
-    const email  = (document.getElementById('signup-email')?.value || '').trim();
-    const pass   = document.getElementById('signup-password')?.value || '';
-    const errEl  = document.getElementById('signup-error');
-    const succEl = document.getElementById('signup-success');
-    const btn    = document.getElementById('signup-btn');
-    if (errEl)  errEl.textContent  = '';
-    if (succEl) succEl.textContent = '';
-    if (!name)         { if (errEl) errEl.textContent = 'Please enter your name.'; return; }
-    if (!email)        { if (errEl) errEl.textContent = 'Please enter your email.'; return; }
-    if (pass.length < 6) { if (errEl) errEl.textContent = 'Password must be at least 6 characters.'; return; }
-    const accountType = document.querySelector('#role-picker .role-btn.active')?.dataset.role || 'renter';
-    if (btn) { btn.disabled = true; btn.textContent = 'Creating account…'; }
-    console.log('[Lily Pad] Signup attempt:', email);
-    try {
-      const res  = await fetch('/api/auth/signup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password: pass, full_name: name, account_type: accountType }) });
-      const data = await res.json();
-      console.log('[Lily Pad] Signup response:', res.status, JSON.stringify(data).slice(0, 200));
-      if (!res.ok) throw new Error(data.error || 'Sign-up failed');
-      if (data.session && data.session.access_token) {
-        saveSession(data.session);
-        saveProfileToServer(data.session);
-        hideGate();
-        afterAuth(data.session);
-      } else if (data.confirm_email) {
-        if (succEl) succEl.textContent = 'Check your email for a confirmation link, then sign in.';
-        if (btn) { btn.disabled = false; btn.textContent = 'Create account'; }
-        setTimeout(() => switchForm('form-login'), 2500);
-      } else {
-        if (succEl) succEl.textContent = 'Account created! Please sign in.';
-        if (btn) { btn.disabled = false; btn.textContent = 'Create account'; }
-        setTimeout(() => switchForm('form-login'), 1500);
-      }
-    } catch (err) {
-      console.error('[Lily Pad] Signup error:', err.message);
-      if (errEl) errEl.textContent = err.message;
-      if (btn) { btn.disabled = false; btn.textContent = 'Create account'; }
-    }
-  }
-
   async function handleForgot() {
     const email  = (document.getElementById('forgot-email')?.value || '').trim();
     const errEl  = document.getElementById('forgot-error');
@@ -297,12 +256,11 @@
 
       // Primary action buttons — trigger handlers directly in case submit doesn't fire
       if (id === 'login-btn')  { e.preventDefault(); handleLogin();  return; }
-      if (id === 'signup-btn') { e.preventDefault(); handleSignup(); return; }
       if (id === 'forgot-btn') { e.preventDefault(); handleForgot(); return; }
 
       // Form switchers
       if (id === 'goto-forgot')    switchForm('form-forgot');
-      if (id === 'goto-signup')    switchForm('form-signup');
+      if (id === 'goto-signup')    { hideGate(); return; } // back to home to use native signup
       if (id === 'goto-login')     switchForm('form-login');
       if (id === 'back-to-login')  switchForm('form-login');
 
@@ -947,12 +905,11 @@
     obs.observe(root, { childList: true, subtree: true });
   }
 
-  // ── After native wizard: prompt user to save real Supabase account ──────────
+  // ── After native wizard: silently register with Supabase in background ───────
   function promptNativeUserToRegister() {
     if (!SUPABASE_OK) return;
-    if (getSession()) return; // already have a Supabase session
+    if (getSession()) return;
 
-    // Read name / email the native wizard collected
     let fullName = '', email = '';
     try {
       const raw = localStorage.getItem('lilypad.appState.v1');
@@ -968,28 +925,25 @@
       }
     } catch {}
 
-    if (!email) return; // nothing to pre-fill — skip prompt
+    if (!email) return;
 
-    // Show the signup form pre-filled
-    setTimeout(() => {
-      showGate();
-      switchForm('form-signup');
-
-      const nameEl  = document.getElementById('signup-name');
-      const emailEl = document.getElementById('signup-email');
-      if (nameEl  && !nameEl.value)  nameEl.value  = fullName;
-      if (emailEl && !emailEl.value) emailEl.value = email;
-
-      // Add a friendly banner so they know why the modal appeared
-      const card = document.querySelector('#form-signup .auth-card');
-      if (card && !document.getElementById('native-reg-banner')) {
-        const banner = document.createElement('p');
-        banner.id = 'native-reg-banner';
-        banner.style.cssText = 'margin:0 0 12px;font-size:13px;color:rgba(255,255,255,0.7);text-align:center;line-height:1.45';
-        banner.textContent = 'Set a password to save your account and access it from any device.';
-        card.insertBefore(banner, card.firstChild);
-      }
-    }, 800);
+    // Generate a random password — user can reset via "Forgot password?" if needed
+    const tempPass = 'LP_' + Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 6).toUpperCase() + '!';
+    console.log('[Lily Pad] Silently registering native user:', email);
+    fetch('/api/auth/signup', {
+      method : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body   : JSON.stringify({ email, password: tempPass, full_name: fullName, account_type: 'renter' }),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.session && data.session.access_token) {
+          saveSession(data.session);
+          saveProfileToServer(data.session);
+          console.log('[Lily Pad] Native user registered silently:', email);
+        }
+      })
+      .catch(() => {});
   }
 
   function onNativeAuthComplete() {

@@ -599,27 +599,28 @@ body.lp-photo-fs .canvas-wrap canvas {
 /* ── Thumbnail zoom badge ────────────────────────────────────────────────── */
 .lp-zoom-badge {
   position: absolute;
-  bottom: 8px;
-  right: 8px;
-  width: 30px;
-  height: 30px;
-  background: rgba(0, 0, 0, 0.52);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.58);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 5px 14px;
+  border-radius: 100px;
+  white-space: nowrap;
   pointer-events: none;
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  z-index: 2;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.35);
-  transition: transform 0.15s ease, background 0.15s ease;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.30);
+  transition: opacity 0.15s ease, background 0.15s ease;
 }
-/* Grow slightly when the card is hovered / focused */
 [data-lp-lb="1"]:hover .lp-zoom-badge,
-[data-lp-lb="1"]:focus-within .lp-zoom-badge {
-  background: rgba(141, 214, 63, 0.88);
-  transform: scale(1.12);
+[data-lp-lb="1"]:active .lp-zoom-badge {
+  background: rgba(141, 214, 63, 0.90);
+  color: #0e1f40;
 }
 
 /* ── Lightbox close button — make it prominent ──────────────────────────── */

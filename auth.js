@@ -1652,48 +1652,82 @@
     }
   }
 
+  function lpAddZoomBadge(container) {
+    if (container.querySelector('.lp-zoom-badge')) return;
+    const badge = document.createElement('div');
+    badge.className = 'lp-zoom-badge';
+    badge.textContent = '⊕ Tap to enlarge';
+    container.appendChild(badge);
+  }
+
   function installPhotoClickHandlers() {
-    // Use the same SVG selector as enlargePadCards — it is unique to p2 pad-card
-    // photo containers and avoids false positives on unrelated img elements.
+    // ── 1. LISTER: p2 pad-cards — <img> inside the SVG-overlay container ──────
+    // The p2 component always renders svg[viewBox="0 0 100 70"] next to the img.
     document.querySelectorAll('svg[viewBox="0 0 100 70"]').forEach(svg => {
       const wrap = svg.parentElement;
       if (!wrap || wrap.dataset.lpLb) return;
       const img = wrap.querySelector('img');
-      if (!img) return;
-      const data = getPadPropsFromEl(img);
-      if (!data) return;
+      if (!img || !img.src) return;
+
+      // Fiber walk for pad props; fall back to raw img.src if not found
+      const data      = getPadPropsFromEl(img);
+      const photoUrl  = (data && data.pad && data.pad.photoUrl) || img.src;
+      if (!photoUrl) return;
+
       wrap.dataset.lpLb = '1';
       wrap.style.cursor = 'zoom-in';
-
-      // Zoom-in badge — small persistent icon so the photo looks tappable
-      const badge = document.createElement('div');
-      badge.className = 'lp-zoom-badge';
-      badge.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
-        fill="none" stroke="white" stroke-width="2.5"
-        stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
-        <circle cx="10" cy="10" r="6"/>
-        <line x1="21" y1="21" x2="14.5" y2="14.5"/>
-        <line x1="12.5" y1="10" x2="7.5" y2="10"/>
-        <line x1="10" y1="7.5" x2="10" y2="12.5"/>
-      </svg>`;
-      wrap.appendChild(badge);
+      if (getComputedStyle(wrap).position === 'static') wrap.style.position = 'relative';
+      lpAddZoomBadge(wrap);
 
       wrap.addEventListener('click', e => {
         e.stopPropagation();
-        // Re-read fiber for latest state (photo/box may have changed since mount)
-        const latest = getPadPropsFromEl(img) || data;
-        const page = lpGetCurrentPage();
-        const isLister = page === 'paddashboard' || page === 'addpad' ||
-                         page === 'photo'        || page === 'photointro';
+        const latest    = getPadPropsFromEl(img) || data || {};
+        const pad       = (latest && latest.pad) || {};
+        const page      = lpGetCurrentPage();
+        const isLister  = page === 'paddashboard' || page === 'addpad' ||
+                          page === 'photo'        || page === 'photointro';
         openPhotoLightbox({
-          photoUrl:       latest.pad.photoUrl,
-          box:            latest.pad.box,
-          color:          latest.pad.color,
-          name:           latest.pad.name,
+          photoUrl:       pad.photoUrl || img.src,
+          box:            pad.box,
+          color:          pad.color,
+          name:           pad.name,
           isLister,
-          onEdit:         latest.onEdit,
-          onReplacePhoto: latest.onReplacePhoto,
+          onEdit:         latest.onEdit  || null,
+          onReplacePhoto: latest.onReplacePhoto || null,
         });
+      });
+    });
+
+    // ── 2. DRIVER: background-image photo divs (detail & booking card views) ──
+    // The bundle renders pad photos as:
+    //   <div style="height:180; background:url(photoUrl) center/cover, #ddd">
+    //   <div style="height:130; background:url(photoUrl) center/cover, ...">
+    // These are NOT <img> elements so the SVG selector misses them entirely.
+    document.querySelectorAll('div[style*="url("]').forEach(div => {
+      if (div.dataset.lpLb) return;
+      // Skip Leaflet map tiles and other non-photo elements
+      if (div.closest('.leaflet-tile-container,.leaflet-layer,.leaflet-pane,[class*="leaflet"]')) return;
+      const bg = div.style.background || div.style.backgroundImage || '';
+      const urlMatch = bg.match(/url\(["']?([^"')]+)["']?\)/);
+      if (!urlMatch) return;
+      const photoUrl = urlMatch[1];
+      // Only data URLs or http(s) URLs — skip map tiles and SVG icons
+      if (!photoUrl.startsWith('http') && !photoUrl.startsWith('data:image')) return;
+      // Must have a meaningful physical height (photos are 130-180px min)
+      const h = div.offsetHeight || div.getBoundingClientRect().height;
+      if (h < 60) return;
+
+      div.dataset.lpLb = '1';
+      div.style.cursor = 'zoom-in';
+      if (!div.style.position || div.style.position === 'static') div.style.position = 'relative';
+      lpAddZoomBadge(div);
+
+      div.addEventListener('click', e => {
+        e.stopPropagation();
+        // Re-read URL in case React has updated it (e.g. photo was changed)
+        const freshBg  = div.style.background || div.style.backgroundImage || '';
+        const freshUrl = (freshBg.match(/url\(["']?([^"')]+)["']?\)/) || [])[1] || photoUrl;
+        openPhotoLightbox({ photoUrl: freshUrl, box: null, name: '', isLister: false });
       });
     });
   }

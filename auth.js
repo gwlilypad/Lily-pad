@@ -254,28 +254,62 @@
   function injectPullDownSignOut() {
     if (document.getElementById('lp-pulldown-so')) return;
 
+    // ── Strategy A: standard renter/pad-renter pull-down (.thumb-nav-card rows) ──
     const cards = document.querySelectorAll('.thumb-nav-card');
-    if (cards.length === 0) return;
+    if (cards.length > 0) {
+      const lastCard = cards[cards.length - 1];
+      const row = document.createElement('div');
+      row.id = 'lp-pulldown-so';
+      row.className = 'thumb-nav-row';
+      row.style.cursor = 'pointer';
+      row.innerHTML =
+        '<span class="thumb-nav-lbl" style="color:rgba(229,57,53,0.85);font-weight:700">Sign out</span>' +
+        '<span class="thumb-nav-arrow">›</span>';
+      row.addEventListener('click', doSignOut);
+      const wrapper = document.createElement('div');
+      wrapper.className = 'thumb-nav-card';
+      wrapper.style.marginTop = '8px';
+      wrapper.appendChild(row);
+      lastCard.parentNode.insertBefore(wrapper, lastCard.nextSibling);
+      console.log('[Lily Pad] Pull-down sign-out injected (standard)');
+      return;
+    }
 
-    // Check if native sign-out row already visible (it is, but add ours below it)
-    const lastCard = cards[cards.length - 1];
+    // ── Strategy B: admin/custom view — locate via "Customer Service" text ──
+    // The account panel items (My Account, My Bookings, Saved Spots, Customer Service)
+    // use inline styles with no stable class names. We find the last item by text,
+    // walk up to the list container, and append a sign-out row.
+    const allEls = Array.from(document.querySelectorAll('*'));
+    const lastItemEl = allEls.find(el =>
+      el.children.length === 0 &&
+      el.textContent.trim() === 'Customer Service'
+    );
+    if (!lastItemEl) return;
 
-    const row = document.createElement('div');
-    row.id = 'lp-pulldown-so';
-    row.className = 'thumb-nav-row';
-    row.style.cursor = 'pointer';
-    row.innerHTML =
-      '<span class="thumb-nav-lbl" style="color:rgba(229,57,53,0.85);font-weight:700">Sign out</span>' +
-      '<span class="thumb-nav-arrow">›</span>';
-    row.addEventListener('click', doSignOut);
+    // Walk up until we reach a container with 4+ children (the menu list)
+    let listContainer = lastItemEl.parentElement;
+    for (let i = 0; i < 10 && listContainer && listContainer !== document.body; i++) {
+      if (listContainer.children.length >= 4) break;
+      listContainer = listContainer.parentElement;
+    }
+    if (!listContainer || listContainer === document.body) return;
 
-    const wrapper = document.createElement('div');
-    wrapper.className = 'thumb-nav-card';
-    wrapper.style.marginTop = '8px';
-    wrapper.appendChild(row);
-
-    lastCard.parentNode.insertBefore(wrapper, lastCard.nextSibling);
-    console.log('[Lily Pad] Pull-down sign-out row injected');
+    const soRow = document.createElement('div');
+    soRow.id = 'lp-pulldown-so';
+    soRow.style.cssText = [
+      'display:flex',
+      'align-items:center',
+      'padding:18px 20px',
+      'cursor:pointer',
+      'border-top:1px solid rgba(255,255,255,0.07)',
+      'margin-top:4px',
+    ].join(';');
+    soRow.innerHTML =
+      '<span style="font-size:16px;font-weight:600;color:rgba(229,57,53,0.9);' +
+      'font-family:\'DM Sans\',sans-serif;letter-spacing:-0.01em">Sign out</span>';
+    soRow.addEventListener('click', doSignOut);
+    listContainer.appendChild(soRow);
+    console.log('[Lily Pad] Pull-down sign-out injected (admin/custom view)');
   }
 
   // ── Guards ────────────────────────────────────────────────────────────────

@@ -42,9 +42,11 @@
     } catch { return 'renter'; }
   }
 
-  // ── Sign-out ─────────────────────────────────────────────────────────────
+  // ── Sign-out ──────────────────────────────────────────────────────────────
+  // Clears our session key AND the native app state so reload lands on page 1
   function doSignOut() {
     clearSession();
+    localStorage.removeItem('lilypad.appState.v1');
     location.reload();
   }
 
@@ -85,16 +87,68 @@
     if (el) el.style.setProperty('display', 'none', 'important');
   }
 
-  // ── Persistent guard: hides unwanted elements on every React re-render ────
+  // ── Landing page: replace "Have a referral code?" with "Sign in" ──────────
+  function injectSignInButton() {
+    if (document.getElementById('lp-signin-btn')) return;
+
+    // Find the leaf node that contains exactly "Have a referral code?"
+    const all = Array.from(document.querySelectorAll('*'));
+    const refEl = all.find(el =>
+      el.children.length === 0 &&
+      el.textContent.trim() === 'Have a referral code?'
+    );
+    if (!refEl) return; // Not on landing page yet
+
+    // Walk up to the nearest block-level wrapper to hide the whole row
+    const refWrapper = refEl.closest('p, a, div, span, button') || refEl;
+    refWrapper.style.setProperty('display', 'none', 'important');
+
+    // Build the "Sign in" button to sit in its place
+    const btn = document.createElement('button');
+    btn.id = 'lp-signin-btn';
+    btn.textContent = 'Sign in';
+    btn.setAttribute('style', [
+      'display:block',
+      'width:100%',
+      'background:transparent',
+      'border:none',
+      'color:rgba(14,31,64,0.55)',
+      'font-size:15px',
+      'font-weight:500',
+      'font-family:"DM Sans",sans-serif',
+      'text-decoration:underline',
+      'text-decoration-color:rgba(14,31,64,0.2)',
+      'text-align:center',
+      'padding:10px 0',
+      'cursor:pointer',
+      'margin-top:4px',
+    ].join(';'));
+
+    btn.addEventListener('click', () => {
+      // Enter the native sign-up/sign-in flow via "Find a pad"
+      const findPad = Array.from(document.querySelectorAll('button'))
+        .find(b => b.textContent.trim() === 'Find a pad');
+      if (findPad) findPad.click();
+    });
+
+    refWrapper.parentNode.insertBefore(btn, refWrapper.nextSibling);
+    console.log('[Lily Pad] Sign-in button injected on landing page');
+  }
+
+  // ── Persistent guard: hides unwanted elements + injects sign-in button ────
   function startHidingGuard() {
     const root = document.getElementById('root');
     if (!root) return;
     hideUnwantedElements();
-    const guard = new MutationObserver(hideUnwantedElements);
+    injectSignInButton();
+    const guard = new MutationObserver(() => {
+      hideUnwantedElements();
+      injectSignInButton();
+    });
     guard.observe(root, { childList: true, subtree: true });
   }
 
-  // ── Full guard: hides + keeps sign-out FAB alive ──────────────────────────
+  // ── Full guard (after auth): hides + keeps FABs alive ────────────────────
   function startGuard() {
     const root = document.getElementById('root');
     if (!root) return;
@@ -106,8 +160,6 @@
   }
 
   // ── Navigate to map by clicking the Renter/Driver toggle programmatically ─
-  // Even if the toggle is hidden via display:none we briefly un-hide it,
-  // click it (so React's event system fires), then re-hide immediately.
   function navigateToMap(role, onNavDone) {
     const targetLabel = (role === 'padRenter') ? 'Driver' : 'Renter';
     let done = false;
@@ -130,18 +182,15 @@
         .find(b => b.textContent.trim() === targetLabel);
       if (btn) {
         console.log('[Lily Pad] Clicking toggle "' + targetLabel + '"');
-        // Temporarily un-hide so React's click handler fires correctly
         btn.style.removeProperty('display');
         if (btn.parentElement) btn.parentElement.style.removeProperty('display');
         btn.click();
-        // Re-hide immediately
         hide(btn);
         hide(btn.parentElement);
         complete('toggle clicked');
         return;
       }
 
-      // Fallback: tab-bar exists → already on map
       if (document.querySelector('.tab-bar')) {
         complete('tab-bar found');
       }
@@ -169,10 +218,7 @@
   }
 
   // ── Watch for native app sign-up completion (tab-bar appearing) ───────────
-  // When the user completes the native wizard, the app shows the tab-bar.
-  // We detect that and finish setup (sign-out button, guard).
   function watchForNativeAuthComplete() {
-    // If tab-bar already present, act immediately
     if (document.querySelector('.tab-bar')) {
       onNativeAuthComplete();
       return;
@@ -283,21 +329,26 @@
     banner.appendChild(btn);
   }
 
-  // ── Sign-out intercept for account-screen rows ────────────────────────────
+  // ── Sign-out intercept for the native pull-down tab rows ──────────────────
+  // The native app has a "Sign out" .thumb-nav-row that calls d("home").
+  // We intercept it (capture phase) to clear session + reload instead.
   function wireSignOut() {
     document.addEventListener('click', (e) => {
       const row = e.target.closest('.thumb-nav-row');
-      if (row && row.textContent.includes('Sign out')) doSignOut();
+      if (row && row.textContent.includes('Sign out')) {
+        e.stopPropagation();
+        e.preventDefault();
+        doSignOut();
+      }
     }, true);
   }
 
   // ── Init ──────────────────────────────────────────────────────────────────
   async function init() {
-    // Always hide the toggle/home button — regardless of Supabase config
+    // Always hide unwanted elements and inject landing-page sign-in button
     startHidingGuard();
 
     if (SUPABASE_OK) {
-      // Check for existing session via our Supabase auth key
       const session = getSession();
       if (session) {
         const nowSec = Date.now() / 1000;
@@ -310,8 +361,8 @@
       }
     }
 
-    // No session (or no Supabase config) — let the native app handle sign-up/sign-in.
-    // Watch for the tab-bar to appear (signals the user reached the map/account view).
+    // No session — let the native app handle sign-up/sign-in.
+    // Watch for the tab-bar to appear (signals the user reached the map view).
     watchForNativeAuthComplete();
   }
 

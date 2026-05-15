@@ -517,6 +517,182 @@
     console.log('[Lily Pad] Pull-down sign-out injected (admin/staff/custom view)');
   }
 
+  // ── Fake spot coordinates baked into the read-only bundle (ar[] array) ───
+  // Used to identify and remove hardcoded demo markers from the Leaflet map.
+  const FAKE_LATLNGS = new Set([
+    '29.757,-95.3677','29.7583,-95.3692','29.7561,-95.3703','29.755,-95.3715',
+    '29.759,-95.366','29.7545,-95.3728','29.7535,-95.368','29.752,-95.3695',
+    '29.7418,-95.3742','29.7438,-95.37','29.7425,-95.372','29.741,-95.376',
+    '29.74,-95.369','29.7463,-95.391','29.7452,-95.3945','29.748,-95.3888',
+    '29.744,-95.393','29.747,-95.387','29.792,-95.401','29.7935,-95.4028',
+    '29.795,-95.399','29.7905,-95.405','29.796,-95.397','29.773,-95.41',
+    '29.772,-95.406','29.774,-95.414','29.739,-95.462','29.7408,-95.464',
+    '29.7375,-95.459','29.7382,-95.4665','29.736,-95.461','29.732,-95.451',
+    '29.7338,-95.448','29.735,-95.442','29.7085,-95.398','29.706,-95.401',
+    '29.71,-95.3955','29.7072,-95.394','29.7182,-95.4052','29.7165,-95.408',
+    '29.72,-95.402','29.7632,-95.578','29.7645,-95.582','29.7618,-95.575',
+    '29.766,-95.5698','29.7672,-95.584','29.7285,-95.548','29.727,-95.551',
+    '29.73,-95.542','29.778,-95.512','29.776,-95.505','29.78,-95.508',
+    '29.7755,-95.518','29.7502,-95.4338','29.7518,-95.436','29.7488,-95.4302',
+    '29.7508,-95.342','29.7525,-95.338','29.749,-95.345','29.7342,-95.3618',
+    '29.7328,-95.364','29.6198,-95.6482','29.622,-95.644','29.6178,-95.651',
+    '29.6155,-95.639','29.5598,-95.3142','29.5618,-95.3108','29.5575,-95.3178',
+    '29.6882,-95.2108','29.6905,-95.2048','29.6862,-95.2168','29.5522,-95.1128',
+    '29.5545,-95.1182','29.55,-95.1068','29.7878,-95.8148','29.7892,-95.8188',
+    '29.7858,-95.8118','30.1638,-95.5018','30.1658,-95.4988','30.1618,-95.5048',
+    '30.1675,-95.4958','29.9698,-95.7028','29.9718,-95.6988','29.9678,-95.7068',
+    '29.9962,-95.2908','29.9982,-95.2868','29.9942,-95.2948','29.6278,-95.5488',
+    '29.6298,-95.5448','29.6258,-95.5528','29.7058,-95.4588','29.7075,-95.4552',
+    '29.704,-95.462','29.8002,-95.3348','29.8022,-95.3308','29.6982,-95.5108',
+    '29.6958,-95.5148','29.7338,-95.5068','29.6985,-95.4428','29.7002,-95.4468',
+    '29.6712,-95.3962','29.6705,-95.4005','29.6732,-95.3928','29.6748,-95.399',
+    '29.6682,-95.4038','29.6778,-95.3975','29.6662,-95.3888','29.6642,-95.4062',
+    '29.6798,-95.4048','29.6602,-95.3918','29.6832,-95.4108','29.6822,-95.3982',
+    '29.6708,-95.3984','29.6735,-95.3985','29.6712,-95.3942','29.6682,-95.4012',
+    '29.6752,-95.399',
+  ]);
+
+  // ── Find Leaflet map instance via React fiber tree ────────────────────────
+  function getLeafletMap() {
+    const container = document.querySelector('.leaflet-container');
+    if (!container) return null;
+    const fk = Object.keys(container).find(k => k.startsWith('__reactFiber$'));
+    if (!fk) return null;
+    let fiber = container[fk];
+    for (let i = 0; i < 80 && fiber; i++) {
+      fiber = fiber.return;
+      if (!fiber) break;
+      let s = fiber.memoizedState;
+      while (s) {
+        const v = s.memoizedState;
+        if (v && typeof v === 'object' && v !== null &&
+            'current' in v && v.current &&
+            typeof v.current.eachLayer === 'function') {
+          return v.current;
+        }
+        s = s.next;
+      }
+    }
+    return null;
+  }
+
+  // ── Call the app's goTo(page) via React context fiber traversal ───────────
+  function callGoTo(page) {
+    const root = document.getElementById('root');
+    if (!root) return false;
+    const fk = Object.keys(root).find(k => k.startsWith('__reactFiber$'));
+    if (!fk) return false;
+    const queue = [root[fk]];
+    let checked = 0;
+    while (queue.length && checked < 400) {
+      const fiber = queue.shift();
+      if (!fiber) continue;
+      checked++;
+      const mp = fiber.memoizedProps;
+      if (mp && mp.value && typeof mp.value.goTo === 'function') {
+        mp.value.goTo(page);
+        return true;
+      }
+      if (fiber.child) queue.push(fiber.child);
+      if (fiber.sibling) queue.push(fiber.sibling);
+    }
+    return false;
+  }
+
+  // ── Remove hardcoded fake parking spots from the Leaflet map ─────────────
+  let _fakeMapCleaned = false;
+  let _fakeMapListener = false;
+
+  function removeFakeMapSpots() {
+    if (!document.querySelector('.leaflet-container')) return;
+    const map = getLeafletMap();
+    if (!map) return;
+
+    // Block any future re-addition of fake layers (one-time setup)
+    if (!_fakeMapListener) {
+      _fakeMapListener = true;
+      map.on('layeradd', function (e) {
+        if (!e.layer || typeof e.layer.getLatLng !== 'function') return;
+        const ll = e.layer.getLatLng();
+        const key = String(ll.lat) + ',' + String(ll.lng);
+        if (FAKE_LATLNGS.has(key)) {
+          setTimeout(() => { try { map.removeLayer(e.layer); } catch (_) {} }, 0);
+        }
+      });
+    }
+
+    if (_fakeMapCleaned) return;
+
+    let removed = 0;
+    map.eachLayer(function (layer) {
+      if (typeof layer.getLatLng !== 'function') return;
+      const ll = layer.getLatLng();
+      const key = String(ll.lat) + ',' + String(ll.lng);
+      if (FAKE_LATLNGS.has(key)) {
+        try { map.removeLayer(layer); removed++; } catch (_) {}
+      }
+    });
+
+    if (removed > 0) {
+      _fakeMapCleaned = true;
+      console.log('[Lily Pad] Removed ' + removed + ' fake map spots');
+    }
+  }
+
+  // ── Back button on My Pads (paddashboard) page ────────────────────────────
+  function injectPaddashboardBack() {
+    if (document.getElementById('lp-pad-back')) return;
+
+    // Detect paddashboard by its unique "Revenue & Payouts" header text
+    const anchor = Array.from(document.querySelectorAll('p,span,div')).find(el =>
+      el.childElementCount === 0 && el.textContent.trim() === 'Revenue & Payouts'
+    );
+    if (!anchor) return;
+
+    // Walk up to find the page-level container (the dark-blue header section)
+    let headerSection = anchor;
+    for (let i = 0; i < 8; i++) {
+      if (!headerSection.parentElement) break;
+      headerSection = headerSection.parentElement;
+      const bg = headerSection.style.background || '';
+      if (bg.includes('#0E1F40') || bg.includes('#142A52') ||
+          bg.includes('rgb(14') || bg.includes('rgb(20')) break;
+    }
+
+    const btn = document.createElement('button');
+    btn.id = 'lp-pad-back';
+    btn.innerHTML =
+      '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" ' +
+      'stroke="rgba(255,255,255,0.80)" stroke-width="2.2" stroke-linecap="round" ' +
+      'stroke-linejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>' +
+      '<span style="font-family:\'DM Sans\',sans-serif;font-size:13px;' +
+      'color:rgba(255,255,255,0.80);font-weight:600">Back</span>';
+    btn.setAttribute('style', [
+      'display:flex',
+      'align-items:center',
+      'gap:5px',
+      'background:none',
+      'border:none',
+      'cursor:pointer',
+      'padding:6px 0 10px',
+      'flex-shrink:0',
+    ].join(';'));
+
+    btn.addEventListener('click', function () {
+      document.getElementById('lp-pad-back')?.remove();
+      if (!callGoTo('find')) {
+        // Fallback: click the bottom tab-bar map/find button
+        const tab = Array.from(document.querySelectorAll('.tab-bar button, button'))
+          .find(b => /map|find|home/i.test(b.textContent));
+        if (tab) tab.click();
+      }
+    });
+
+    // Prepend into the header section so it sits at the very top
+    headerSection.insertBefore(btn, headerSection.firstChild);
+    console.log('[Lily Pad] Paddashboard back button injected');
+  }
+
   // ── Guards ────────────────────────────────────────────────────────────────
   function startHidingGuard() {
     const root = document.getElementById('root');
@@ -540,6 +716,8 @@
       injectPullDownSignOut();
       updateProfileDisplay();
       updatePhotoFullscreen();
+      injectPaddashboardBack();
+      removeFakeMapSpots();
     });
     guard.observe(root, { childList: true, subtree: true });
   }

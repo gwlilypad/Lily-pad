@@ -25,9 +25,9 @@ app.get('/', (req, res) => {
     window.__SUPABASE_ANON_KEY__ = "${SUPABASE_ANON_KEY}";
   </script>`;
 
-  html = html.replace('</head>', `${headInjection}</head>`);
-  html = html.replace('<div id="root"></div>', `${authOverlay}<div id="root"></div>`);
-  html = html.replace('</body>', `<script>${authJS}</script></body>`);
+  html = html.replace('</head>', () => `${headInjection}</head>`);
+  html = html.replace('<div id="root"></div>', () => `${authOverlay}<div id="root"></div>`);
+  html = html.replace('</body>', () => `<script>${authJS}</script></body>`);
 
   // No caching on the main page
   res.setHeader('Cache-Control', 'no-store');

@@ -1,10 +1,10 @@
 (function () {
   const SUPABASE_URL = window.__SUPABASE_URL__;
   const SUPABASE_ANON_KEY = window.__SUPABASE_ANON_KEY__;
+  const SUPABASE_OK = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
 
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    console.warn('[Lily Pad] Supabase config missing.');
-    return;
+  if (!SUPABASE_OK) {
+    console.warn('[Lily Pad] Supabase config missing — hiding guard still runs.');
   }
 
   const HEADERS = {
@@ -293,23 +293,25 @@
 
   // ── Init ──────────────────────────────────────────────────────────────────
   async function init() {
-    // Always hide the toggle/home button from the very start
+    // Always hide the toggle/home button — regardless of Supabase config
     startHidingGuard();
 
-    // Check for existing session via our Supabase auth key
-    const session = getSession();
-    if (session) {
-      const nowSec = Date.now() / 1000;
-      if ((session.expires_at || 0) > nowSec + 60) { afterAuth(session); return; }
-      if (session.refresh_token) {
-        const r = await refreshSession(session.refresh_token).catch(() => null);
-        if (r) { afterAuth(r); return; }
+    if (SUPABASE_OK) {
+      // Check for existing session via our Supabase auth key
+      const session = getSession();
+      if (session) {
+        const nowSec = Date.now() / 1000;
+        if ((session.expires_at || 0) > nowSec + 60) { afterAuth(session); return; }
+        if (session.refresh_token) {
+          const r = await refreshSession(session.refresh_token).catch(() => null);
+          if (r) { afterAuth(r); return; }
+        }
+        clearSession();
       }
-      clearSession();
     }
 
-    // No session — let the native app handle sign-up/sign-in.
-    // Just watch for the tab-bar to appear (signals auth complete + map view).
+    // No session (or no Supabase config) — let the native app handle sign-up/sign-in.
+    // Watch for the tab-bar to appear (signals the user reached the map/account view).
     watchForNativeAuthComplete();
   }
 

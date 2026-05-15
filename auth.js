@@ -248,7 +248,7 @@
         if (btn) { btn.disabled = true; btn.textContent = 'Creating account…'; }
 
         try {
-          // Use server-side route: creates user with email_confirm=true (no confirmation email)
+          console.log('[Lily Pad] Signup attempt for:', email);
           const res = await fetch('/api/auth/signup', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -260,11 +260,13 @@
             }),
           });
           const data = await res.json();
+          console.log('[Lily Pad] Signup response:', res.status, JSON.stringify(data).slice(0, 200));
           if (!res.ok) {
             throw new Error(data.error || 'Sign-up failed');
           }
 
           if (data.session && data.session.access_token) {
+            console.log('[Lily Pad] Signup success — session received, logging in');
             saveSession(data.session);
             saveProfileToServer(data.session);
             hideGate();
@@ -274,10 +276,13 @@
             if (btn) { btn.disabled = false; btn.textContent = 'Create account'; }
             setTimeout(() => switchForm('form-login'), 2500);
           } else {
-            if (succEl) succEl.textContent = 'Account created! Signing you in…';
-            setTimeout(() => switchForm('form-login'), 1200);
+            console.log('[Lily Pad] Signup success — no session, redirecting to sign-in');
+            if (succEl) succEl.textContent = 'Account created! Please sign in.';
+            if (btn) { btn.disabled = false; btn.textContent = 'Create account'; }
+            setTimeout(() => switchForm('form-login'), 1500);
           }
         } catch (err) {
+          console.error('[Lily Pad] Signup error:', err.message);
           if (errEl) errEl.textContent = err.message;
           if (btn) { btn.disabled = false; btn.textContent = 'Create account'; }
         }
@@ -311,14 +316,13 @@
         if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
 
         try {
-          const res = await fetch(`${SUPABASE_URL}/auth/v1/recover`, {
-            method: 'POST', headers: HEADERS,
+          const res = await fetch('/api/auth/forgot', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email }),
           });
-          if (!res.ok) {
-            const d = await res.json();
-            throw new Error(d.error_description || d.message || 'Request failed');
-          }
+          const d = await res.json();
+          if (!res.ok) throw new Error(d.error || 'Request failed');
           if (succEl) succEl.textContent = 'Reset link sent — check your inbox.';
         } catch (err) {
           if (errEl) errEl.textContent = err.message;
@@ -336,10 +340,7 @@
     if (gotoForgot && !gotoForgot.dataset.wired) { gotoForgot.dataset.wired = '1'; gotoForgot.addEventListener('click', () => switchForm('form-forgot')); }
     if (gotoSignup && !gotoSignup.dataset.wired) {
       gotoSignup.dataset.wired = '1';
-      gotoSignup.addEventListener('click', () => {
-        hideGate();
-        // Let the native app sign-up flow handle it from the home page
-      });
+      gotoSignup.addEventListener('click', () => switchForm('form-signup'));
     }
     if (gotoLogin  && !gotoLogin.dataset.wired)  { gotoLogin.dataset.wired  = '1'; gotoLogin.addEventListener('click',  () => switchForm('form-login'));  }
     if (backLogin  && !backLogin.dataset.wired)  { backLogin.dataset.wired  = '1'; backLogin.addEventListener('click',  () => switchForm('form-login'));  }

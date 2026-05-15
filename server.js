@@ -146,6 +146,25 @@ app.post('/api/auth/signin', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Auth: forgot password ─────────────────────────────────────────────────────
+app.post('/api/auth/forgot', async (req, res) => {
+  const { email } = req.body || {};
+  if (!email) return res.status(400).json({ error: 'email required' });
+  if (!SUPABASE_ANON) return res.status(500).json({ error: 'Server auth not configured' });
+  try {
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/recover`, {
+      method : 'POST',
+      headers: { 'apikey': SUPABASE_ANON, 'Content-Type': 'application/json' },
+      body   : JSON.stringify({ email }),
+    });
+    if (!r.ok) {
+      const d = await r.json();
+      return res.status(r.status).json({ error: d.error_description || d.message || 'Request failed' });
+    }
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Auth: server-side token refresh ───────────────────────────────────────────
 app.post('/api/auth/refresh', async (req, res) => {
   const { refresh_token } = req.body || {};

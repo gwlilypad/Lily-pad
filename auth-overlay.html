@@ -1,102 +1,94 @@
 <div id="auth-gate" class="hidden">
+  <div id="auth-inner">
 
-  <!-- Dark navy top band (mobile only — hidden on desktop via CSS) -->
-  <div id="auth-header">
-    <svg width="36" height="36" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="50" cy="50" r="50" fill="#8DD63F"/>
-      <ellipse cx="50" cy="58" rx="26" ry="17" fill="#0E1F40"/>
-      <circle cx="50" cy="37" rx="13" ry="13" fill="#0E1F40"/>
-    </svg>
-    <span id="auth-brand">lily pad</span>
-  </div>
-
-  <!-- White bottom sheet -->
-  <div id="auth-container">
-
-    <!-- Logo row — shown on desktop inside the card -->
+    <!-- Logo centred above the card -->
     <div id="auth-logo">
-      <svg width="32" height="32" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <svg width="48" height="48" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
         <circle cx="50" cy="50" r="50" fill="#8DD63F"/>
-        <ellipse cx="50" cy="58" rx="26" ry="17" fill="#0E1F40"/>
-        <circle cx="50" cy="37" rx="13" ry="13" fill="#0E1F40"/>
+        <ellipse cx="50" cy="55" rx="28" ry="18" fill="#0E1F40"/>
+        <circle cx="50" cy="40" r="14" fill="#0E1F40"/>
       </svg>
-      <span id="auth-logo-brand">lily pad</span>
+      <span id="auth-brand">lily pad</span>
     </div>
 
-    <!-- Login Form -->
-    <div id="form-login" class="auth-form active">
-      <h2 class="auth-title">Welcome back.</h2>
-      <p class="auth-subtitle">Sign in to your Lily Pad account.</p>
-      <form id="login-form" onsubmit="return false;">
-        <div class="auth-field">
-          <label for="login-email">Email</label>
-          <input type="email" id="login-email" placeholder="you@example.com" autocomplete="email" />
-        </div>
-        <div class="auth-field">
-          <label for="login-password">Password</label>
-          <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" />
-        </div>
-        <div id="login-error" class="auth-error"></div>
-        <button id="login-btn" type="submit" class="auth-btn-primary">Sign in</button>
-      </form>
-      <button id="goto-forgot" class="auth-link">Forgot password?</button>
-      <p class="auth-switch">New to Lily Pad? <button id="goto-signup" class="auth-link-inline">Sign up</button></p>
-    </div>
+    <!-- Card -->
+    <div id="auth-container">
 
-    <!-- Signup Form -->
-    <div id="form-signup" class="auth-form">
-      <h2 class="auth-title">Create account.</h2>
-      <p class="auth-subtitle">Join Lily Pad today.</p>
-      <form id="signup-form" onsubmit="return false;">
-        <div class="auth-field">
-          <label for="signup-name">Full name</label>
-          <input type="text" id="signup-name" placeholder="Your name" autocomplete="name" />
-        </div>
-        <div class="auth-field">
-          <label for="signup-email">Email</label>
-          <input type="email" id="signup-email" placeholder="you@example.com" autocomplete="email" />
-        </div>
-        <div class="auth-field">
-          <label for="signup-password">Password</label>
-          <input type="password" id="signup-password" placeholder="Create a strong password" autocomplete="new-password" />
-        </div>
-        <div class="auth-field">
-          <label>I am a…</label>
-          <div id="role-picker">
-            <button type="button" class="role-btn active" data-role="renter">
-              <span class="role-icon">🚗</span>
-              <span class="role-label">Driver</span>
-              <span class="role-sub">Looking for parking</span>
-            </button>
-            <button type="button" class="role-btn" data-role="padRenter">
-              <span class="role-icon">🏠</span>
-              <span class="role-label">Pad Renter</span>
-              <span class="role-sub">I have a spot to rent</span>
-            </button>
+      <!-- Login Form -->
+      <div id="form-login" class="auth-form active">
+        <h2 class="auth-title">Welcome back.</h2>
+        <p class="auth-subtitle">Sign in to your Lily Pad account.</p>
+        <form id="login-form" onsubmit="return false;">
+          <div class="auth-field">
+            <label for="login-email">Email</label>
+            <input type="email" id="login-email" placeholder="you@example.com" autocomplete="email" />
           </div>
-        </div>
-        <div id="signup-error" class="auth-error"></div>
-        <div id="signup-success" class="auth-success"></div>
-        <button id="signup-btn" type="submit" class="auth-btn-primary">Create account</button>
-      </form>
-      <p class="auth-switch">Already have an account? <button id="goto-login" class="auth-link-inline">Sign in</button></p>
-    </div>
+          <div class="auth-field">
+            <label for="login-password">Password</label>
+            <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" />
+          </div>
+          <div id="login-error" class="auth-error"></div>
+          <button id="login-btn" type="submit" class="auth-btn-primary">Sign in</button>
+        </form>
+        <button id="goto-forgot" class="auth-link">Forgot password?</button>
+        <p class="auth-switch">New to Lily Pad? <button id="goto-signup" class="auth-link-inline">Sign up</button></p>
+      </div>
 
-    <!-- Forgot Password Form -->
-    <div id="form-forgot" class="auth-form">
-      <h2 class="auth-title">Reset password.</h2>
-      <p class="auth-subtitle">Enter your email and we'll send a reset link.</p>
-      <form id="forgot-form" onsubmit="return false;">
-        <div class="auth-field">
-          <label for="forgot-email">Email</label>
-          <input type="forgot-email" id="forgot-email" placeholder="you@example.com" autocomplete="email" />
-        </div>
-        <div id="forgot-error" class="auth-error"></div>
-        <div id="forgot-success" class="auth-success"></div>
-        <button id="forgot-btn" type="submit" class="auth-btn-primary">Send reset link</button>
-      </form>
-      <p class="auth-switch"><button id="back-to-login" class="auth-link-inline">Back to sign in</button></p>
-    </div>
+      <!-- Signup Form -->
+      <div id="form-signup" class="auth-form">
+        <h2 class="auth-title">Create account.</h2>
+        <p class="auth-subtitle">Join Lily Pad today.</p>
+        <form id="signup-form" onsubmit="return false;">
+          <div class="auth-field">
+            <label for="signup-name">Full name</label>
+            <input type="text" id="signup-name" placeholder="Your name" autocomplete="name" />
+          </div>
+          <div class="auth-field">
+            <label for="signup-email">Email</label>
+            <input type="email" id="signup-email" placeholder="you@example.com" autocomplete="email" />
+          </div>
+          <div class="auth-field">
+            <label for="signup-password">Password</label>
+            <input type="password" id="signup-password" placeholder="Create a strong password" autocomplete="new-password" />
+          </div>
+          <div class="auth-field">
+            <label>I am a…</label>
+            <div id="role-picker">
+              <button type="button" class="role-btn active" data-role="renter">
+                <span class="role-icon">🚗</span>
+                <span class="role-label">Driver</span>
+                <span class="role-sub">Looking for parking</span>
+              </button>
+              <button type="button" class="role-btn" data-role="padRenter">
+                <span class="role-icon">🏠</span>
+                <span class="role-label">Pad Renter</span>
+                <span class="role-sub">I have a spot to rent</span>
+              </button>
+            </div>
+          </div>
+          <div id="signup-error" class="auth-error"></div>
+          <div id="signup-success" class="auth-success"></div>
+          <button id="signup-btn" type="submit" class="auth-btn-primary">Create account</button>
+        </form>
+        <p class="auth-switch">Already have an account? <button id="goto-login" class="auth-link-inline">Sign in</button></p>
+      </div>
 
+      <!-- Forgot Password Form -->
+      <div id="form-forgot" class="auth-form">
+        <h2 class="auth-title">Reset password.</h2>
+        <p class="auth-subtitle">We'll send a reset link to your email.</p>
+        <form id="forgot-form" onsubmit="return false;">
+          <div class="auth-field">
+            <label for="forgot-email">Email</label>
+            <input type="email" id="forgot-email" placeholder="you@example.com" autocomplete="email" />
+          </div>
+          <div id="forgot-error" class="auth-error"></div>
+          <div id="forgot-success" class="auth-success"></div>
+          <button id="forgot-btn" type="submit" class="auth-btn-primary">Send reset link</button>
+        </form>
+        <p class="auth-switch"><button id="back-to-login" class="auth-link-inline">Back to sign in</button></p>
+      </div>
+
+    </div>
   </div>
 </div>

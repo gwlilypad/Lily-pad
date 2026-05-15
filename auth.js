@@ -12,47 +12,13 @@
     'Content-Type': 'application/json',
   };
 
-  // ── Session ──────────────────────────────────────────────────────────────
+  // ── Session (our key, for users who signed in via Supabase directly) ──────
   function getSession() {
     try { return JSON.parse(localStorage.getItem('lily_pad_session') || 'null'); }
     catch { return null; }
   }
   function saveSession(s) { localStorage.setItem('lily_pad_session', JSON.stringify(s)); }
   function clearSession() { localStorage.removeItem('lily_pad_session'); }
-
-  // ── Supabase calls ───────────────────────────────────────────────────────
-  async function signIn(email, password) {
-    const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
-      method: 'POST', headers: HEADERS,
-      body: JSON.stringify({ email, password }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error_description || data.msg || 'Sign in failed.');
-    saveSession(data);
-    return data;
-  }
-
-  async function signUp(email, password, fullName, role) {
-    const res = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
-      method: 'POST', headers: HEADERS,
-      body: JSON.stringify({ email, password, data: { full_name: fullName, account_type: role } }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error_description || data.msg || 'Sign up failed.');
-    if (data.access_token) saveSession(data);
-    return data;
-  }
-
-  async function sendPasswordReset(email) {
-    const res = await fetch(`${SUPABASE_URL}/auth/v1/recover`, {
-      method: 'POST', headers: HEADERS,
-      body: JSON.stringify({ email }),
-    });
-    if (!res.ok) {
-      const data = await res.json();
-      throw new Error(data.error_description || data.msg || 'Reset failed.');
-    }
-  }
 
   async function refreshSession(token) {
     const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
@@ -82,26 +48,6 @@
     location.reload();
   }
 
-  // ── Gate show / hide ─────────────────────────────────────────────────────
-  function showGate() {
-    const gate = document.getElementById('auth-gate');
-    if (!gate) return;
-    gate.classList.remove('hidden', 'hiding');
-    void gate.offsetWidth;
-    gate.classList.add('visible');
-  }
-
-  function hideGate() {
-    const gate = document.getElementById('auth-gate');
-    if (!gate || gate.classList.contains('hidden')) return;
-    gate.classList.remove('visible');
-    gate.classList.add('hiding');
-    setTimeout(() => {
-      gate.classList.remove('hiding');
-      gate.classList.add('hidden');
-    }, 420);
-  }
-
   // ── Element hiding ────────────────────────────────────────────────────────
   function hideUnwantedElements() {
     const appRoot = document.getElementById('root');
@@ -124,7 +70,7 @@
       }
     });
 
-    // Hide the map "Back to home" / "Back to admin" element
+    // Hide the map "Back to home" / "Back to admin" element (any tag)
     document.querySelectorAll('[title]').forEach(el => {
       const t = (el.title || '').toLowerCase();
       if (t.includes('back to home') || t.includes('back to admin')) {
@@ -139,7 +85,7 @@
     if (el) el.style.setProperty('display', 'none', 'important');
   }
 
-  // ── Early guard: hides unwanted elements before and after auth ────────────
+  // ── Persistent guard: hides unwanted elements on every React re-render ────
   function startHidingGuard() {
     const root = document.getElementById('root');
     if (!root) return;
@@ -148,7 +94,7 @@
     guard.observe(root, { childList: true, subtree: true });
   }
 
-  // ── Full guard: hides + keeps sign-out FAB alive after auth ───────────────
+  // ── Full guard: hides + keeps sign-out FAB alive ──────────────────────────
   function startGuard() {
     const root = document.getElementById('root');
     if (!root) return;
@@ -159,19 +105,103 @@
     guard.observe(root, { childList: true, subtree: true });
   }
 
-  // ── Intercept landing page CTA buttons → show sign-in gate ──────────────
-  function interceptLandingButtons() {
-    document.addEventListener('click', (e) => {
-      const btn = e.target.closest('button');
-      if (!btn) return;
-      const text = btn.textContent.trim();
-      if (text === 'Find a pad' || text === 'List my lily pad') {
-        e.stopPropagation();
-        e.preventDefault();
-        showForm('form-login');
-        showGate();
+  // ── Navigate to map by clicking the Renter/Driver toggle programmatically ─
+  // Even if the toggle is hidden via display:none we briefly un-hide it,
+  // click it (so React's event system fires), then re-hide immediately.
+  function navigateToMap(role, onNavDone) {
+    const targetLabel = (role === 'padRenter') ? 'Driver' : 'Renter';
+    let done = false;
+
+    function complete(reason) {
+      if (done) return;
+      done = true;
+      console.log('[Lily Pad] Navigation complete:', reason);
+      if (onNavDone) onNavDone();
+      hideUnwantedElements();
+      startGuard();
+      wireSignOut();
+      injectSignOutButtons();
+    }
+
+    function tryClick() {
+      if (done) return;
+
+      const btn = Array.from(document.querySelectorAll('button'))
+        .find(b => b.textContent.trim() === targetLabel);
+      if (btn) {
+        console.log('[Lily Pad] Clicking toggle "' + targetLabel + '"');
+        // Temporarily un-hide so React's click handler fires correctly
+        btn.style.removeProperty('display');
+        if (btn.parentElement) btn.parentElement.style.removeProperty('display');
+        btn.click();
+        // Re-hide immediately
+        hide(btn);
+        hide(btn.parentElement);
+        complete('toggle clicked');
+        return;
       }
-    }, true);
+
+      // Fallback: tab-bar exists → already on map
+      if (document.querySelector('.tab-bar')) {
+        complete('tab-bar found');
+      }
+    }
+
+    const root = document.getElementById('root');
+    const obs = new MutationObserver(() => { tryClick(); if (done) obs.disconnect(); });
+    if (root) obs.observe(root, { childList: true, subtree: true });
+
+    const poll = setInterval(() => { tryClick(); if (done) clearInterval(poll); }, 80);
+
+    setTimeout(() => {
+      clearInterval(poll);
+      obs.disconnect();
+      if (!done) {
+        done = true;
+        console.warn('[Lily Pad] Nav timeout — showing app as-is');
+        if (onNavDone) onNavDone();
+        hideUnwantedElements();
+        startGuard();
+        wireSignOut();
+        injectSignOutButtons();
+      }
+    }, 8000);
+  }
+
+  // ── Watch for native app sign-up completion (tab-bar appearing) ───────────
+  // When the user completes the native wizard, the app shows the tab-bar.
+  // We detect that and finish setup (sign-out button, guard).
+  function watchForNativeAuthComplete() {
+    // If tab-bar already present, act immediately
+    if (document.querySelector('.tab-bar')) {
+      onNativeAuthComplete();
+      return;
+    }
+    const root = document.getElementById('root');
+    if (!root) return;
+    const obs = new MutationObserver(() => {
+      if (document.querySelector('.tab-bar')) {
+        obs.disconnect();
+        onNativeAuthComplete();
+      }
+    });
+    obs.observe(root, { childList: true, subtree: true });
+  }
+
+  function onNativeAuthComplete() {
+    console.log('[Lily Pad] Native auth complete — setting up guard + sign-out');
+    hideUnwantedElements();
+    startGuard();
+    wireSignOut();
+    injectSignOutButtons();
+  }
+
+  // ── After successful Supabase auth (our session key) ─────────────────────
+  async function afterAuth(session) {
+    const role = (session && session.access_token)
+      ? await getUserRole(session.access_token)
+      : 'renter';
+    navigateToMap(role, () => {});
   }
 
   // ── Sign-out button injection ─────────────────────────────────────────────
@@ -185,12 +215,8 @@
 
     const root = document.getElementById('root');
     if (!root) return;
-
     const container = root.firstElementChild;
-    if (!container) {
-      setTimeout(injectSignOutFab, 120);
-      return;
-    }
+    if (!container) { setTimeout(injectSignOutFab, 120); return; }
 
     if (getComputedStyle(container).position === 'static') {
       container.style.position = 'relative';
@@ -234,10 +260,8 @@
       return t.includes('Admin view') || t.includes('Staff view');
     });
     if (!banner) return;
-
     const old = document.getElementById('lp-admin-so');
     if (old) old.remove();
-
     const btn = document.createElement('button');
     btn.id = 'lp-admin-so';
     btn.textContent = 'Sign out';
@@ -257,185 +281,22 @@
       'pointer-events:auto',
     ].join(';'));
     banner.appendChild(btn);
-    console.log('[Lily Pad] Admin sign-out button injected');
   }
 
-  // ── Navigate to map after auth ────────────────────────────────────────────
-  function navigateToMap(role, onNavDone) {
-    const targetLabel = (role === 'padRenter') ? 'Driver' : 'Renter';
-    let done = false;
-
-    function complete(reason) {
-      if (done) return;
-      done = true;
-      console.log('[Lily Pad] Navigation complete:', reason);
-      if (onNavDone) onNavDone();
-      hideUnwantedElements();
-      startGuard();
-      wireSignOut();
-      injectSignOutButtons();
-    }
-
-    function tryClick() {
-      if (done) return;
-
-      const btn = Array.from(document.querySelectorAll('button'))
-        .find(b => b.textContent.trim() === targetLabel);
-      if (btn) {
-        console.log('[Lily Pad] Clicking toggle "' + targetLabel + '" to navigate to map');
-        btn.click();
-        complete('toggle clicked');
-        return;
-      }
-
-      const findTab = Array.from(document.querySelectorAll('.tab-bar button'))
-        .find(b => b.textContent.includes('Find') || b.classList.contains('active-tab'));
-      if (findTab) {
-        console.log('[Lily Pad] Navigating via Find tab fallback');
-        findTab.click();
-        complete('find-tab clicked');
-        return;
-      }
-
-      if (document.querySelector('.tab-bar') &&
-          !Array.from(document.querySelectorAll('button')).find(b => b.textContent.trim() === targetLabel)) {
-        complete('already on map');
-      }
-    }
-
-    const root = document.getElementById('root');
-    const obs = new MutationObserver(() => {
-      tryClick();
-      if (done) obs.disconnect();
-    });
-    if (root) obs.observe(root, { childList: true, subtree: true });
-
-    const poll = setInterval(() => {
-      tryClick();
-      if (done) clearInterval(poll);
-    }, 80);
-
-    setTimeout(() => {
-      clearInterval(poll);
-      obs.disconnect();
-      if (!done) {
-        done = true;
-        console.warn('[Lily Pad] Navigation timeout — showing app as-is');
-        if (onNavDone) onNavDone();
-        hideUnwantedElements();
-        startGuard();
-        wireSignOut();
-        injectSignOutButtons();
-      }
-    }, 8000);
-  }
-
-  // ── Sign-out intercept for existing account-screen rows ──────────────────
+  // ── Sign-out intercept for account-screen rows ────────────────────────────
   function wireSignOut() {
     document.addEventListener('click', (e) => {
       const row = e.target.closest('.thumb-nav-row');
-      if (row && row.textContent.includes('Sign out')) {
-        doSignOut();
-      }
+      if (row && row.textContent.includes('Sign out')) doSignOut();
     }, true);
-  }
-
-  // ── After successful auth ─────────────────────────────────────────────────
-  async function afterAuth(session) {
-    const role = (session && session.access_token)
-      ? await getUserRole(session.access_token)
-      : 'renter';
-    navigateToMap(role, () => hideGate());
-  }
-
-  // ── Auth form helpers ─────────────────────────────────────────────────────
-  function showForm(id) {
-    document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
-    document.getElementById(id).classList.add('active');
-    clearMsgs();
-  }
-  function clearMsgs() {
-    document.querySelectorAll('.auth-error, .auth-success').forEach(el => el.textContent = '');
-  }
-  function setError(id, msg) { const el = document.getElementById(id); if (el) el.textContent = msg; }
-  function setSuccess(id, msg) { const el = document.getElementById(id); if (el) el.textContent = msg; }
-  function setLoading(btn, on) {
-    btn.disabled = on;
-    btn.textContent = on ? 'Please wait…' : btn.dataset.label;
-  }
-
-  // ── Wire auth forms ───────────────────────────────────────────────────────
-  function wireAuthForms() {
-    document.querySelectorAll('.role-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-      });
-    });
-
-    const loginBtn  = document.getElementById('login-btn');
-    const signupBtn = document.getElementById('signup-btn');
-    const forgotBtn = document.getElementById('forgot-btn');
-    loginBtn.dataset.label  = 'Sign in';
-    signupBtn.dataset.label = 'Create account';
-    forgotBtn.dataset.label = 'Send reset link';
-
-    document.getElementById('goto-signup').addEventListener('click', () => showForm('form-signup'));
-    document.getElementById('goto-login').addEventListener('click',  () => showForm('form-login'));
-    document.getElementById('goto-forgot').addEventListener('click', () => showForm('form-forgot'));
-    document.getElementById('back-to-login').addEventListener('click', () => showForm('form-login'));
-
-    document.getElementById('login-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const email    = document.getElementById('login-email').value.trim();
-      const password = document.getElementById('login-password').value;
-      if (!email || !password) { setError('login-error', 'Please enter your email and password.'); return; }
-      clearMsgs(); setLoading(loginBtn, true);
-      try { afterAuth(await signIn(email, password)); }
-      catch (err) { setError('login-error', err.message); setLoading(loginBtn, false); }
-    });
-
-    document.getElementById('signup-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const name     = document.getElementById('signup-name').value.trim();
-      const email    = document.getElementById('signup-email').value.trim();
-      const password = document.getElementById('signup-password').value;
-      const roleEl   = document.querySelector('.role-btn.active');
-      const role     = roleEl ? roleEl.dataset.role : 'renter';
-      if (!name)   { setError('signup-error', 'Please enter your full name.'); return; }
-      if (!email)  { setError('signup-error', 'Please enter your email.'); return; }
-      if (!password || password.length < 6) { setError('signup-error', 'Password must be at least 6 characters.'); return; }
-      clearMsgs(); setLoading(signupBtn, true);
-      try {
-        const result = await signUp(email, password, name, role);
-        if (result.access_token) { afterAuth(result); }
-        else if (result.id) {
-          setSuccess('signup-success', 'Check your inbox to confirm your email, then sign in.');
-          signupBtn.style.display = 'none';
-        } else { setError('signup-error', 'Something went wrong.'); setLoading(signupBtn, false); }
-      } catch (err) { setError('signup-error', err.message); setLoading(signupBtn, false); }
-    });
-
-    document.getElementById('forgot-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const email = document.getElementById('forgot-email').value.trim();
-      if (!email) { setError('forgot-error', 'Please enter your email.'); return; }
-      clearMsgs(); setLoading(forgotBtn, true);
-      try { await sendPasswordReset(email); setSuccess('forgot-success', 'Reset link sent! Check your inbox.'); }
-      catch (err) { setError('forgot-error', err.message); }
-      finally { setLoading(forgotBtn, false); }
-    });
   }
 
   // ── Init ──────────────────────────────────────────────────────────────────
   async function init() {
-    // Always start hiding the toggle & home button immediately
-    if (document.getElementById('root')) {
-      startHidingGuard();
-    } else {
-      document.addEventListener('DOMContentLoaded', startHidingGuard);
-    }
+    // Always hide the toggle/home button from the very start
+    startHidingGuard();
 
+    // Check for existing session via our Supabase auth key
     const session = getSession();
     if (session) {
       const nowSec = Date.now() / 1000;
@@ -447,9 +308,9 @@
       clearSession();
     }
 
-    // No valid session — let landing page show, intercept CTA taps
-    interceptLandingButtons();
-    wireAuthForms();
+    // No session — let the native app handle sign-up/sign-in.
+    // Just watch for the tab-bar to appear (signals auth complete + map view).
+    watchForNativeAuthComplete();
   }
 
   if (document.readyState === 'loading') {

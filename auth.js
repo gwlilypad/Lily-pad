@@ -1241,18 +1241,30 @@
   // the bundle renders them without a back button. We inject one by reading the
   // current page name from the React fiber tree and using the context's goTo().
   const LP_BACK_TARGETS = {
-    availability : 'paddashboard',
-    payment      : 'paddashboard',
-    photo        : 'paddashboard',
-    photointro   : 'paddashboard',
-    addpad       : 'paddashboard',
-    bookings     : 'find',
-    admin        : 'find',
+    availability   : 'paddashboard',
+    payment        : 'paddashboard',
+    photo          : 'paddashboard',
+    photointro     : 'paddashboard',
+    addpad         : 'paddashboard',
+    account        : 'paddashboard',  // pad detail / edit opened from My Pads
+    billing        : 'paddashboard',
+    confirm        : 'paddashboard',
+    bookings       : 'find',
+    driveraccount  : 'find',          // driver viewing a listing
+    feedback       : 'find',
+    support        : 'find',
+    admin          : 'find',
+    reinstate      : 'admin',
+    verify         : 'admin',
+    unverify       : 'admin',
+    suspend        : 'admin',
   };
   const LP_ALL_PAGES = new Set([
     'home','find','root','paddashboard','bookings','payment',
     'availability','photo','photointro','addpad',
     'signup','driversignup','bizsignup','padtype','admin',
+    'account','billing','confirm','driveraccount',
+    'feedback','support','reinstate','verify','unverify','suspend',
   ]);
   let _lpGoToFn   = null;  // cached from fiber; invalidated on back-click
   let _lpLastPage = null;
@@ -1320,11 +1332,16 @@
     const target = LP_BACK_TARGETS[page];
     if (!target) return; // not a page that needs an injected back btn
 
-    // Honour native back button if the bundle already rendered one
-    if (document.querySelector('.s-nav:not(#lp-deep-back) .back-btn')) return;
-
     // Already injected for this page
     if (document.getElementById('lp-deep-back')) return;
+
+    // The bundle's own back button on addpad navigates to 'signup' for existing
+    // pads instead of 'paddashboard', so we hide it and inject our own which
+    // always uses the correct LP_BACK_TARGETS destination.
+    document.querySelectorAll('.s-nav:not(#lp-deep-back) .back-btn').forEach(el => {
+      el.style.visibility = 'hidden';
+      el.style.pointerEvents = 'none';
+    });
 
     // Find best anchor — prefer the active page container
     const anchor = document.querySelector('.page.active') ||

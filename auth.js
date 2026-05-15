@@ -554,7 +554,64 @@
     return false;
   }
 
-  function injectPullDownSignOut() { injectSignOut(); }
+  function injectPullDownSignOut() {
+    if (document.getElementById('lp-pulldown-so')) return;
+
+    // Find the "Customer Service" text node (last menu item)
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    let csNode = null, n;
+    while ((n = walker.nextNode())) {
+      if (n.nodeValue.trim() === 'Customer Service') { csNode = n; break; }
+    }
+    if (!csNode) return;
+
+    // Walk up from the text to find the card container:
+    // the element whose direct children include all 4 menu rows
+    let el = csNode.parentElement;
+    let card = null;
+    while (el && el !== document.body) {
+      const p = el.parentElement;
+      if (!p) break;
+      if (
+        p.children.length >= 3 &&
+        p.textContent.includes('My Account') &&
+        p.textContent.includes('My Bookings')
+      ) { card = p; break; }
+      el = p;
+    }
+    if (!card) return;
+
+    // Build a row matching the app's dark-card style
+    const row = document.createElement('div');
+    row.id = 'lp-pulldown-so';
+    row.style.cssText = [
+      'display:flex',
+      'align-items:center',
+      'gap:14px',
+      'padding:14px 20px',
+      'cursor:pointer',
+      'border-top:1px solid rgba(255,255,255,0.07)',
+      'margin-top:2px',
+    ].join(';');
+    row.innerHTML =
+      '<div style="width:40px;height:40px;border-radius:12px;' +
+        'background:rgba(229,57,53,0.13);display:flex;align-items:center;' +
+        'justify-content:center;flex-shrink:0">' +
+        '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" ' +
+          'stroke="rgba(229,57,53,0.9)" stroke-width="2.5" ' +
+          'stroke-linecap="round" stroke-linejoin="round">' +
+          '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>' +
+          '<polyline points="16 17 21 12 16 7"/>' +
+          '<line x1="21" y1="12" x2="9" y2="12"/>' +
+        '</svg>' +
+      '</div>' +
+      '<span style="font-size:15px;font-weight:700;' +
+        'color:rgba(229,57,53,0.9);font-family:\'DM Sans\',sans-serif;' +
+        'letter-spacing:-0.01em">Sign out</span>';
+    row.addEventListener('click', doSignOut);
+    card.appendChild(row);
+    console.log('[Lily Pad] Sign-out row injected into account menu');
+  }
 
   // ── Fake spot coordinates baked into the read-only bundle (ar[] array) ───
   // Used to identify and remove hardcoded demo markers from the Leaflet map.
@@ -849,43 +906,7 @@
   // ── Sign-out button injections ────────────────────────────────────────────
   function injectSignOutButtons() { injectSignOut(); }
 
-  // ── Single fixed-position sign-out button ─────────────────────────────────
-  // Lives on document.body so no overflow:hidden can clip it.
-  // Visible only when the Account page menu items are in the DOM.
-  function injectSignOut() {
-    let btn = document.getElementById('lp-so-fab');
-    if (!btn) {
-      btn = document.createElement('button');
-      btn.id = 'lp-so-fab';
-      btn.textContent = 'Sign out';
-      btn.addEventListener('click', doSignOut);
-      btn.setAttribute('style', [
-        'position:fixed',
-        'bottom:86px',
-        'left:50%',
-        'transform:translateX(-50%)',
-        'z-index:2147483647',
-        'background:rgba(14,31,64,0.82)',
-        'color:#fff',
-        'border:none',
-        'border-radius:100px',
-        'padding:12px 36px',
-        'font-size:15px',
-        'font-weight:700',
-        'font-family:"DM Sans",sans-serif',
-        'cursor:pointer',
-        'box-shadow:0 4px 20px rgba(0,0,0,0.30)',
-        'backdrop-filter:blur(14px)',
-        '-webkit-backdrop-filter:blur(14px)',
-        'letter-spacing:-0.02em',
-        'white-space:nowrap',
-        'pointer-events:auto',
-        'display:none',
-      ].join(';'));
-      document.body.appendChild(btn);
-    }
-    btn.style.display = isOnAccountPage() ? 'block' : 'none';
-  }
+  function injectSignOut() { injectPullDownSignOut(); }
 
   // ── Init ──────────────────────────────────────────────────────────────────
   async function init() {

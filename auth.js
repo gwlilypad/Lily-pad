@@ -358,8 +358,27 @@
 
     let forceRenderDispatch = null;
 
+    // Inject a one-time CSS rule so any element we mark [data-lp-fake]
+    // stays hidden even if React re-renders and patches it.
+    if (!document.getElementById('lp-fake-css')) {
+      const st = document.createElement('style');
+      st.id = 'lp-fake-css';
+      st.textContent = '[data-lp-fake]{display:none!important}';
+      document.head.appendChild(st);
+    }
+
+    function hideFakeFiber(fiber) {
+      // Walk DOWN to the first HTMLElement stateNode (card's root div)
+      let f = fiber;
+      while (f && !(f.stateNode instanceof HTMLElement)) f = f.child;
+      if (f && f.stateNode instanceof HTMLElement) {
+        f.stateNode.setAttribute('data-lp-fake', '1');
+        _clearListingsCooldown = now;
+      }
+    }
+
     function walk(fiber, depth) {
-      if (!fiber || depth > 160) return;
+      if (!fiber || depth > 300) return;
 
       // ── Check this fiber's hooks ────────────────────────────────────────
       let s = fiber.memoizedState;
@@ -387,16 +406,17 @@
 
       // ── Check memoizedProps for listing-card component ──────────────────
       // Function components spread ar-item props: {addr, price, id, meta, lat, lng}
+      // Also handle wrapped variants: {spot:{addr,id}} or {pad:{addr,id}}
       const p = fiber.memoizedProps;
-      if (p && typeof p.addr === 'string' && typeof p.price === 'string' &&
-          typeof p.id === 'number') {
-        // Walk down to find the first host (DOM) element
-        let f = fiber;
-        while (f && !(f.stateNode instanceof HTMLElement)) f = f.child;
-        if (f && f.stateNode instanceof HTMLElement &&
-            f.stateNode.style.display !== 'none') {
-          f.stateNode.style.display = 'none';
-          _clearListingsCooldown = now;
+      if (p && typeof p.id === 'number') {
+        if (typeof p.addr === 'string' && typeof p.price === 'string') {
+          hideFakeFiber(fiber);
+        }
+      } else if (p) {
+        const inner = p.spot || p.pad || p.item || p.listing;
+        if (inner && typeof inner.id === 'number' &&
+            typeof inner.addr === 'string' && typeof inner.price === 'string') {
+          hideFakeFiber(fiber);
         }
       }
 
@@ -405,6 +425,32 @@
     }
 
     walk(root[fk], 0);
+
+    // ── DOM text-scan fallback ──────────────────────────────────────────────
+    // Any listing card that survived the fiber walk gets caught here.
+    // The fake ar[] meta field always produces "· X.X mi" distance text
+    // (e.g. "Garage · 1.1 mi") — real Supabase listings don't exist yet, but
+    // when they do, their distance format will differ.  We hide the nearest
+    // card-like ancestor (first element ≥ 60 px tall that contains the node).
+    const miRe = /·\s*\d+\.\d+\s*mi/;
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    const toHide = [];
+    let tn;
+    while ((tn = walker.nextNode())) {
+      if (miRe.test(tn.nodeValue)) {
+        let el = tn.parentElement;
+        // Walk up to find a card-like container (≥ 60 px tall, not body/root)
+        for (let i = 0; i < 12 && el && el !== document.body; i++, el = el.parentElement) {
+          if (el.offsetHeight >= 60) { toHide.push(el); break; }
+        }
+      }
+    }
+    toHide.forEach(el => {
+      if (!el.dataset.lpFake) {
+        el.setAttribute('data-lp-fake', '1');
+        _clearListingsCooldown = now;
+      }
+    });
 
     // If we patched useMemo values but the saved-Set dispatch wasn't found,
     // force a re-render through any boolean useState to pick up the patched Q

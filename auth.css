@@ -380,3 +380,16 @@ body.lp-photo-fs .canvas-wrap canvas {
 
 #lp-canvas-cancel:hover  { background: rgba(14, 31, 64, 0.95); }
 #lp-canvas-cancel:active { transform: scale(0.96); }
+
+/* ── Pad drawing — corner resize handles ─────────────────────────────────── */
+.lp-corner {
+  /* All sizing/position set inline via JS; these provide the active animation */
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.lp-corner:hover {
+  transform: translate(-50%, -50%) scale(1.2) !important;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.5) !important;
+}

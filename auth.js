@@ -660,41 +660,97 @@
     if (canvas.dataset.lpMove) return;
     canvas.dataset.lpMove = '1';
 
-    let drag = null; // {dispatch, origCx, origCy, startX, startY}
+    const cw = canvas.closest('.canvas-wrap') || canvas.parentElement;
+    if (getComputedStyle(cw).position === 'static') cw.style.position = 'relative';
 
-    function normXY(e) {
-      const r = canvas.getBoundingClientRect();
+    // ── Corner resize handles ───────────────────────────────────────────────
+    // Four small square handles at each corner of the drawn box.
+    const CORNER_DEFS = [
+      { id: 'tl', cursor: 'nwse-resize' },
+      { id: 'tr', cursor: 'nesw-resize' },
+      { id: 'bl', cursor: 'nesw-resize' },
+      { id: 'br', cursor: 'nwse-resize' },
+    ];
+    const handles = {};
+    CORNER_DEFS.forEach(({ id, cursor }) => {
+      const h = document.createElement('div');
+      h.className = 'lp-corner';
+      h.dataset.corner = id;
+      h.style.cssText =
+        'position:absolute;width:22px;height:22px;' +
+        'background:#8DD63F;border:2.5px solid rgba(255,255,255,0.92);border-radius:5px;' +
+        'cursor:' + cursor + ';z-index:20;' +
+        'transform:translate(-50%,-50%);touch-action:none;' +
+        'box-shadow:0 1px 6px rgba(0,0,0,0.45);display:none;';
+      cw.appendChild(h);
+      handles[id] = h;
+    });
+
+    function updateHandles(box) {
+      if (!box || box.w < 0.01) {
+        Object.values(handles).forEach(h => { h.style.display = 'none'; });
+        return;
+      }
+      const pos = {
+        tl: [box.cx - box.w / 2, box.cy - box.h / 2],
+        tr: [box.cx + box.w / 2, box.cy - box.h / 2],
+        bl: [box.cx - box.w / 2, box.cy + box.h / 2],
+        br: [box.cx + box.w / 2, box.cy + box.h / 2],
+      };
+      Object.entries(handles).forEach(([id, h]) => {
+        h.style.left    = pos[id][0] * 100 + '%';
+        h.style.top     = pos[id][1] * 100 + '%';
+        h.style.display = 'block';
+      });
+    }
+
+    // Expose so updatePhotoFullscreen can refresh handles after React redraws
+    canvas._lpUpdateHandles = updateHandles;
+
+    // ── Shared drag state ───────────────────────────────────────────────────
+    let drag = null;
+    // mode: 'move' | 'resize'
+    // move:   { dispatch, origCx, origCy, startX, startY }
+    // resize: { dispatch, ax, ay, rect }   (ax/ay = anchor corner in norm coords)
+
+    // ── Coordinate helpers ──────────────────────────────────────────────────
+    function normXY(e, el) {
+      const r = (el || canvas).getBoundingClientRect();
       const t = e.touches ? (e.touches[0] || e.changedTouches[0]) : e;
       return { x: (t.clientX - r.left) / r.width, y: (t.clientY - r.top) / r.height };
     }
 
     function isInsideBox(box, x, y) {
       if (!box || box.w < 0.01) return false;
-      // Use half-dimensions + small margin for easier grabbing
       return Math.abs(x - box.cx) < box.w / 2 + 0.04 &&
              Math.abs(y - box.cy) < box.h / 2 + 0.04;
     }
 
+    // ── Canvas: translate (move existing box) ───────────────────────────────
     canvas.addEventListener('pointerdown', e => {
       const hook = findH2BoxHook(canvas);
       if (!hook || !hook.box || hook.box.w < 0.01) return;
       const { x, y } = normXY(e);
       if (!isInsideBox(hook.box, x, y)) return;
-      drag = { dispatch: hook.dispatch, origCx: hook.box.cx, origCy: hook.box.cy, startX: x, startY: y };
+      drag = { mode: 'move', dispatch: hook.dispatch,
+               origCx: hook.box.cx, origCy: hook.box.cy, startX: x, startY: y };
       e.stopPropagation();
       canvas.setPointerCapture(e.pointerId);
       canvas.style.cursor = 'grabbing';
     }, true);
 
     canvas.addEventListener('pointermove', e => {
-      if (drag) {
+      if (drag && drag.mode === 'move') {
         e.stopPropagation();
         const { x, y } = normXY(e);
         const newCx = Math.max(0.04, Math.min(0.96, drag.origCx + x - drag.startX));
         const newCy = Math.max(0.04, Math.min(0.96, drag.origCy + y - drag.startY));
-        drag.dispatch(prev => ({ ...prev, cx: newCx, cy: newCy }));
-      } else {
-        // Cursor hint when hovering over the box
+        drag.dispatch(prev => {
+          const u = { ...prev, cx: newCx, cy: newCy };
+          updateHandles(u);
+          return u;
+        });
+      } else if (!drag) {
         const hook = findH2BoxHook(canvas);
         if (hook?.box?.w > 0.01) {
           const { x, y } = normXY(e);
@@ -704,18 +760,69 @@
     }, true);
 
     canvas.addEventListener('pointerup', e => {
-      if (!drag) return;
+      if (!drag || drag.mode !== 'move') return;
       e.stopPropagation();
       drag = null;
       canvas.style.cursor = 'crosshair';
     }, true);
 
     canvas.addEventListener('pointercancel', () => {
-      drag = null;
-      canvas.style.cursor = 'crosshair';
+      if (drag?.mode === 'move') { drag = null; canvas.style.cursor = 'crosshair'; }
     }, true);
 
-    console.log('[Lily Pad] Pad move handlers installed');
+    // ── Corner handles: resize ──────────────────────────────────────────────
+    Object.entries(handles).forEach(([id, handle]) => {
+
+      handle.addEventListener('pointerdown', e => {
+        e.stopPropagation();
+        e.preventDefault();
+        handle.setPointerCapture(e.pointerId);
+
+        const hook = findH2BoxHook(canvas);
+        if (!hook) return;
+        const box = hook.box;
+
+        // Opposite (anchor) corner stays fixed during resize
+        const ax = id.includes('r') ? box.cx - box.w / 2 : box.cx + box.w / 2;
+        const ay = id.includes('b') ? box.cy - box.h / 2 : box.cy + box.h / 2;
+
+        drag = { mode: 'resize', dispatch: hook.dispatch,
+                 ax, ay, rect: canvas.getBoundingClientRect() };
+        handle.style.transform = 'translate(-50%,-50%) scale(1.25)';
+      }, true);
+
+      handle.addEventListener('pointermove', e => {
+        if (!drag || drag.mode !== 'resize') return;
+        e.stopPropagation();
+        e.preventDefault();
+        const nx = Math.max(0.01, Math.min(0.99, (e.clientX - drag.rect.left) / drag.rect.width));
+        const ny = Math.max(0.01, Math.min(0.99, (e.clientY - drag.rect.top)  / drag.rect.height));
+        const newCx = (nx + drag.ax) / 2;
+        const newCy = (ny + drag.ay) / 2;
+        const newW  = Math.abs(nx - drag.ax);
+        const newH  = Math.abs(ny - drag.ay);
+        if (newW < 0.03 || newH < 0.03) return; // enforce minimum box size
+        drag.dispatch(prev => {
+          const u = { ...prev, cx: newCx, cy: newCy, w: newW, h: newH };
+          updateHandles(u);
+          return u;
+        });
+      }, true);
+
+      handle.addEventListener('pointerup', e => {
+        if (!drag || drag.mode !== 'resize') return;
+        e.stopPropagation();
+        drag = null;
+        handle.style.transform = 'translate(-50%,-50%)';
+      }, true);
+
+      handle.addEventListener('pointercancel', () => {
+        if (drag?.mode === 'resize') drag = null;
+        handle.style.transform = 'translate(-50%,-50%)';
+      }, true);
+    });
+
+    console.log('[Lily Pad] Pad move + corner-resize handlers installed');
   }
 
   // ── Cancel button for the h2 pad-drawing editing modal ─────────────────────
@@ -776,6 +883,11 @@
       enterPhotoFullscreen();
       injectCanvasCancel();
       installPadMoveHandlers(drawCanvas);
+      // Keep corner handles in sync on every DOM mutation (React redraws, state changes)
+      if (typeof drawCanvas._lpUpdateHandles === 'function') {
+        const hook = findH2BoxHook(drawCanvas);
+        drawCanvas._lpUpdateHandles(hook ? hook.box : null);
+      }
     } else {
       // Photo removed or changed step — exit fullscreen and show expand btn
       if (document.body.classList.contains('lp-photo-fs')) exitPhotoFullscreen();

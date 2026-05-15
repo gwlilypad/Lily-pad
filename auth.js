@@ -1411,6 +1411,62 @@
     console.log('[Lily Pad] Paddashboard back button injected');
   }
 
+  // ── Back button on pad detail (account) page ──────────────────────────────
+  // Detected by the "Change photo" button (unique to this single-pad view).
+  // Navigates back to paddashboard (My Pads list).
+  function injectPadAccountBack() {
+    if (document.getElementById('lp-pad-account-back')) return;
+
+    // "Change photo" only exists on the individual pad detail/account page
+    const changePhotoBtn = Array.from(document.querySelectorAll('button'))
+      .find(b => b.childElementCount === 0 && b.textContent.trim() === 'Change photo');
+    if (!changePhotoBtn) return;
+
+    // Walk up to find the photo-card container (it will have a background-image
+    // set to the pad's photo URL, making it a reliable stop condition)
+    let headerSection = changePhotoBtn;
+    for (let i = 0; i < 12; i++) {
+      if (!headerSection.parentElement || headerSection.parentElement === document.body) break;
+      headerSection = headerSection.parentElement;
+      const bg = getComputedStyle(headerSection).backgroundImage;
+      if (bg && bg !== 'none') break;
+    }
+
+    const btn = document.createElement('button');
+    btn.id = 'lp-pad-account-back';
+    btn.innerHTML =
+      '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" ' +
+      'stroke="rgba(255,255,255,0.80)" stroke-width="2.2" stroke-linecap="round" ' +
+      'stroke-linejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>' +
+      '<span style="font-family:\'DM Sans\',sans-serif;font-size:13px;' +
+      'color:rgba(255,255,255,0.80);font-weight:600">Back</span>';
+    btn.setAttribute('style', [
+      'display:flex',
+      'align-items:center',
+      'gap:5px',
+      'background:none',
+      'border:none',
+      'cursor:pointer',
+      'padding:6px 0 10px',
+      'flex-shrink:0',
+      'position:relative',
+      'z-index:200',
+    ].join(';'));
+
+    btn.addEventListener('click', function () {
+      document.getElementById('lp-pad-account-back')?.remove();
+      if (!callGoTo('paddashboard')) {
+        // Fallback: try direct fiber call like injectDeepBackButton does
+        _lpGoToFn = null;
+        const fresh = lpGetGoTo();
+        if (fresh) fresh('paddashboard');
+      }
+    });
+
+    headerSection.insertBefore(btn, headerSection.firstChild);
+    console.log('[Lily Pad] Pad account back button injected');
+  }
+
   // ── Guards ────────────────────────────────────────────────────────────────
   function startHidingGuard() {
     const root = document.getElementById('root');
@@ -1436,7 +1492,7 @@
     photo          : 'paddashboard',
     photointro     : 'paddashboard',
     addpad         : 'paddashboard',
-    account        : 'paddashboard',  // pad detail / edit opened from My Pads
+    // account handled by injectPadAccountBack() via DOM text detection
     billing        : 'paddashboard',
     confirm        : 'paddashboard',
     bookings       : 'find',
@@ -1850,6 +1906,7 @@
       updatePhotoFullscreen();
       scheduleDeepBack();
       injectPaddashboardBack();
+      injectPadAccountBack();
       removeFakeMapSpots();
       clearFakePads();
       clearFakeListings();

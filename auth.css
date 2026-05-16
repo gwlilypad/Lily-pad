@@ -830,3 +830,19 @@ body.lp-photo-fs .canvas-wrap canvas {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
+
+/* ── Larger pad photo thumbnails on My Pads list ──────────────────────────── */
+/* data-lp-draw-edit is set by injectPadDrawEdit on every pad-card photo wrap  */
+[data-lp-draw-edit="1"] {
+  min-height: 200px !important;
+  height: 200px !important;
+}
+[data-lp-draw-edit="1"] img {
+  height: 200px !important;
+  width: 100% !important;
+  object-fit: cover !important;
+}
+[data-lp-draw-edit="1"] svg[viewBox="0 0 100 70"] {
+  height: 200px !important;
+  width: 100% !important;
+}

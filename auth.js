@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-16-S';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-16-T';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -1916,7 +1916,7 @@
     if (lb) { lb.classList.remove('open'); setTimeout(() => lb.remove(), 220); }
   }
 
-  function openPhotoLightbox({ photoUrl, box, color, name, isLister, onEdit, onReplacePhoto }) {
+  function openPhotoLightbox({ photoUrl, srcKey, box, color, name, isLister, onEdit, onReplacePhoto }) {
     closeLightbox();
     const lb = document.createElement('div');
     lb.id = 'lp-lightbox';
@@ -1957,8 +1957,10 @@
       canvas.width  = wrap.offsetWidth  || img.naturalWidth  || 360;
       canvas.height = wrap.offsetHeight || img.naturalHeight || 240;
       drawBoxOnLightboxCanvas(canvas, box, color || '#8DD63F', name);
-      // Overlay the quad-polygon drawing (new format) as an SVG on the wrap
-      overlayPadDrawing(img, wrap);
+      // Overlay the quad-polygon drawing — look up by srcKey (thumbnail img.src)
+      // which is what _savePadBox used, falling back to photoUrl if not provided.
+      const lookupImg = { src: srcKey || photoUrl };
+      overlayPadDrawing(lookupImg, wrap);
     }
     if (img.complete && img.naturalWidth) render();
     else img.addEventListener('load', render);
@@ -2068,6 +2070,7 @@
         // fiber-sourced onEdit which often returns null for the paddashboard view.
         openPhotoLightbox({
           photoUrl:       pad.photoUrl || img.src,
+          srcKey:         img.src,  // key used by _savePadBox — may differ from pad.photoUrl
           box:            pad.box,
           color:          pad.color,
           name:           pad.name,
@@ -2697,7 +2700,7 @@
 
     // Dynamic SVG elements (rebuilt by renderQuad)
     let svgPoly = null, svgTab = null, svgLabel = null;
-    let svgRotLine = null, svgRotHandle = null;
+    let svgRotLine = null, svgRotHandle = null, svgRotSymbol = null;
     let svgCorners = []; // 4 circle elements
 
     // Normalise a pointer/touch event to 0-1 coords over the SVG
@@ -2731,6 +2734,7 @@
       if (svgLabel)     { svgLabel.remove();     svgLabel     = null; }
       if (svgRotLine)   { svgRotLine.remove();   svgRotLine   = null; }
       if (svgRotHandle) { svgRotHandle.remove(); svgRotHandle = null; }
+      if (svgRotSymbol) { svgRotSymbol.remove(); svgRotSymbol = null; }
       svgCorners.forEach(c => c.remove());
       svgCorners = [];
 
@@ -2779,16 +2783,20 @@
       svgLabel.textContent = 'Your spot';
       boxSvg.appendChild(svgLabel);
 
-      // Corner handles — each moves independently, others stay fixed
+      // Corner handles — subtle small diamonds (rotated rects), no white blobs
       const cursors = ['nwse-resize', 'nesw-resize', 'nwse-resize', 'nesw-resize'];
       quad.forEach((pt, i) => {
-        const c = document.createElementNS(ns, 'circle');
-        c.setAttribute('cx', (pt.x * 100).toFixed(2));
-        c.setAttribute('cy', (pt.y * 100).toFixed(2));
-        c.setAttribute('r',  '6');
-        c.setAttribute('fill',         '#fff');
-        c.setAttribute('stroke',       '#4caf50');
-        c.setAttribute('stroke-width', '2.5');
+        const cx = (pt.x * 100).toFixed(2), cy = (pt.y * 100).toFixed(2);
+        const c = document.createElementNS(ns, 'rect');
+        c.setAttribute('x',      (pt.x * 100 - 3.5).toFixed(2));
+        c.setAttribute('y',      (pt.y * 100 - 3.5).toFixed(2));
+        c.setAttribute('width',  '7');
+        c.setAttribute('height', '7');
+        c.setAttribute('rx',     '1');
+        c.setAttribute('transform', `rotate(45,${cx},${cy})`);
+        c.setAttribute('fill',         '#4caf50');
+        c.setAttribute('stroke',       'rgba(255,255,255,0.85)');
+        c.setAttribute('stroke-width', '1.5');
         c.setAttribute('vector-effect','non-scaling-stroke');
         c.style.cursor = cursors[i];
         c.dataset.lpRole   = 'corner';
@@ -2817,14 +2825,28 @@
       svgRotHandle = document.createElementNS(ns, 'circle');
       svgRotHandle.setAttribute('cx', rotStemX);
       svgRotHandle.setAttribute('cy', rotHY);
-      svgRotHandle.setAttribute('r',  '6');
-      svgRotHandle.setAttribute('fill',         '#fff');
-      svgRotHandle.setAttribute('stroke',       '#4caf50');
-      svgRotHandle.setAttribute('stroke-width', '2.5');
+      svgRotHandle.setAttribute('r',  '7');
+      svgRotHandle.setAttribute('fill',         '#4caf50');
+      svgRotHandle.setAttribute('stroke',       'rgba(255,255,255,0.85)');
+      svgRotHandle.setAttribute('stroke-width', '1.5');
       svgRotHandle.setAttribute('vector-effect','non-scaling-stroke');
       svgRotHandle.style.cursor     = 'grab';
       svgRotHandle.dataset.lpRole   = 'rotate';
       boxSvg.appendChild(svgRotHandle);
+
+      // ↻ symbol on top — pointer-events:none so circle handles the drag
+      svgRotSymbol = document.createElementNS(ns, 'text');
+      svgRotSymbol.setAttribute('x',                  rotStemX);
+      svgRotSymbol.setAttribute('y',                  rotHY + 0.5);
+      svgRotSymbol.setAttribute('text-anchor',        'middle');
+      svgRotSymbol.setAttribute('dominant-baseline',  'middle');
+      svgRotSymbol.setAttribute('font-size',          '8');
+      svgRotSymbol.setAttribute('font-family',        'system-ui, sans-serif');
+      svgRotSymbol.setAttribute('fill',               '#fff');
+      svgRotSymbol.setAttribute('pointer-events',     'none');
+      svgRotSymbol.setAttribute('user-select',        'none');
+      svgRotSymbol.textContent = '↻';
+      boxSvg.appendChild(svgRotSymbol);
     }
 
     renderQuad();

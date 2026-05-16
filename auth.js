@@ -82,20 +82,40 @@
   })();
 
   // ── Block fake pad sample data from ever persisting ─────────────────────────
-  // The bundle's "My Pads" host view initialises from a hardcoded e2 array
-  // (sample pads like "142 Maple St"). Intercepting localStorage prevents the
-  // bundle from reading or re-writing those samples between sessions.
+  // ── Pad storage constants (used by localStorage proxy AND address hint) ──
+  const _LP_PADS_KEY   = 'lilypad.pads.v1';
+  const _LP_FAKE_ADDRS = new Set(['142 Maple Street', '880 Oak Lane']);
+  const _lpRawGet      = Storage.prototype.getItem; // unpatched getter for bypassing our filter
+
+  // ── Intercept lilypad.pads.v1 ─────────────────────────────────────────────
+  // Allow REAL user-created pads to persist between sessions.
+  // Silently drop the two hardcoded demo-pad entries so they never load.
   (function () {
-    const PADS_KEY = 'lilypad.pads.v1';
-    const _get = Storage.prototype.getItem;
     const _set = Storage.prototype.setItem;
     Storage.prototype.getItem = function (key) {
-      if (key === PADS_KEY) return null; // always look empty → bundle stays at []
-      return _get.call(this, key);
+      if (key !== _LP_PADS_KEY) return _lpRawGet.call(this, key);
+      const raw = _lpRawGet.call(this, key);
+      if (!raw) return null;
+      try {
+        const pads = JSON.parse(raw);
+        const real = pads.filter(p =>
+          typeof p.id !== 'number' &&
+          !_LP_FAKE_ADDRS.has(p.address) && !_LP_FAKE_ADDRS.has(p.addr)
+        );
+        return real.length > 0 ? JSON.stringify(real) : null;
+      } catch { return null; }
     };
     Storage.prototype.setItem = function (key, value) {
-      if (key === PADS_KEY) return; // block sample data from being stored
-      _set.call(this, key, value);
+      if (key !== _LP_PADS_KEY) { _set.call(this, key, value); return; }
+      try {
+        const pads = JSON.parse(value);
+        const real = pads.filter(p =>
+          typeof p.id !== 'number' &&
+          !_LP_FAKE_ADDRS.has(p.address) && !_LP_FAKE_ADDRS.has(p.addr)
+        );
+        if (real.length > 0) _set.call(this, key, JSON.stringify(real));
+        // if all were fake, write nothing — keeps localStorage clean
+      } catch {}
     };
   })();
 
@@ -2032,39 +2052,75 @@
   }
 
   // ── Same-address hint on the add-pad wizard ──────────────────────────────
-  // When the user starts adding a second pad, the address step shows a
-  // suggestion chip for any pad they already have — saves retyping.
+  // Shows a suggestion chip for any previously-listed pad address so the
+  // user doesn't have to retype it when adding a second pad.
+  //
+  // Detection: DOM-based — fires whenever "What's the address?" is visible
+  // regardless of which wizard flow (addpad, signup step 2, etc.) triggered it.
   function injectSameAddressHint() {
     if (document.getElementById('lp-same-addr')) return;
-    if (lpGetCurrentPage() !== 'addpad') return;
 
-    // Address input has placeholder "Address" (confirmed literal in bundle)
-    const input = Array.from(document.querySelectorAll('input'))
-      .find(i => /^address$/i.test((i.placeholder || '').trim()));
+    // Detect the address step purely from DOM text — works for both flows
+    const onAddrStep = Array.from(document.querySelectorAll('*')).some(el =>
+      el.childElementCount === 0 && /what.s the address\??/i.test(el.textContent.trim())
+    );
+    if (!onAddrStep) return;
+
+    // Find the address input — placeholder differs between wizard flows:
+    //   addpad wizard   → "123 Main St, City, State"
+    //   signup wizard   → "Address" or similar
+    // Accept any visible text input whose placeholder suggests an address.
+    const input =
+      Array.from(document.querySelectorAll('input[type="text"],input:not([type])')).find(i => {
+        const ph = (i.placeholder || '').toLowerCase();
+        return ph.includes('address') || ph.includes('main st') ||
+               ph.includes('city')   || ph.includes('state');
+      }) ||
+      // Broadest fallback: first visible unfilled text input on the page
+      Array.from(document.querySelectorAll('input')).find(i =>
+        (!i.type || i.type === 'text') && !i.value && i.getBoundingClientRect().width > 0
+      );
     if (!input) return;
 
-    // Walk fiber for real pads: UUID-style id + address or addr string
+    // Collect existing-pad addresses from three sources ─────────────────────
     const addrs = [];
     const seen  = new Set();
-    const root  = document.getElementById('root');
+    function addAddr(a) {
+      const v = (a || '').trim();
+      if (v && !_LP_FAKE_ADDRS.has(v) && !seen.has(v)) { seen.add(v); addrs.push(v); }
+    }
+
+    // Source 1: lilypad.pads.v1 in localStorage — raw read bypasses our filter
+    try {
+      const raw = _lpRawGet.call(localStorage, _LP_PADS_KEY);
+      if (raw) {
+        JSON.parse(raw)
+          .filter(p => typeof p.id !== 'number' &&
+                       !_LP_FAKE_ADDRS.has(p.address) && !_LP_FAKE_ADDRS.has(p.addr))
+          .forEach(p => addAddr(p.address || p.addr));
+      }
+    } catch {}
+
+    // Source 2: our own persisted address list (saved on every address-input blur)
+    try {
+      JSON.parse(localStorage.getItem('lp_saved_addresses') || '[]').forEach(addAddr);
+    } catch {}
+
+    // Source 3: fiber state — any pad array with a non-fake address
+    //   (no UUID-length requirement — bundle may assign short/numeric-string IDs)
+    const root = document.getElementById('root');
     if (root) {
       const fk = Object.keys(root).find(k => k.startsWith('__reactFiber$'));
       if (fk) {
         (function walk(f, d) {
-          if (!f || d > 250) return;
+          if (!f || d > 300) return;
           let s = f.memoizedState;
           while (s) {
             const v = s.memoizedState;
             if (Array.isArray(v) && v.length > 0 && v[0]) {
-              const item = v[0];
-              const addr = item.address || item.addr || '';
-              // Real pads have a string UUID id (≥32 chars) and a non-empty address
-              if (typeof item.id === 'string' && item.id.length >= 32 &&
-                  typeof addr === 'string' && addr.trim()) {
-                v.forEach(p => {
-                  const a = (p.address || p.addr || '').trim();
-                  if (a && !seen.has(a)) { seen.add(a); addrs.push(a); }
-                });
+              const a0 = (v[0].address || v[0].addr || '').trim();
+              if (a0 && !_LP_FAKE_ADDRS.has(a0)) {
+                v.forEach(p => addAddr(p.address || p.addr));
               }
             }
             s = s.next;
@@ -2074,9 +2130,10 @@
         })(root[fk], 0);
       }
     }
+
     if (addrs.length === 0) return;
 
-    // Build a row of chips (one per unique existing-pad address)
+    // Build a row of chips (one per unique existing-pad address) ─────────────
     const row = document.createElement('div');
     row.id = 'lp-same-addr';
     row.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;';
@@ -2096,7 +2153,6 @@
         'white-space:nowrap',
       ].join(';');
       chip.addEventListener('click', () => {
-        // Inject value via React's native setter so it triggers onChange
         const setter = Object.getOwnPropertyDescriptor(
           window.HTMLInputElement.prototype, 'value').set;
         setter.call(input, addr);
@@ -2109,6 +2165,25 @@
 
     const parent = input.parentElement || input.closest('div');
     if (parent) parent.insertAdjacentElement('afterend', row);
+
+    // Wire up auto-save on blur so the address is remembered for next time
+    // even if the user doesn't use a chip (typed it manually)
+    if (!input.dataset.lpAddrSave) {
+      input.dataset.lpAddrSave = '1';
+      input.addEventListener('blur', () => {
+        const v = input.value.trim();
+        if (!v || _LP_FAKE_ADDRS.has(v)) return;
+        try {
+          const saved = JSON.parse(localStorage.getItem('lp_saved_addresses') || '[]');
+          if (!saved.includes(v)) {
+            saved.unshift(v);
+            localStorage.setItem('lp_saved_addresses', JSON.stringify(saved.slice(0, 10)));
+            console.log('[Lily Pad] Address saved for future hints:', v);
+          }
+        } catch {}
+      });
+    }
+
     console.log('[Lily Pad] Same-address hint injected:', addrs);
   }
 

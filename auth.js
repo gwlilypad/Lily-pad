@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-16-K';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-16-L';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -2532,6 +2532,7 @@
       }
       const rect = img.getBoundingClientRect();
       if (rect.width < 60 || rect.height < 40) return; // skip tiny / off-screen
+      if (img.closest('#lp-lightbox,#lp-draw-editor')) return; // skip our own modals
       img.dataset.lpDrawEdit = '1';
       const parent = img.parentElement;
       if (!parent) return;
@@ -2906,37 +2907,56 @@
   }
 
   let _guardDiagLast = 0;
+  let _guardRafPending = false; // RAF debounce flag
+
+  function _runGuardFunctions() {
+    hideUnwantedElements();
+    injectPullDownSignOut();
+    updateProfileDisplay();
+    updatePhotoFullscreen();
+    scheduleDeepBack();
+    injectPaddashboardBack();
+    injectPadAccountBack();
+    removeFakeMapSpots();
+    clearFakePads();
+    clearFakeListings();
+    installPhotoClickHandlers();
+    _scrapePaddashboardAddresses();
+    injectSameAddressHint();
+    enlargePadCards();
+    injectPadDrawEdit();
+
+    // ── Throttled page-state diagnostic (once every 4 s) ──────────────────
+    const _now = Date.now();
+    if (_now - _guardDiagLast > 4000) {
+      _guardDiagLast = _now;
+      const leafTexts = Array.from(document.querySelectorAll('p,span,h1,h2,h3,button'))
+        .filter(el => el.childElementCount === 0)
+        .map(el => el.textContent.trim())
+        .filter(t => t.length > 2 && t.length < 40)
+        .slice(0, 12);
+      console.log('[Lily Pad] guard page-state:', JSON.stringify(leafTexts));
+    }
+  }
+
   function startGuard() {
     if (window.__lpGuardObserver) return;
     const target = document.body;
+    // ── RAF-debounced MutationObserver ─────────────────────────────────────
+    // Cascaded DOM mutations (e.g. adding a lightbox that triggers injectPadDrawEdit
+    // which adds a button which triggers the guard again) can fire the callback
+    // synchronously many times before the browser paints or processes rAFs.
+    // Debouncing to one run per animation frame ensures:
+    //   1. All mutations in a batch are handled in a single guard pass.
+    //   2. requestAnimationFrame callbacks (like lb.classList.add('open')) are
+    //      never blocked by an unbounded cascade of synchronous guard calls.
     const guard = new MutationObserver(() => {
-      hideUnwantedElements();
-      injectPullDownSignOut();
-      updateProfileDisplay();
-      updatePhotoFullscreen();
-      scheduleDeepBack();
-      injectPaddashboardBack();
-      injectPadAccountBack();
-      removeFakeMapSpots();
-      clearFakePads();
-      clearFakeListings();
-      installPhotoClickHandlers();
-      _scrapePaddashboardAddresses();
-      injectSameAddressHint();
-      enlargePadCards();
-      injectPadDrawEdit();
-
-      // ── Throttled page-state diagnostic (once every 4 s) ──────────────────
-      const _now = Date.now();
-      if (_now - _guardDiagLast > 4000) {
-        _guardDiagLast = _now;
-        const leafTexts = Array.from(document.querySelectorAll('p,span,h1,h2,h3,button'))
-          .filter(el => el.childElementCount === 0)
-          .map(el => el.textContent.trim())
-          .filter(t => t.length > 2 && t.length < 40)
-          .slice(0, 12);
-        console.log('[Lily Pad] guard page-state:', JSON.stringify(leafTexts));
-      }
+      if (_guardRafPending) return;
+      _guardRafPending = true;
+      requestAnimationFrame(() => {
+        _guardRafPending = false;
+        _runGuardFunctions();
+      });
     });
     guard.observe(target, {
       childList: true, subtree: true,

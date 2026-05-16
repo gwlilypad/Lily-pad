@@ -766,9 +766,10 @@ body.lp-photo-fs .canvas-wrap canvas {
   inset: 0;
   width: 100%;
   height: 100%;
-  pointer-events: none;
+  pointer-events: all;   /* must be 'all' — SVG is now the sole interaction surface */
   z-index: 3;
   overflow: visible;
+  touch-action: none;
 }
 .lp-de-footer {
   display: flex;

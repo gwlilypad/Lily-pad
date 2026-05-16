@@ -791,6 +791,21 @@ body.lp-photo-fs .canvas-wrap canvas {
   transition: border-color 0.15s;
 }
 .lp-de-clear:hover { border-color: rgba(255,255,255,0.45); }
+.lp-de-rotate {
+  flex: 1;
+  padding: 13px 8px;
+  border: 1.5px solid rgba(141, 214, 63, 0.55);
+  background: transparent;
+  color: #8DD63F;
+  border-radius: 14px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.lp-de-rotate:hover { border-color: #8DD63F; color: #a5e855; }
 .lp-de-save {
   flex: 2;
   padding: 13px;

@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-16-H';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-16-I';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -2444,32 +2444,45 @@
     try { return JSON.parse(localStorage.getItem(_padBoxKey(src)) || 'null'); } catch { return null; }
   }
 
-  // Overlay the saved drawing as a green SVG rect on a thumbnail image
+  // Convert legacy {cx,cy,w,h} rectangle to quad array
+  function _rectToQuad(box) {
+    const { cx, cy, w, h } = box;
+    return [
+      { x: cx - w / 2, y: cy - h / 2 }, // TL
+      { x: cx + w / 2, y: cy - h / 2 }, // TR
+      { x: cx + w / 2, y: cy + h / 2 }, // BR
+      { x: cx - w / 2, y: cy + h / 2 }, // BL
+    ];
+  }
+
+  // Overlay the saved drawing as a green SVG polygon on a thumbnail image.
+  // Handles both legacy {cx,cy,w,h} and the new quad [{x,y}×4] format.
   function overlayPadDrawing(img) {
     const parent = img.parentElement;
     if (!parent) return;
     if (getComputedStyle(parent).position === 'static') parent.style.position = 'relative';
     const old = parent.querySelector('.lp-draw-overlay-svg');
     if (old) old.remove();
-    const box = _loadPadBox(img.src);
-    if (!box || !(box.w > 0.01)) return;
-    const { cx, cy, w, h } = box;
+    const saved = _loadPadBox(img.src);
+    if (!saved) return;
+    let pts;
+    if (Array.isArray(saved) && saved.length === 4) {
+      pts = saved;
+    } else if (saved && saved.w > 0.01) {
+      pts = _rectToQuad(saved);
+    } else return;
     const ns = 'http://www.w3.org/2000/svg';
     const svg = document.createElementNS(ns, 'svg');
     svg.setAttribute('viewBox', '0 0 100 100');
     svg.setAttribute('preserveAspectRatio', 'none');
     svg.className = 'lp-draw-overlay-svg';
-    const r = document.createElementNS(ns, 'rect');
-    r.setAttribute('x',      (cx - w / 2) * 100);
-    r.setAttribute('y',      (cy - h / 2) * 100);
-    r.setAttribute('width',   w * 100);
-    r.setAttribute('height',  h * 100);
-    r.setAttribute('fill',   'rgba(76,175,80,0.25)');
-    r.setAttribute('stroke', '#4caf50');
-    r.setAttribute('stroke-width', '2');
-    r.setAttribute('vector-effect', 'non-scaling-stroke');
-    r.setAttribute('rx', '2');
-    svg.appendChild(r);
+    const poly = document.createElementNS(ns, 'polygon');
+    poly.setAttribute('points', pts.map(p => (p.x * 100).toFixed(2) + ',' + (p.y * 100).toFixed(2)).join(' '));
+    poly.setAttribute('fill',   'rgba(76,175,80,0.25)');
+    poly.setAttribute('stroke', '#4caf50');
+    poly.setAttribute('stroke-width', '2');
+    poly.setAttribute('vector-effect', 'non-scaling-stroke');
+    svg.appendChild(poly);
     parent.appendChild(svg);
   }
 
@@ -2537,25 +2550,34 @@
 
   // Full-screen drawing editor modal
   // Interactions:
-  //   • Drag on blank photo area → draws a new box (replaces any existing one)
-  //   • Drag the green pill tab at top of box → moves the whole box
-  //   • Drag any white corner circle → resizes, opposite corner stays fixed
-  //   • Clear button → removes the box so you can redraw
-  //   • Save button → persists to localStorage and updates the thumbnail overlay
+  //   • Drag on blank area         → draw a new shape (rectangle seed)
+  //   • Drag the green pill tab    → move the whole shape
+  //   • Drag any white corner dot  → move ONLY that corner (others stay fixed)
+  //   • Rotate button (↻)         → rotate 15° clockwise around centroid
+  //   • Clear                      → remove shape so you can redraw
+  //   • Save                       → persist quad and update thumbnail
   function openPadDrawEditor(img) {
     if (document.getElementById('lp-draw-editor')) return;
 
-    const existingBox = _loadPadBox(img.src) || { cx: 0.5, cy: 0.5, w: 0, h: 0 };
-    let box = { ...existingBox };
+    // Load existing drawing — support both legacy {cx,cy,w,h} and new quad format
+    const raw = _loadPadBox(img.src);
+    let quad = null; // array of 4 {x,y} points: [TL, TR, BR, BL] in 0-1 coords
+    if (raw) {
+      if (Array.isArray(raw) && raw.length === 4) {
+        quad = raw.map(p => ({ x: p.x, y: p.y }));
+      } else if (raw.w > 0.01) {
+        quad = _rectToQuad(raw);
+      }
+    }
 
-    // ── Interaction state ────────────────────────────────────────────────────
-    // mode: 'idle' | 'draw' | 'move' | 'resize'
-    let mode       = 'idle';
-    let drawStart  = { x: 0, y: 0 };
-    let dragAnchor = { dx: 0, dy: 0 };   // pointer offset from box centre (move)
-    let resizeOpp  = { cx: 0, cy: 0 };   // the fixed opposite corner (resize)
+    // ── Interaction state ─────────────────────────────────────────────────────
+    // mode: 'idle' | 'draw' | 'move' | 'corner'
+    let mode           = 'idle';
+    let drawStart      = { x: 0, y: 0 };
+    let moveDelta      = { dx: 0, dy: 0 }; // pointer offset from centroid (move)
+    let activeCorner   = -1;               // index into quad[] being dragged
 
-    // ── DOM ──────────────────────────────────────────────────────────────────
+    // ── DOM ───────────────────────────────────────────────────────────────────
     const modal = document.createElement('div');
     modal.id = 'lp-draw-editor';
     modal.innerHTML =
@@ -2568,8 +2590,6 @@
         '<div class="lp-de-hint">Drag on the photo to draw your spot</div>' +
         '<div class="lp-de-canvas-wrap">' +
           '<img class="lp-de-photo" src="' + img.src + '" alt="Pad photo" draggable="false">' +
-          // Single SVG — no separate canvas.  bgHit is the transparent catch-all
-          // for draw events; all other elements are stacked on top of it.
           '<svg class="lp-de-box-svg" viewBox="0 0 100 100" preserveAspectRatio="none">' +
             '<rect class="lp-de-bg-hit" x="0" y="0" width="100" height="100" ' +
                   'fill="transparent" style="cursor:crosshair"/>' +
@@ -2577,24 +2597,26 @@
         '</div>' +
         '<div class="lp-de-footer">' +
           '<button class="lp-de-clear">Clear</button>' +
+          '<button class="lp-de-rotate">&#x21BB; Rotate</button>' +
           '<button class="lp-de-save">Save</button>' +
         '</div>' +
       '</div>';
     document.body.appendChild(modal);
 
-    const boxSvg  = modal.querySelector('.lp-de-box-svg');
-    const bgHit   = modal.querySelector('.lp-de-bg-hit');
-    const saveBtn = modal.querySelector('.lp-de-save');
-    const clearBtn= modal.querySelector('.lp-de-clear');
-    const closeBtn= modal.querySelector('.lp-de-close');
-    const hint    = modal.querySelector('.lp-de-hint');
-    const ns      = 'http://www.w3.org/2000/svg';
+    const boxSvg   = modal.querySelector('.lp-de-box-svg');
+    const bgHit    = modal.querySelector('.lp-de-bg-hit');
+    const saveBtn  = modal.querySelector('.lp-de-save');
+    const clearBtn = modal.querySelector('.lp-de-clear');
+    const rotateBtn= modal.querySelector('.lp-de-rotate');
+    const closeBtn = modal.querySelector('.lp-de-close');
+    const hint     = modal.querySelector('.lp-de-hint');
+    const ns       = 'http://www.w3.org/2000/svg';
 
-    // Dynamic SVG elements (rebuilt by renderBox)
-    let svgRect = null, svgTab = null, svgLabel = null;
-    let svgCorners = [];   // array of 4 circle elements
+    // Dynamic SVG elements (rebuilt by renderQuad)
+    let svgPoly = null, svgTab = null, svgLabel = null;
+    let svgCorners = []; // 4 circle elements
 
-    // Convert a pointer/touch event to normalised [0-1] coords over the SVG
+    // Normalise a pointer/touch event to 0-1 coords over the SVG
     function normXY(e) {
       const r = boxSvg.getBoundingClientRect();
       const t = e.touches ? (e.touches[0] || e.changedTouches[0]) : e;
@@ -2604,41 +2626,49 @@
       };
     }
 
-    // Rebuild the SVG box visuals.
-    // SVG paint order = DOM order (back → front), so:
-    //   bgHit (back) → svgRect → svgTab → svgCorners (front)
-    function renderBox() {
-      if (svgRect)  { svgRect.remove();  svgRect = null;  }
-      if (svgTab)   { svgTab.remove();   svgTab  = null;  }
+    // Compute centroid of the current quad
+    function centroid() {
+      return {
+        x: (quad[0].x + quad[1].x + quad[2].x + quad[3].x) / 4,
+        y: (quad[0].y + quad[1].y + quad[2].y + quad[3].y) / 4,
+      };
+    }
+
+    // Clamp a point to [0,1]×[0,1]
+    function clamp01(p) {
+      return { x: Math.max(0, Math.min(1, p.x)), y: Math.max(0, Math.min(1, p.y)) };
+    }
+
+    // Rebuild the SVG visuals from the current quad.
+    // DOM paint order: bgHit (back) → svgPoly → svgTab → svgLabel → svgCorners (front)
+    function renderQuad() {
+      if (svgPoly)  { svgPoly.remove();  svgPoly  = null; }
+      if (svgTab)   { svgTab.remove();   svgTab   = null; }
       if (svgLabel) { svgLabel.remove(); svgLabel = null; }
       svgCorners.forEach(c => c.remove());
       svgCorners = [];
 
-      if (!box || !(box.w > 0.01)) return;
-      const { cx, cy, w, h } = box;
-      const x0 = (cx - w / 2) * 100, y0 = (cy - h / 2) * 100;
+      if (!quad) return;
 
-      // Box body (fills the spot; drag = move whole box)
-      svgRect = document.createElementNS(ns, 'rect');
-      svgRect.setAttribute('x',      x0);
-      svgRect.setAttribute('y',      y0);
-      svgRect.setAttribute('width',  w * 100);
-      svgRect.setAttribute('height', h * 100);
-      svgRect.setAttribute('fill',   'rgba(76,175,80,0.22)');
-      svgRect.setAttribute('stroke', '#4caf50');
-      svgRect.setAttribute('stroke-width', '2');
-      svgRect.setAttribute('vector-effect', 'non-scaling-stroke');
-      svgRect.setAttribute('rx', '2');
-      svgRect.style.cursor = 'move';
-      svgRect.dataset.lpRole = 'move';
-      // Insert after bgHit so it sits above the transparent background
-      bgHit.insertAdjacentElement('afterend', svgRect);
+      // Polygon fill
+      svgPoly = document.createElementNS(ns, 'polygon');
+      svgPoly.setAttribute('points',
+        quad.map(p => (p.x * 100).toFixed(2) + ',' + (p.y * 100).toFixed(2)).join(' '));
+      svgPoly.setAttribute('fill',         'rgba(76,175,80,0.22)');
+      svgPoly.setAttribute('stroke',       '#4caf50');
+      svgPoly.setAttribute('stroke-width', '2');
+      svgPoly.setAttribute('vector-effect','non-scaling-stroke');
+      svgPoly.style.cursor = 'move';
+      svgPoly.dataset.lpRole = 'move';
+      bgHit.insertAdjacentElement('afterend', svgPoly);
 
-      // Move tab — green pill straddling the top edge, centred horizontally
-      const tabW = Math.min(w * 100 * 0.45, 20), tabH = 6;
+      // Move-tab pill at the topmost point of the quad
+      const cen  = centroid();
+      const topY = Math.min(quad[0].y, quad[1].y, quad[2].y, quad[3].y);
+      const tabW = 18, tabH = 6;
       svgTab = document.createElementNS(ns, 'rect');
-      svgTab.setAttribute('x',      cx * 100 - tabW / 2);
-      svgTab.setAttribute('y',      y0 - tabH / 2);
+      svgTab.setAttribute('x',      cen.x * 100 - tabW / 2);
+      svgTab.setAttribute('y',      topY  * 100 - tabH - 2);
       svgTab.setAttribute('width',  tabW);
       svgTab.setAttribute('height', tabH);
       svgTab.setAttribute('rx',     tabH / 2);
@@ -2650,10 +2680,10 @@
       svgTab.dataset.lpRole = 'move';
       boxSvg.appendChild(svgTab);
 
-      // "Your spot" label (non-interactive, sits above the tab)
+      // "Your spot" label
       svgLabel = document.createElementNS(ns, 'text');
-      svgLabel.setAttribute('x', cx * 100);
-      svgLabel.setAttribute('y', y0 - tabH / 2 - 2);
+      svgLabel.setAttribute('x', cen.x * 100);
+      svgLabel.setAttribute('y', topY  * 100 - tabH - 5);
       svgLabel.setAttribute('text-anchor', 'middle');
       svgLabel.setAttribute('font-size',   '4.5');
       svgLabel.setAttribute('font-family', 'DM Sans, sans-serif');
@@ -2663,55 +2693,51 @@
       svgLabel.textContent = 'Your spot';
       boxSvg.appendChild(svgLabel);
 
-      // Corner handles — [TL, TR, BL, BR]
-      // Each stores the OPPOSITE corner as the resize anchor.
-      const corners = [
-        { px: cx - w/2, py: cy - h/2, opp: { cx: cx + w/2, cy: cy + h/2 }, cur: 'nwse-resize' },
-        { px: cx + w/2, py: cy - h/2, opp: { cx: cx - w/2, cy: cy + h/2 }, cur: 'nesw-resize' },
-        { px: cx - w/2, py: cy + h/2, opp: { cx: cx + w/2, cy: cy - h/2 }, cur: 'nesw-resize' },
-        { px: cx + w/2, py: cy + h/2, opp: { cx: cx - w/2, cy: cy - h/2 }, cur: 'nwse-resize' },
-      ];
-      corners.forEach(co => {
+      // Corner handles — each moves independently, others stay fixed
+      const cursors = ['nwse-resize', 'nesw-resize', 'nwse-resize', 'nesw-resize'];
+      quad.forEach((pt, i) => {
         const c = document.createElementNS(ns, 'circle');
-        c.setAttribute('cx', co.px * 100);
-        c.setAttribute('cy', co.py * 100);
-        c.setAttribute('r',  '5.5');
-        c.setAttribute('fill',   '#fff');
-        c.setAttribute('stroke', '#4caf50');
-        c.setAttribute('stroke-width', '2');
-        c.setAttribute('vector-effect', 'non-scaling-stroke');
-        c.style.cursor = co.cur;
-        c.dataset.lpRole = 'resize';
-        c._lpOpp = co.opp;
+        c.setAttribute('cx', (pt.x * 100).toFixed(2));
+        c.setAttribute('cy', (pt.y * 100).toFixed(2));
+        c.setAttribute('r',  '6');
+        c.setAttribute('fill',         '#fff');
+        c.setAttribute('stroke',       '#4caf50');
+        c.setAttribute('stroke-width', '2.5');
+        c.setAttribute('vector-effect','non-scaling-stroke');
+        c.style.cursor = cursors[i];
+        c.dataset.lpRole   = 'corner';
+        c.dataset.lpCorner = String(i);
         boxSvg.appendChild(c);
         svgCorners.push(c);
       });
     }
 
-    renderBox();
+    renderQuad();
 
     // ── Unified SVG pointer handling ──────────────────────────────────────────
     boxSvg.addEventListener('pointerdown', e => {
       e.preventDefault();
       e.stopPropagation();
       boxSvg.setPointerCapture(e.pointerId);
-      const p = normXY(e);
+      const p    = normXY(e);
       const role = e.target.dataset.lpRole;
 
-      if (role === 'resize') {
-        mode = 'resize';
-        resizeOpp = e.target._lpOpp;
-        hint.textContent = 'Drag to resize — opposite corner stays fixed';
+      if (role === 'corner') {
+        // Move only this corner; others stay put
+        mode = 'corner';
+        activeCorner = parseInt(e.target.dataset.lpCorner, 10);
+        hint.textContent = 'Drag to move this corner — others stay fixed';
       } else if (role === 'move') {
         mode = 'move';
-        dragAnchor = { dx: p.x - box.cx, dy: p.y - box.cy };
+        const cen = centroid();
+        moveDelta = { dx: p.x - cen.x, dy: p.y - cen.y };
         hint.textContent = 'Drag to reposition your spot';
       } else {
-        // Blank area — start a fresh draw (replaces existing box immediately)
-        mode = 'draw';
+        // Blank area — start a fresh rectangle draw
+        mode      = 'draw';
         drawStart = p;
-        box = { cx: p.x, cy: p.y, w: 0, h: 0 };
-        renderBox();
+        quad = null;
+        renderQuad();
         hint.textContent = 'Drag to set the size of your spot';
       }
     });
@@ -2722,27 +2748,33 @@
       const p = normXY(e);
 
       if (mode === 'draw') {
-        box = {
-          cx: (drawStart.x + p.x) / 2,
-          cy: (drawStart.y + p.y) / 2,
-          w:  Math.abs(p.x - drawStart.x),
-          h:  Math.abs(p.y - drawStart.y),
-        };
+        const left  = Math.min(drawStart.x, p.x);
+        const right = Math.max(drawStart.x, p.x);
+        const top   = Math.min(drawStart.y, p.y);
+        const bot   = Math.max(drawStart.y, p.y);
+        quad = [
+          { x: left,  y: top },   // TL
+          { x: right, y: top },   // TR
+          { x: right, y: bot },   // BR
+          { x: left,  y: bot },   // BL
+        ];
       } else if (mode === 'move') {
-        const hw = box.w / 2, hh = box.h / 2;
-        box = {
-          ...box,
-          cx: Math.max(hw, Math.min(1 - hw, p.x - dragAnchor.dx)),
-          cy: Math.max(hh, Math.min(1 - hh, p.y - dragAnchor.dy)),
-        };
-      } else if (mode === 'resize') {
-        const { cx: ox, cy: oy } = resizeOpp;
-        const nw = Math.abs(p.x - ox), nh = Math.abs(p.y - oy);
-        if (nw > 0.01 && nh > 0.01) {
-          box = { cx: (p.x + ox) / 2, cy: (p.y + oy) / 2, w: nw, h: nh };
-        }
+        // Translate all 4 corners together
+        const cen = centroid();
+        const newCen = { x: p.x - moveDelta.dx, y: p.y - moveDelta.dy };
+        const dx = newCen.x - cen.x, dy = newCen.y - cen.y;
+        quad = quad.map(pt => clamp01({ x: pt.x + dx, y: pt.y + dy }));
+        // Update anchor so grab feels sticky
+        const updatedCen = centroid();
+        moveDelta = { dx: p.x - updatedCen.x, dy: p.y - updatedCen.y };
+      } else if (mode === 'corner') {
+        // Move only the active corner — the other 3 are untouched
+        const newQuad = quad.map((pt, i) =>
+          i === activeCorner ? clamp01(p) : { x: pt.x, y: pt.y }
+        );
+        quad = newQuad;
       }
-      renderBox();
+      renderQuad();
     });
 
     boxSvg.addEventListener('pointerup', e => {
@@ -2752,16 +2784,17 @@
       mode = 'idle';
 
       if (prevMode === 'draw') {
-        if (box.w > 0.04 && box.h > 0.02) {
-          renderBox();
+        // Reject tiny accidental taps
+        const w = (quad[1].x - quad[0].x), h = (quad[3].y - quad[0].y);
+        if (w > 0.04 && h > 0.02) {
           hint.textContent = 'Looking good! Drag corners to adjust, or tap Save.';
         } else {
-          box = { cx: 0.5, cy: 0.5, w: 0, h: 0 };
-          renderBox();
+          quad = null;
           hint.textContent = 'Try dragging a larger area across your photo.';
         }
+        renderQuad();
       } else {
-        renderBox();
+        renderQuad();
         hint.textContent = 'Tap Save to apply, or keep adjusting.';
       }
     });
@@ -2769,11 +2802,27 @@
     boxSvg.addEventListener('pointercancel', () => { mode = 'idle'; });
     boxSvg.addEventListener('touchstart', e => e.preventDefault(), { passive: false });
 
-    // ── Buttons ──────────────────────────────────────────────────────────────
+    // ── Buttons ───────────────────────────────────────────────────────────────
     clearBtn.addEventListener('click', () => {
-      box = { cx: 0.5, cy: 0.5, w: 0, h: 0 };
-      renderBox();
+      quad = null;
+      renderQuad();
       hint.textContent = 'Spot cleared — drag on the photo to draw a new one';
+    });
+
+    rotateBtn.addEventListener('click', () => {
+      if (!quad) { hint.textContent = 'Draw a spot first to rotate it.'; return; }
+      const deg = 15 * Math.PI / 180;
+      const cos = Math.cos(deg), sin = Math.sin(deg);
+      const cen = centroid();
+      quad = quad.map(pt => {
+        const dx = pt.x - cen.x, dy = pt.y - cen.y;
+        return clamp01({
+          x: cen.x + dx * cos - dy * sin,
+          y: cen.y + dx * sin + dy * cos,
+        });
+      });
+      renderQuad();
+      hint.textContent = 'Rotated 15° — tap again to rotate more';
     });
 
     function closeModal() { modal.remove(); }
@@ -2781,18 +2830,19 @@
     modal.querySelector('.lp-de-bg').addEventListener('click', closeModal);
 
     saveBtn.addEventListener('click', () => {
-      if (!(box.w > 0.01)) {
+      if (!quad) {
         hint.textContent = 'Draw a spot first, then tap Save.';
         return;
       }
-      _savePadBox(img.src, box);
-      overlayPadDrawing(img);   // update thumbnail before closing
+      _savePadBox(img.src, quad);
       closeModal();
+      // Defer overlay update to avoid triggering React reconciler on dashboard card
+      setTimeout(() => overlayPadDrawing(img), 80);
       showLpToast('Spot saved!');
-      console.log('[Lily Pad] Pad drawing saved:', JSON.stringify(box));
+      console.log('[Lily Pad] Pad drawing saved (quad):', JSON.stringify(quad));
     });
 
-    console.log('[Lily Pad] Pad draw editor opened, existing box:', JSON.stringify(box));
+    console.log('[Lily Pad] Draw editor opened. Existing quad:', JSON.stringify(quad));
   }
 
   let _guardDiagLast = 0;

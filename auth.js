@@ -1,4 +1,7 @@
 (function () {
+  const LP_BUILD = 'LP-2026-05-16-C';   // bump each deploy to confirm cache bust
+  console.log('[Lily Pad] auth.js build:', LP_BUILD);
+
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
   const SUPABASE_ANON_KEY = '%%SUPABASE_ANON_KEY%%' || window.__SUPABASE_ANON_KEY__;
   const SUPABASE_OK = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
@@ -232,7 +235,8 @@
   // Calling setState via React fiber injects it without touching the bundle.
   function writeUserToNativeState(firstName, lastName, email) {
     if (!firstName && !email) return;
-    // Also persist to localStorage so the bundle picks it up on remount
+    console.log('[Lily Pad] writeUserToNativeState:', firstName, lastName, email);
+    // Persist to localStorage so the bundle picks it up on remount
     try {
       const raw = localStorage.getItem('lilypad.appState.v1');
       const state = raw ? JSON.parse(raw) : {};
@@ -241,34 +245,62 @@
       localStorage.setItem('lilypad.appState.v1', JSON.stringify(state));
     } catch {}
 
-    // Walk fiber tree to find the global state context and update it live
+    // Walk fiber tree — two strategies:
+    // A) Context provider whose value.setState manages app state (original approach)
+    // B) Any useState/useReducer hook whose state object contains drAns or suAns
     const root = document.getElementById('root');
     if (!root) return;
     const fk = Object.keys(root).find(k => k.startsWith('__reactFiber$'));
     if (!fk) return;
     const queue = [root[fk]];
     let checked = 0;
-    while (queue.length && checked < 600) {
+    while (queue.length && checked < 800) {
       const fiber = queue.shift();
       if (!fiber) continue;
       checked++;
-      const mp = fiber.memoizedProps;
-      if (mp && mp.value && typeof mp.value.setState === 'function') {
-        const v = mp.value;
-        if (v.state && typeof v.state === 'object' &&
-            ('drAns' in v.state || 'suAns' in v.state || 'accountType' in v.state)) {
-          v.setState(prev => ({
-            ...prev,
-            drAns: { ...(prev.drAns || {}), 0: firstName, 1: lastName, 2: email },
-            suAns: { ...(prev.suAns || {}), 0: firstName, 1: lastName, 2: email },
-          }));
-          console.log('[Lily Pad] Native state name written:', firstName, lastName, email);
-          return;
+
+      // Strategy A: context provider with value.setState
+      for (const propsKey of ['memoizedProps', 'pendingProps']) {
+        const mp = fiber[propsKey];
+        if (mp && mp.value && typeof mp.value.setState === 'function') {
+          const v = mp.value;
+          if (v.state && typeof v.state === 'object' &&
+              ('drAns' in v.state || 'suAns' in v.state || 'accountType' in v.state)) {
+            v.setState(prev => ({
+              ...prev,
+              drAns: { ...(prev.drAns || {}), 0: firstName, 1: lastName, 2: email },
+              suAns: { ...(prev.suAns || {}), 0: firstName, 1: lastName, 2: email },
+            }));
+            console.log('[Lily Pad] Native state written (ctx setState) after', checked, 'fibers');
+            return;
+          }
         }
       }
-      if (fiber.child)    queue.push(fiber.child);
-      if (fiber.sibling)  queue.push(fiber.sibling);
+
+      // Strategy B: useState/useReducer hook holding drAns/suAns object directly
+      let ms = fiber.memoizedState;
+      while (ms) {
+        const v = ms.memoizedState;
+        if (v && typeof v === 'object' && !Array.isArray(v) && !(v instanceof Set) &&
+            ('drAns' in v || 'suAns' in v || 'accountType' in v)) {
+          const dispatch = ms.queue && ms.queue.dispatch;
+          if (typeof dispatch === 'function') {
+            dispatch(prev => ({
+              ...prev,
+              drAns: { ...(prev.drAns || {}), 0: firstName, 1: lastName, 2: email },
+              suAns: { ...(prev.suAns || {}), 0: firstName, 1: lastName, 2: email },
+            }));
+            console.log('[Lily Pad] Native state written (hook dispatch) after', checked, 'fibers');
+            return;
+          }
+        }
+        ms = ms.next;
+      }
+
+      if (fiber.child)   queue.push(fiber.child);
+      if (fiber.sibling) queue.push(fiber.sibling);
     }
+    console.log('[Lily Pad] writeUserToNativeState: no fiber found after', checked, 'nodes (localStorage only)');
   }
 
   // ── Clear fake admin users and driver spots from React state ─────────────
@@ -532,37 +564,70 @@
     }
   }
 
-  // ── Update profile name/initials/email displayed in the pull-down ─────────
+  // ── Update profile name/email displayed in the pull-down ─────────────────
+  // The bundle does NOT use .profile-name or .avatar-initials class names.
+  // Instead we find the pull-down container (same detection as injectPullDownSignOut)
+  // and update leaf text nodes that are not known menu labels.
+  const _PD_LABELS = new Set([
+    'My Account','My Bookings','Saved Spots','Customer Service','Sign out',
+    'Find a Pad','List my lily pad','Driver','Renter','Find a pad',
+  ]);
+  function _findPullDownContainer() {
+    let csNode = null;
+    for (const n of document.querySelectorAll('*')) {
+      if (n.children.length === 0 && n.textContent.trim() === 'Customer Service') {
+        csNode = n; break;
+      }
+    }
+    if (!csNode) return null;
+    let node = csNode.parentElement;
+    while (node && node !== document.body) {
+      const txt = node.textContent;
+      let hits = 0;
+      if (txt.includes('My Account'))      hits++;
+      if (txt.includes('My Bookings'))     hits++;
+      if (txt.includes('Saved Spots'))     hits++;
+      if (txt.includes('Customer Service')) hits++;
+      if (hits >= 3) return node;
+      node = node.parentElement;
+    }
+    return null;
+  }
+
   function updateProfileDisplay() {
     const data = getUserData();
     if (!data) return;
 
-    // Update name
-    document.querySelectorAll('.profile-name').forEach(el => {
-      if (data.fullName) el.textContent = data.fullName;
-    });
+    const menuCard = _findPullDownContainer();
+    if (!menuCard) return; // pull-down not open yet — observer will retry
 
-    // Update avatar initials
-    document.querySelectorAll('.avatar-initials').forEach(el => {
-      const initials = [data.firstName[0], data.lastName[0]]
-        .filter(Boolean).join('').toUpperCase();
-      if (initials) el.textContent = initials;
-    });
-
-    // Update any element near .profile-name that looks like an email address
-    // (contains '@') — this is the email sub-line in the pull-down header
-    if (data.email) {
-      document.querySelectorAll('.profile-name').forEach(nameEl => {
-        // Check siblings and nearby elements for an email-looking node
-        const parent = nameEl.parentElement;
-        if (!parent) return;
-        Array.from(parent.querySelectorAll('*')).forEach(el => {
-          if (el.children.length === 0 && el.textContent.includes('@')) {
-            el.textContent = data.email;
-          }
-        });
-      });
+    // Walk UP from menuCard to include the header section (name + email live above)
+    let container = menuCard;
+    for (let i = 0; i < 5 && container.parentElement; i++) {
+      container = container.parentElement;
+      if (container.textContent.includes('@') ||
+          container.offsetHeight > menuCard.offsetHeight + 80) break;
     }
+
+    let nameSet = false;
+    Array.from(container.querySelectorAll('*')).forEach(el => {
+      if (el.children.length !== 0) return;
+      const t = el.textContent.trim();
+      if (!t || t.length > 60) return;
+      if (_PD_LABELS.has(t)) return;
+      // Email element
+      if (t.includes('@') && data.email && el.textContent !== data.email) {
+        el.textContent = data.email;
+        return;
+      }
+      // Name element: non-label, non-email, non-numeric, reasonable length
+      if (!nameSet && !t.includes('@') && t.length >= 2 &&
+          !/^\d/.test(t) && data.fullName && el.textContent !== data.fullName) {
+        el.textContent = data.fullName;
+        nameSet = true;
+        console.log('[Lily Pad] Profile name updated in pull-down:', data.fullName);
+      }
+    });
   }
 
   // ── Auth gate (sign-in modal) ──────────────────────────────────────────────
@@ -1419,6 +1484,7 @@
     const onPage = !!Array.from(document.querySelectorAll('p,span,div')).find(el =>
       el.childElementCount === 0 && el.textContent.trim() === 'Revenue & Payouts'
     );
+    if (!existing) console.log('[Lily Pad] injectPaddashboardBack: onPage=', onPage);
 
     // Remove the button if we've navigated away
     if (existing && !onPage) { existing.remove(); return; }
@@ -1473,6 +1539,7 @@
     // "Change photo" only exists on the individual pad detail/account page
     const onPage = !!Array.from(document.querySelectorAll('button'))
       .find(b => b.childElementCount === 0 && b.textContent.trim() === 'Change photo');
+    if (!existing) console.log('[Lily Pad] injectPadAccountBack: onPage=', onPage);
 
     // Remove if we've navigated away
     if (existing && !onPage) { existing.remove(); return; }
@@ -2057,6 +2124,7 @@
     });
   }
 
+  let _guardDiagLast = 0;
   function startGuard() {
     if (window.__lpGuardObserver) return;
     const target = document.body;
@@ -2074,6 +2142,18 @@
       installPhotoClickHandlers();
       injectSameAddressHint();
       enlargePadCards();
+
+      // ── Throttled page-state diagnostic (once every 4 s) ──────────────────
+      const _now = Date.now();
+      if (_now - _guardDiagLast > 4000) {
+        _guardDiagLast = _now;
+        const leafTexts = Array.from(document.querySelectorAll('p,span,h1,h2,h3,button'))
+          .filter(el => el.childElementCount === 0)
+          .map(el => el.textContent.trim())
+          .filter(t => t.length > 2 && t.length < 40)
+          .slice(0, 12);
+        console.log('[Lily Pad] guard page-state:', JSON.stringify(leafTexts));
+      }
     });
     guard.observe(target, { childList: true, subtree: true });
     window.__lpGuardObserver = guard;

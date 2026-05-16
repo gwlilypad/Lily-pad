@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-16-D';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-16-E';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -2391,12 +2391,26 @@
   }
 
   // Full-screen drawing editor modal
+  // Interactions:
+  //   • Drag on blank photo area → draws a new box (replaces any existing one)
+  //   • Drag the green pill tab at top of box → moves the whole box
+  //   • Drag any white corner circle → resizes, opposite corner stays fixed
+  //   • Clear button → removes the box so you can redraw
+  //   • Save button → persists to localStorage and updates the thumbnail overlay
   function openPadDrawEditor(img) {
     if (document.getElementById('lp-draw-editor')) return;
 
-    const existingBox = _loadPadBox(img.src) || { cx: 0.5, cy: 0.5, w: 0, h: 0, angle: 0 };
+    const existingBox = _loadPadBox(img.src) || { cx: 0.5, cy: 0.5, w: 0, h: 0 };
     let box = { ...existingBox };
 
+    // ── Interaction state ────────────────────────────────────────────────────
+    // mode: 'idle' | 'draw' | 'move' | 'resize'
+    let mode       = 'idle';
+    let drawStart  = { x: 0, y: 0 };
+    let dragAnchor = { dx: 0, dy: 0 };   // pointer offset from box centre (move)
+    let resizeOpp  = { cx: 0, cy: 0 };   // the fixed opposite corner (resize)
+
+    // ── DOM ──────────────────────────────────────────────────────────────────
     const modal = document.createElement('div');
     modal.id = 'lp-draw-editor';
     modal.innerHTML =
@@ -2409,8 +2423,12 @@
         '<div class="lp-de-hint">Drag on the photo to draw your spot</div>' +
         '<div class="lp-de-canvas-wrap">' +
           '<img class="lp-de-photo" src="' + img.src + '" alt="Pad photo" draggable="false">' +
-          '<canvas class="lp-de-canvas"></canvas>' +
-          '<svg class="lp-de-box-svg" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>' +
+          // Single SVG — no separate canvas.  bgHit is the transparent catch-all
+          // for draw events; all other elements are stacked on top of it.
+          '<svg class="lp-de-box-svg" viewBox="0 0 100 100" preserveAspectRatio="none">' +
+            '<rect class="lp-de-bg-hit" x="0" y="0" width="100" height="100" ' +
+                  'fill="transparent" style="cursor:crosshair"/>' +
+          '</svg>' +
         '</div>' +
         '<div class="lp-de-footer">' +
           '<button class="lp-de-clear">Clear</button>' +
@@ -2419,67 +2437,21 @@
       '</div>';
     document.body.appendChild(modal);
 
-    const canvas   = modal.querySelector('.lp-de-canvas');
-    const boxSvg   = modal.querySelector('.lp-de-box-svg');
-    const saveBtn  = modal.querySelector('.lp-de-save');
-    const clearBtn = modal.querySelector('.lp-de-clear');
-    const closeBtn = modal.querySelector('.lp-de-close');
-    const hint     = modal.querySelector('.lp-de-hint');
-    const ns = 'http://www.w3.org/2000/svg';
+    const boxSvg  = modal.querySelector('.lp-de-box-svg');
+    const bgHit   = modal.querySelector('.lp-de-bg-hit');
+    const saveBtn = modal.querySelector('.lp-de-save');
+    const clearBtn= modal.querySelector('.lp-de-clear');
+    const closeBtn= modal.querySelector('.lp-de-close');
+    const hint    = modal.querySelector('.lp-de-hint');
+    const ns      = 'http://www.w3.org/2000/svg';
 
-    function renderBox() {
-      while (boxSvg.firstChild) boxSvg.removeChild(boxSvg.firstChild);
-      if (!box || !(box.w > 0.01)) return;
-      const { cx, cy, w, h } = box;
+    // Dynamic SVG elements (rebuilt by renderBox)
+    let svgRect = null, svgTab = null, svgLabel = null;
+    let svgCorners = [];   // array of 4 circle elements
 
-      // Main rectangle
-      const rect = document.createElementNS(ns, 'rect');
-      rect.setAttribute('x',      (cx - w / 2) * 100);
-      rect.setAttribute('y',      (cy - h / 2) * 100);
-      rect.setAttribute('width',   w * 100);
-      rect.setAttribute('height',  h * 100);
-      rect.setAttribute('fill',   'rgba(76,175,80,0.25)');
-      rect.setAttribute('stroke', '#4caf50');
-      rect.setAttribute('stroke-width', '2');
-      rect.setAttribute('vector-effect', 'non-scaling-stroke');
-      rect.setAttribute('rx', '2');
-      boxSvg.appendChild(rect);
-
-      // Corner handles
-      [[cx - w/2, cy - h/2],[cx + w/2, cy - h/2],
-       [cx - w/2, cy + h/2],[cx + w/2, cy + h/2]].forEach(([px, py]) => {
-        const c = document.createElementNS(ns, 'circle');
-        c.setAttribute('cx',  px * 100);
-        c.setAttribute('cy',  py * 100);
-        c.setAttribute('r',   '3.5');
-        c.setAttribute('fill',         '#fff');
-        c.setAttribute('stroke',       '#4caf50');
-        c.setAttribute('stroke-width', '1.5');
-        c.setAttribute('vector-effect','non-scaling-stroke');
-        boxSvg.appendChild(c);
-      });
-
-      // Label
-      const lbl = document.createElementNS(ns, 'text');
-      lbl.setAttribute('x', cx * 100);
-      lbl.setAttribute('y', (cy - h / 2) * 100 - 2);
-      lbl.setAttribute('text-anchor',  'middle');
-      lbl.setAttribute('font-size',    '5');
-      lbl.setAttribute('font-family',  'DM Sans, sans-serif');
-      lbl.setAttribute('font-weight',  '600');
-      lbl.setAttribute('fill',         '#4caf50');
-      lbl.setAttribute('vector-effect','non-scaling-stroke');
-      lbl.textContent = 'Your spot';
-      boxSvg.appendChild(lbl);
-    }
-    renderBox();
-
-    // ── Drawing interaction (drag to draw a new rectangle) ──────────────────
-    let drawing  = false;
-    let drawStart = { x: 0, y: 0 };
-
+    // Convert a pointer/touch event to normalised [0-1] coords over the SVG
     function normXY(e) {
-      const r = canvas.getBoundingClientRect();
+      const r = boxSvg.getBoundingClientRect();
       const t = e.touches ? (e.touches[0] || e.changedTouches[0]) : e;
       return {
         x: Math.max(0, Math.min(1, (t.clientX - r.left) / r.width)),
@@ -2487,79 +2459,195 @@
       };
     }
 
-    canvas.addEventListener('pointerdown', e => {
-      e.preventDefault();
-      drawing   = true;
-      drawStart = normXY(e);
-      canvas.setPointerCapture(e.pointerId);
-      hint.textContent = 'Release to set your spot';
-    });
+    // Rebuild the SVG box visuals.
+    // SVG paint order = DOM order (back → front), so:
+    //   bgHit (back) → svgRect → svgTab → svgCorners (front)
+    function renderBox() {
+      if (svgRect)  { svgRect.remove();  svgRect = null;  }
+      if (svgTab)   { svgTab.remove();   svgTab  = null;  }
+      if (svgLabel) { svgLabel.remove(); svgLabel = null; }
+      svgCorners.forEach(c => c.remove());
+      svgCorners = [];
 
-    canvas.addEventListener('pointermove', e => {
-      if (!drawing) return;
-      e.preventDefault();
-      const { x, y } = normXY(e);
-      box = {
-        cx: (drawStart.x + x) / 2,
-        cy: (drawStart.y + y) / 2,
-        w:  Math.abs(x - drawStart.x),
-        h:  Math.abs(y - drawStart.y),
-        angle: 0,
-      };
-      renderBox();
-    });
+      if (!box || !(box.w > 0.01)) return;
+      const { cx, cy, w, h } = box;
+      const x0 = (cx - w / 2) * 100, y0 = (cy - h / 2) * 100;
 
-    canvas.addEventListener('pointerup', e => {
-      if (!drawing) return;
+      // Box body (fills the spot; drag = move whole box)
+      svgRect = document.createElementNS(ns, 'rect');
+      svgRect.setAttribute('x',      x0);
+      svgRect.setAttribute('y',      y0);
+      svgRect.setAttribute('width',  w * 100);
+      svgRect.setAttribute('height', h * 100);
+      svgRect.setAttribute('fill',   'rgba(76,175,80,0.22)');
+      svgRect.setAttribute('stroke', '#4caf50');
+      svgRect.setAttribute('stroke-width', '2');
+      svgRect.setAttribute('vector-effect', 'non-scaling-stroke');
+      svgRect.setAttribute('rx', '2');
+      svgRect.style.cursor = 'move';
+      svgRect.dataset.lpRole = 'move';
+      // Insert after bgHit so it sits above the transparent background
+      bgHit.insertAdjacentElement('afterend', svgRect);
+
+      // Move tab — green pill straddling the top edge, centred horizontally
+      const tabW = Math.min(w * 100 * 0.45, 20), tabH = 6;
+      svgTab = document.createElementNS(ns, 'rect');
+      svgTab.setAttribute('x',      cx * 100 - tabW / 2);
+      svgTab.setAttribute('y',      y0 - tabH / 2);
+      svgTab.setAttribute('width',  tabW);
+      svgTab.setAttribute('height', tabH);
+      svgTab.setAttribute('rx',     tabH / 2);
+      svgTab.setAttribute('fill',   '#4caf50');
+      svgTab.setAttribute('stroke', '#fff');
+      svgTab.setAttribute('stroke-width', '1.2');
+      svgTab.setAttribute('vector-effect', 'non-scaling-stroke');
+      svgTab.style.cursor = 'grab';
+      svgTab.dataset.lpRole = 'move';
+      boxSvg.appendChild(svgTab);
+
+      // "Your spot" label (non-interactive, sits above the tab)
+      svgLabel = document.createElementNS(ns, 'text');
+      svgLabel.setAttribute('x', cx * 100);
+      svgLabel.setAttribute('y', y0 - tabH / 2 - 2);
+      svgLabel.setAttribute('text-anchor', 'middle');
+      svgLabel.setAttribute('font-size',   '4.5');
+      svgLabel.setAttribute('font-family', 'DM Sans, sans-serif');
+      svgLabel.setAttribute('font-weight', '600');
+      svgLabel.setAttribute('fill',        '#4caf50');
+      svgLabel.setAttribute('pointer-events', 'none');
+      svgLabel.textContent = 'Your spot';
+      boxSvg.appendChild(svgLabel);
+
+      // Corner handles — [TL, TR, BL, BR]
+      // Each stores the OPPOSITE corner as the resize anchor.
+      const corners = [
+        { px: cx - w/2, py: cy - h/2, opp: { cx: cx + w/2, cy: cy + h/2 }, cur: 'nwse-resize' },
+        { px: cx + w/2, py: cy - h/2, opp: { cx: cx - w/2, cy: cy + h/2 }, cur: 'nesw-resize' },
+        { px: cx - w/2, py: cy + h/2, opp: { cx: cx + w/2, cy: cy - h/2 }, cur: 'nesw-resize' },
+        { px: cx + w/2, py: cy + h/2, opp: { cx: cx - w/2, cy: cy - h/2 }, cur: 'nwse-resize' },
+      ];
+      corners.forEach(co => {
+        const c = document.createElementNS(ns, 'circle');
+        c.setAttribute('cx', co.px * 100);
+        c.setAttribute('cy', co.py * 100);
+        c.setAttribute('r',  '5.5');
+        c.setAttribute('fill',   '#fff');
+        c.setAttribute('stroke', '#4caf50');
+        c.setAttribute('stroke-width', '2');
+        c.setAttribute('vector-effect', 'non-scaling-stroke');
+        c.style.cursor = co.cur;
+        c.dataset.lpRole = 'resize';
+        c._lpOpp = co.opp;
+        boxSvg.appendChild(c);
+        svgCorners.push(c);
+      });
+    }
+
+    renderBox();
+
+    // ── Unified SVG pointer handling ──────────────────────────────────────────
+    boxSvg.addEventListener('pointerdown', e => {
       e.preventDefault();
-      drawing = false;
-      const { x, y } = normXY(e);
-      const w = Math.abs(x - drawStart.x);
-      const h = Math.abs(y - drawStart.y);
-      if (w > 0.04 && h > 0.02) {
-        box = { cx: (drawStart.x + x) / 2, cy: (drawStart.y + y) / 2, w, h, angle: 0 };
-        renderBox();
-        hint.textContent = 'Looking good! Tap Save to apply.';
+      e.stopPropagation();
+      boxSvg.setPointerCapture(e.pointerId);
+      const p = normXY(e);
+      const role = e.target.dataset.lpRole;
+
+      if (role === 'resize') {
+        mode = 'resize';
+        resizeOpp = e.target._lpOpp;
+        hint.textContent = 'Drag to resize — opposite corner stays fixed';
+      } else if (role === 'move') {
+        mode = 'move';
+        dragAnchor = { dx: p.x - box.cx, dy: p.y - box.cy };
+        hint.textContent = 'Drag to reposition your spot';
       } else {
-        hint.textContent = 'Try dragging a larger area across the photo.';
+        // Blank area — start a fresh draw (replaces existing box immediately)
+        mode = 'draw';
+        drawStart = p;
+        box = { cx: p.x, cy: p.y, w: 0, h: 0 };
+        renderBox();
+        hint.textContent = 'Drag to set the size of your spot';
       }
     });
 
-    canvas.addEventListener('pointercancel', () => { drawing = false; });
-    canvas.addEventListener('touchstart',    e => e.preventDefault(), { passive: false });
+    boxSvg.addEventListener('pointermove', e => {
+      if (mode === 'idle') return;
+      e.preventDefault();
+      const p = normXY(e);
 
-    // ── Buttons ─────────────────────────────────────────────────────────────
-    clearBtn.addEventListener('click', () => {
-      box = { cx: 0.5, cy: 0.5, w: 0, h: 0, angle: 0 };
+      if (mode === 'draw') {
+        box = {
+          cx: (drawStart.x + p.x) / 2,
+          cy: (drawStart.y + p.y) / 2,
+          w:  Math.abs(p.x - drawStart.x),
+          h:  Math.abs(p.y - drawStart.y),
+        };
+      } else if (mode === 'move') {
+        const hw = box.w / 2, hh = box.h / 2;
+        box = {
+          ...box,
+          cx: Math.max(hw, Math.min(1 - hw, p.x - dragAnchor.dx)),
+          cy: Math.max(hh, Math.min(1 - hh, p.y - dragAnchor.dy)),
+        };
+      } else if (mode === 'resize') {
+        const { cx: ox, cy: oy } = resizeOpp;
+        const nw = Math.abs(p.x - ox), nh = Math.abs(p.y - oy);
+        if (nw > 0.01 && nh > 0.01) {
+          box = { cx: (p.x + ox) / 2, cy: (p.y + oy) / 2, w: nw, h: nh };
+        }
+      }
       renderBox();
-      hint.textContent = 'Drag on the photo to draw your spot';
+    });
+
+    boxSvg.addEventListener('pointerup', e => {
+      if (mode === 'idle') return;
+      e.preventDefault();
+      const prevMode = mode;
+      mode = 'idle';
+
+      if (prevMode === 'draw') {
+        if (box.w > 0.04 && box.h > 0.02) {
+          renderBox();
+          hint.textContent = 'Looking good! Drag corners to adjust, or tap Save.';
+        } else {
+          box = { cx: 0.5, cy: 0.5, w: 0, h: 0 };
+          renderBox();
+          hint.textContent = 'Try dragging a larger area across your photo.';
+        }
+      } else {
+        renderBox();
+        hint.textContent = 'Tap Save to apply, or keep adjusting.';
+      }
+    });
+
+    boxSvg.addEventListener('pointercancel', () => { mode = 'idle'; });
+    boxSvg.addEventListener('touchstart', e => e.preventDefault(), { passive: false });
+
+    // ── Buttons ──────────────────────────────────────────────────────────────
+    clearBtn.addEventListener('click', () => {
+      box = { cx: 0.5, cy: 0.5, w: 0, h: 0 };
+      renderBox();
+      hint.textContent = 'Spot cleared — drag on the photo to draw a new one';
     });
 
     function closeModal() { modal.remove(); }
-
     closeBtn.addEventListener('click', closeModal);
     modal.querySelector('.lp-de-bg').addEventListener('click', closeModal);
 
     saveBtn.addEventListener('click', () => {
-      _savePadBox(img.src, box);
-
-      // Try to update the bundle's h2 canvas if on the padAccount page
-      const bundleCanvas = document.querySelector('.canvas-wrap canvas');
-      if (bundleCanvas && box.w > 0.01) {
-        const hook = findH2BoxHook(bundleCanvas);
-        if (hook) {
-          hook.dispatch(prev => ({ ...prev, ...box }));
-          console.log('[Lily Pad] Pad box pushed to bundle fiber:', box);
-        }
+      if (!(box.w > 0.01)) {
+        hint.textContent = 'Draw a spot first, then tap Save.';
+        return;
       }
-
-      overlayPadDrawing(img);
+      _savePadBox(img.src, box);
+      overlayPadDrawing(img);   // update thumbnail before closing
       closeModal();
-      showLpToast('Spot drawing saved!');
+      showLpToast('Spot saved!');
       console.log('[Lily Pad] Pad drawing saved:', JSON.stringify(box));
     });
 
-    console.log('[Lily Pad] Pad draw editor opened');
+    console.log('[Lily Pad] Pad draw editor opened, existing box:', JSON.stringify(box));
   }
 
   let _guardDiagLast = 0;

@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-16-W';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-16-X';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -2547,7 +2547,11 @@
                                     /revenue.*payouts|payouts/i.test(el.textContent.trim())));
     if (!onDash) {
       document.querySelectorAll('.lp-draw-edit-btn').forEach(el => el.remove());
-      document.querySelectorAll('.lp-draw-overlay-svg').forEach(el => el.remove());
+      // Only remove overlays that are NOT inside the lightbox — the lightbox
+      // overlay is managed by openPhotoLightbox's render() and must be preserved.
+      document.querySelectorAll('.lp-draw-overlay-svg').forEach(el => {
+        if (!el.closest('#lp-lightbox')) el.remove();
+      });
       return;
     }
 
@@ -3026,8 +3030,9 @@
       }
       _savePadBox(img.src, quad);
       closeModal();
-      // Defer overlay update to avoid triggering React reconciler on dashboard card
-      setTimeout(() => overlayPadDrawing(img), 80);
+      // Immediately re-render overlays on all photos — localStorage doesn't
+      // fire a DOM mutation so the MutationObserver guard won't catch this.
+      requestAnimationFrame(() => injectAllPhotoOverlays());
       showLpToast('Spot saved!');
       console.log('[Lily Pad] Pad drawing saved (quad):', JSON.stringify(quad));
     });

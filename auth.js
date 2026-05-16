@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-16-N';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-16-O';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -2463,8 +2463,11 @@
 
   // Overlay the saved drawing as a green SVG polygon on a thumbnail image.
   // Handles both legacy {cx,cy,w,h} and the new quad [{x,y}×4] format.
-  function overlayPadDrawing(img) {
-    const parent = img.parentElement;
+  // `wrap` is the pad-card photo container (parent of the bundle's SVG overlay).
+  // Passing it explicitly avoids relying on img.parentElement which may be a
+  // deeply-nested inner element, not the styled wrap we need.
+  function overlayPadDrawing(img, wrap) {
+    const parent = wrap || img.parentElement;
     if (!parent) return;
     // ── Load data FIRST — only touch the DOM if there is something to render.
     // Setting parent.style.position before this check triggers the MutationObserver
@@ -2503,6 +2506,12 @@
 
   // Inject "Edit drawing" pencil button on every pad photo thumbnail when on
   // the paddashboard (My Pads).  Re-runs on every guard tick; idempotent.
+  //
+  // Discovery strategy: use the SAME svg[viewBox="0 0 100 70"] selector that
+  // installPhotoClickHandlers and enlargePadCards already rely on — this is the
+  // only proven-reliable way to find pad-card photo containers in the bundle's
+  // DOM.  The img may be nested several levels inside the wrap, so we never
+  // use img.parentElement; we always pass the outer wrap explicitly.
   function injectPadDrawEdit() {
     // Detect paddashboard using rendered elements only — document.body.textContent
     // includes our own <script> text and causes false positives.
@@ -2518,24 +2527,11 @@
       document.querySelectorAll('.lp-draw-overlay-svg').forEach(el => el.remove());
       return;
     }
-    // ── Helper: find the correct pad-card photo wrap for an img ───────────────
-    // installPhotoClickHandlers marks the wrap (parent of svg[viewBox="0 0 100 70"])
-    // with dataset.lpLb='1', and enlargePadCards marks it with dataset.lpEnlarged='1'.
-    // The img returned by wrap.querySelector('img') may be several DOM levels BELOW
-    // the wrap, so img.parentElement ≠ wrap.  Walk up to find the real container.
-    function _findPadCardWrap(img) {
-      let el = img.parentElement;
-      for (let depth = 0; depth < 8 && el && el !== document.body; depth++) {
-        if (el.dataset.lpLb || el.dataset.lpEnlarged) return el;
-        el = el.parentElement;
-      }
-      return img.parentElement; // fallback — best-effort
-    }
 
     // ── Helper: ensure the edit button exists in wrap (idempotent) ────────────
     function _ensureDrawBtn(img, wrap) {
       if (wrap.querySelector('.lp-draw-edit-btn')) return; // already there — no DOM mutation
-      // wrap already has position:relative from installPhotoClickHandlers/enlargePadCards
+      // wrap already has position:relative set by installPhotoClickHandlers
       if (getComputedStyle(wrap).position === 'static') wrap.style.position = 'relative';
       const btn = document.createElement('button');
       btn.className = 'lp-draw-edit-btn';
@@ -2551,35 +2547,39 @@
         e.stopPropagation();
         openPadDrawEditor(img);
       });
-      console.log('[Lily Pad] Draw edit btn injected on', img.src.slice(-30));
+      console.log('[Lily Pad] Draw edit btn injected');
     }
 
-    document.querySelectorAll('img[src]').forEach(img => {
-      if (img.dataset.lpDrawEdit) {
-        // Already processed — re-inject button if React reconciliation removed it
-        const wrap = _findPadCardWrap(img);
-        if (wrap) _ensureDrawBtn(img, wrap);
+    // Walk the same SVG elements that installPhotoClickHandlers uses — guarantees
+    // we always find the exact wrap+img even if img.src is set asynchronously.
+    document.querySelectorAll('svg[viewBox="0 0 100 70"]').forEach(svg => {
+      const wrap = svg.parentElement;
+      if (!wrap) return;
+      const img = wrap.querySelector('img');
+      if (!img || !img.src) return;
+      // Skip anything inside our own modals (lightbox or draw editor)
+      if (wrap.closest('#lp-lightbox,#lp-draw-editor')) return;
 
-        // Only re-render SVG overlay when saved data changed; skip if none saved
-        const saved = _loadPadBox(img.src);
-        if (!saved) return;
-        const newHash = JSON.stringify(saved);
-        const existingSvg = wrap && wrap.querySelector('.lp-draw-overlay-svg');
-        if (!existingSvg || existingSvg.dataset.lpHash !== newHash) {
-          overlayPadDrawing(img);
-          const freshSvg = wrap && wrap.querySelector('.lp-draw-overlay-svg');
-          if (freshSvg) freshSvg.dataset.lpHash = newHash;
-        }
+      // Always ensure the button is present (React may have removed it)
+      _ensureDrawBtn(img, wrap);
+
+      // First-time setup: mark and render overlay
+      if (!img.dataset.lpDrawEdit) {
+        img.dataset.lpDrawEdit = '1';
+        overlayPadDrawing(img, wrap);
         return;
       }
-      const rect = img.getBoundingClientRect();
-      if (rect.width < 60 || rect.height < 40) return;
-      if (img.closest('#lp-lightbox,#lp-draw-editor')) return;
-      const wrap = _findPadCardWrap(img);
-      if (!wrap) return;
-      img.dataset.lpDrawEdit = '1';
-      _ensureDrawBtn(img, wrap);
-      overlayPadDrawing(img);
+
+      // Subsequent ticks: only re-render overlay if saved data changed
+      const saved = _loadPadBox(img.src);
+      if (!saved) return;
+      const newHash = JSON.stringify(saved);
+      const existingSvg = wrap.querySelector('.lp-draw-overlay-svg');
+      if (!existingSvg || existingSvg.dataset.lpHash !== newHash) {
+        overlayPadDrawing(img, wrap);
+        const freshSvg = wrap.querySelector('.lp-draw-overlay-svg');
+        if (freshSvg) freshSvg.dataset.lpHash = newHash;
+      }
     });
   }
 

@@ -25,9 +25,14 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   full_name     TEXT,
   account_type  TEXT DEFAULT 'renter',
   avatar_url    TEXT,
+  status        TEXT DEFAULT 'active',
+  spend_total   NUMERIC DEFAULT 0,
   created_at    TIMESTAMPTZ DEFAULT NOW(),
   updated_at    TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS spend_total NUMERIC DEFAULT 0;
 
 CREATE TABLE IF NOT EXISTS public.saved_spots (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -47,9 +52,36 @@ CREATE TABLE IF NOT EXISTS public.bookings (
   created_at    TIMESTAMPTZ DEFAULT NOW()
 );
 
-ALTER TABLE public.profiles    ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.saved_spots ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.bookings    ENABLE ROW LEVEL SECURITY;
+CREATE TABLE IF NOT EXISTS public.support_conversations (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id          UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  user_name        TEXT DEFAULT '',
+  user_email       TEXT DEFAULT '',
+  subject          TEXT DEFAULT 'Support Request',
+  status           TEXT DEFAULT 'open',
+  assigned_to      UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  assigned_name    TEXT DEFAULT '',
+  last_message     TEXT DEFAULT '',
+  last_message_at  TIMESTAMPTZ DEFAULT NOW(),
+  created_at       TIMESTAMPTZ DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.support_messages (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  conversation_id  UUID NOT NULL REFERENCES public.support_conversations(id) ON DELETE CASCADE,
+  sender_id        UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  sender_name      TEXT NOT NULL DEFAULT 'User',
+  sender_role      TEXT NOT NULL DEFAULT 'customer',
+  message          TEXT NOT NULL,
+  created_at       TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.profiles             ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.saved_spots          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.bookings             ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.support_conversations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.support_messages     ENABLE ROW LEVEL SECURITY;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='profiles'    AND policyname='profiles_self')
@@ -58,6 +90,10 @@ DO $$ BEGIN
     THEN CREATE POLICY saved_spots_self ON public.saved_spots FOR ALL USING (auth.uid() = user_id);    END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='bookings'    AND policyname='bookings_self')
     THEN CREATE POLICY bookings_self    ON public.bookings    FOR ALL USING (auth.uid() = user_id);    END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='support_conversations' AND policyname='support_conv_self')
+    THEN CREATE POLICY support_conv_self ON public.support_conversations FOR ALL USING (auth.uid() = user_id); END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='support_messages' AND policyname='support_msg_self')
+    THEN CREATE POLICY support_msg_self ON public.support_messages FOR ALL USING (auth.uid() = sender_id); END IF;
 END $$;
 
 CREATE OR REPLACE FUNCTION public.handle_new_user()
@@ -352,6 +388,133 @@ app.get('/api/bookings/:userId', async (req, res) => {
     );
     const data = await r.json();
     res.json(r.ok ? data : []);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: list all real users with booking counts ────────────────────────────
+app.get('/api/admin/users', async (req, res) => {
+  if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });
+  try {
+    const [profRes, bookRes] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/profiles?select=*&order=created_at.desc`, { headers: SVC_HEADERS }),
+      fetch(`${SUPABASE_URL}/rest/v1/bookings?select=user_id`, { headers: SVC_HEADERS }),
+    ]);
+    const profiles = await profRes.json();
+    const bookings = await bookRes.json();
+    if (!profRes.ok) return res.status(profRes.status).json({ error: profiles });
+    const counts = {};
+    if (Array.isArray(bookings)) bookings.forEach(b => { if (b.user_id) counts[b.user_id] = (counts[b.user_id] || 0) + 1; });
+    const result = Array.isArray(profiles) ? profiles.map(p => ({ ...p, booking_count: counts[p.id] || 0 })) : [];
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: update user (status, account_type, etc.) ──────────────────────────
+app.patch('/api/admin/users/:id', async (req, res) => {
+  if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });
+  const fields = { ...req.body, updated_at: new Date().toISOString() };
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${req.params.id}`,
+      { method: 'PATCH', headers: { ...SVC_HEADERS, 'Prefer': 'return=representation' }, body: JSON.stringify(fields) }
+    );
+    const data = await r.json();
+    if (!r.ok) return res.status(r.status).json({ error: data });
+    res.json(Array.isArray(data) ? (data[0] || null) : data);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Support: list conversations (all for staff/admin; filtered by user_id for customers) ─
+app.get('/api/support/conversations', async (req, res) => {
+  if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });
+  const { user_id } = req.query;
+  try {
+    const filter = user_id ? `?user_id=eq.${user_id}&order=updated_at.desc` : `?order=updated_at.desc`;
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/support_conversations${filter}`, { headers: SVC_HEADERS });
+    const data = await r.json();
+    res.json(r.ok ? (Array.isArray(data) ? data : []) : []);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Support: create conversation ──────────────────────────────────────────────
+app.post('/api/support/conversations', async (req, res) => {
+  if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });
+  const { user_id, user_name, user_email, subject, first_message } = req.body || {};
+  if (!user_id && !user_email) return res.status(400).json({ error: 'user_id or user_email required' });
+  try {
+    const now = new Date().toISOString();
+    const conv = {
+      user_id: user_id || null, user_name: user_name || user_email || 'Customer',
+      user_email: user_email || '', subject: subject || 'Support Request',
+      status: 'open', last_message: first_message || '', last_message_at: now,
+      created_at: now, updated_at: now,
+    };
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/support_conversations`,
+      { method: 'POST', headers: { ...SVC_HEADERS, 'Prefer': 'return=representation' }, body: JSON.stringify(conv) }
+    );
+    const data = await r.json();
+    if (!r.ok) return res.status(r.status).json({ error: data });
+    const created = Array.isArray(data) ? data[0] : data;
+    if (first_message && created && created.id) {
+      await fetch(`${SUPABASE_URL}/rest/v1/support_messages`, {
+        method: 'POST', headers: { ...SVC_HEADERS, 'Prefer': 'return=minimal' },
+        body: JSON.stringify({
+          conversation_id: created.id, sender_id: user_id || null,
+          sender_name: user_name || user_email || 'Customer',
+          sender_role: 'customer', message: first_message, created_at: now,
+        }),
+      });
+    }
+    res.json(created);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Support: get messages for a conversation ──────────────────────────────────
+app.get('/api/support/conversations/:id/messages', async (req, res) => {
+  if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/support_messages?conversation_id=eq.${req.params.id}&order=created_at.asc`,
+      { headers: SVC_HEADERS }
+    );
+    const data = await r.json();
+    res.json(r.ok ? (Array.isArray(data) ? data : []) : []);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Support: send a message ───────────────────────────────────────────────────
+app.post('/api/support/messages', async (req, res) => {
+  if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });
+  const { conversation_id, sender_id, sender_name, sender_role, message } = req.body || {};
+  if (!conversation_id || !message) return res.status(400).json({ error: 'conversation_id and message required' });
+  try {
+    const now = new Date().toISOString();
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/support_messages`,
+      { method: 'POST', headers: { ...SVC_HEADERS, 'Prefer': 'return=representation' },
+        body: JSON.stringify({ conversation_id, sender_id: sender_id || null,
+          sender_name: sender_name || 'User', sender_role: sender_role || 'customer',
+          message, created_at: now }) }
+    );
+    const data = await r.json();
+    if (!r.ok) return res.status(r.status).json({ error: data });
+    await fetch(`${SUPABASE_URL}/rest/v1/support_conversations?id=eq.${conversation_id}`,
+      { method: 'PATCH', headers: SVC_HEADERS,
+        body: JSON.stringify({ last_message: message, last_message_at: now, updated_at: now }) }
+    );
+    res.json(Array.isArray(data) ? (data[0] || null) : data);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Support: update conversation (status, assigned_to) ────────────────────────
+app.patch('/api/support/conversations/:id', async (req, res) => {
+  if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/support_conversations?id=eq.${req.params.id}`,
+      { method: 'PATCH', headers: { ...SVC_HEADERS, 'Prefer': 'return=representation' },
+        body: JSON.stringify({ ...req.body, updated_at: new Date().toISOString() }) }
+    );
+    const data = await r.json();
+    if (!r.ok) return res.status(r.status).json({ error: data });
+    res.json(Array.isArray(data) ? (data[0] || null) : data);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

@@ -1,10 +1,27 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-16-AB';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-16-AC';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
   const SUPABASE_ANON_KEY = '%%SUPABASE_ANON_KEY%%' || window.__SUPABASE_ANON_KEY__;
   const SUPABASE_OK = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
+
+  // ── Current user role cache (admin | staff | padRenter | renter | customer) ─
+  let _lpCurrentRole = localStorage.getItem('lp_role_cache') || 'customer';
+
+  async function _fetchAndCacheRole(userId) {
+    try {
+      const r = await fetch(`/api/profile/${userId}`);
+      if (r.ok) {
+        const p = await r.json();
+        if (p && p.account_type) {
+          _lpCurrentRole = p.account_type;
+          localStorage.setItem('lp_role_cache', p.account_type);
+          console.log('[LP] Role cached:', _lpCurrentRole);
+        }
+      }
+    } catch {}
+  }
 
   // ── Block fake admin-users data from localStorage ────────────────────────
   // The bundle persists all users (including the hardcoded demo users with
@@ -3102,6 +3119,507 @@
     console.log('[Lily Pad] Draw editor opened. Existing quad:', JSON.stringify(quad));
   }
 
+  // ── Admin/Staff panel — real user accounts from Supabase ─────────────────
+  let _adminUsers = null;
+  let _adminFetching = false;
+  let _adminTab = 'renters';
+  let _adminSearch = '';
+
+  function _isAdminOrStaff() {
+    return _lpCurrentRole === 'admin' || _lpCurrentRole === 'staff';
+  }
+
+  function _isAdminView() {
+    if (lpGetCurrentPage() === 'admin') return true;
+    return Array.from(document.querySelectorAll('h1,h2,h3,[class*="title"]')).some(
+      el => el.childElementCount === 0 && el.textContent.trim() === 'All Accounts'
+    );
+  }
+
+  function _adminInitials(name) {
+    const parts = (name || '?').split(' ').filter(Boolean);
+    return parts.length >= 2
+      ? (parts[0][0] + parts[1][0]).toUpperCase()
+      : (parts[0] || '?').slice(0, 2).toUpperCase();
+  }
+
+  async function _fetchAdminUsers(force) {
+    if (_adminFetching && !force) return;
+    _adminFetching = true;
+    try {
+      const r = await fetch('/api/admin/users');
+      if (r.ok) { _adminUsers = await r.json(); _renderAdminPanel(); }
+    } catch (e) { console.warn('[LP] admin users fetch failed:', e.message); }
+    finally { _adminFetching = false; }
+  }
+
+  function _renderAdminPanel() {
+    const panel = document.getElementById('lp-admin-panel');
+    if (!panel || !_adminUsers) return;
+    const isHosts = _adminTab === 'hosts';
+    const renters = _adminUsers.filter(u => u.account_type !== 'padRenter' && u.account_type !== 'admin' && u.account_type !== 'staff');
+    const hosts   = _adminUsers.filter(u => u.account_type === 'padRenter');
+    const pool    = isHosts ? hosts : renters;
+    const q       = _adminSearch.toLowerCase();
+    const visible = q ? pool.filter(u => (u.full_name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q)) : pool;
+    const sorted  = [...visible].sort((a, b) => (b.spend_total || 0) - (a.spend_total || 0));
+
+    panel.querySelector('.lp-ap-content').innerHTML = `
+      <div class="lp-ap-tabs">
+        <button class="lp-ap-tab ${!isHosts ? 'active' : ''}" data-tab="renters">🚗 Renters (${renters.length})</button>
+        <button class="lp-ap-tab ${isHosts ? 'active' : ''}" data-tab="hosts">🏠 Hosts (${hosts.length})</button>
+      </div>
+      <div class="lp-ap-meta-row">
+        <span>SORTED BY SPEND · HIGHEST FIRST</span><span>${sorted.length} shown</span>
+      </div>
+      <div class="lp-ap-search-wrap">
+        <input class="lp-ap-search" placeholder="Search by name or email" value="${_adminSearch.replace(/"/g, '&quot;')}">
+      </div>
+      <div class="lp-ap-list">
+        ${sorted.length === 0
+          ? `<div class="lp-ap-empty">No ${isHosts ? 'hosts' : 'renters'} registered yet.</div>`
+          : sorted.map(u => {
+              const name = u.full_name || u.email || 'Unknown';
+              const susp = u.status === 'suspended';
+              const verif = u.status === 'verified';
+              const spend = u.spend_total ? '$' + Math.round(u.spend_total) : '$0';
+              const bc = u.booking_count || 0;
+              return `
+              <div class="lp-ap-row" data-uid="${u.id}">
+                <div class="lp-ap-avatar">${_adminInitials(name)}</div>
+                <div class="lp-ap-info">
+                  <div class="lp-ap-name">
+                    ${name} <span class="lp-ap-star">★</span>
+                    ${susp ? '<span class="lp-ap-badge susp">SUSPENDED</span>' : ''}
+                    ${verif ? '<span class="lp-ap-badge verif">VERIFIED</span>' : ''}
+                  </div>
+                  <div class="lp-ap-email">${u.email || ''}</div>
+                </div>
+                <div class="lp-ap-meta-r">
+                  <div class="lp-ap-spend">${spend}</div>
+                  <div class="lp-ap-bcount">${bc} booking${bc !== 1 ? 's' : ''}</div>
+                </div>
+              </div>`;
+            }).join('')
+        }
+      </div>`;
+
+    panel.querySelectorAll('.lp-ap-tab').forEach(btn =>
+      btn.addEventListener('click', () => { _adminTab = btn.dataset.tab; _renderAdminPanel(); })
+    );
+    const srch = panel.querySelector('.lp-ap-search');
+    if (srch) srch.addEventListener('input', () => { _adminSearch = srch.value; _renderAdminPanel(); });
+    panel.querySelectorAll('.lp-ap-row').forEach(row =>
+      row.addEventListener('click', () => {
+        const u = _adminUsers.find(x => x.id === row.dataset.uid);
+        if (u) _showAdminActions(u);
+      })
+    );
+  }
+
+  function _showAdminActions(user) {
+    document.getElementById('lp-admin-sheet')?.remove();
+    const susp = user.status === 'suspended';
+    const verif = user.status === 'verified';
+    const sheet = document.createElement('div');
+    sheet.id = 'lp-admin-sheet';
+    sheet.innerHTML = `
+      <div class="lp-sheet-backdrop"></div>
+      <div class="lp-sheet-body">
+        <div class="lp-sheet-name">${user.full_name || user.email}</div>
+        <div class="lp-sheet-email">${user.email || ''}</div>
+        <div class="lp-sheet-type">${user.account_type === 'padRenter' ? '🏠 Host' : '🚗 Renter'} · Joined ${user.created_at ? new Date(user.created_at).toLocaleDateString() : 'unknown'}</div>
+        <div class="lp-sheet-actions">
+          <button class="lp-sheet-btn" data-action="message">💬 Message User</button>
+          ${susp
+            ? '<button class="lp-sheet-btn green" data-action="reinstate">✓ Reinstate Account</button>'
+            : '<button class="lp-sheet-btn red"   data-action="suspend">⊘ Suspend Account</button>'}
+          ${verif
+            ? '<button class="lp-sheet-btn" data-action="unverify">✗ Remove Verification</button>'
+            : '<button class="lp-sheet-btn" data-action="verify">✓ Verify Account</button>'}
+          <button class="lp-sheet-btn ghost" data-action="cancel">Cancel</button>
+        </div>
+      </div>`;
+    document.body.appendChild(sheet);
+    requestAnimationFrame(() => sheet.classList.add('open'));
+
+    const close = () => { sheet.classList.remove('open'); setTimeout(() => sheet.remove(), 220); };
+    sheet.querySelector('.lp-sheet-backdrop').addEventListener('click', close);
+    sheet.querySelector('[data-action="cancel"]').addEventListener('click', close);
+
+    sheet.querySelectorAll('[data-action]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const action = btn.dataset.action;
+        if (action === 'cancel') return;
+        if (action === 'message') { close(); _openAdminChatWith(user); return; }
+        const statusMap = { suspend: 'suspended', reinstate: 'active', verify: 'verified', unverify: 'active' };
+        const newStatus = statusMap[action];
+        if (!newStatus) return;
+        btn.disabled = true;
+        try {
+          const r = await fetch(`/api/admin/users/${user.id}`, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: newStatus }),
+          });
+          if (r.ok) {
+            const idx = (_adminUsers || []).findIndex(u => u.id === user.id);
+            if (idx >= 0) _adminUsers[idx].status = newStatus;
+            close();
+            _renderAdminPanel();
+          }
+        } catch (e) { console.warn('[LP] admin action failed:', e.message); btn.disabled = false; }
+      });
+    });
+  }
+
+  function injectAdminPanel() {
+    if (!_isAdminOrStaff()) return;
+    if (!_isAdminView()) { document.getElementById('lp-admin-panel')?.remove(); return; }
+    if (document.getElementById('lp-admin-panel')) return;
+
+    const panel = document.createElement('div');
+    panel.id = 'lp-admin-panel';
+    panel.innerHTML = `
+      <div class="lp-ap-header">
+        <div class="lp-ap-breadcrumb">ADMIN · USERS</div>
+        <div class="lp-ap-title-row">
+          <h2 class="lp-ap-title">All Accounts</h2>
+          <button class="lp-ap-refresh" title="Refresh">↻</button>
+        </div>
+      </div>
+      <div class="lp-ap-content"><div class="lp-ap-loading">Loading accounts…</div></div>`;
+    document.body.appendChild(panel);
+
+    panel.querySelector('.lp-ap-refresh').addEventListener('click', () => _fetchAdminUsers(true));
+    _fetchAdminUsers();
+  }
+
+  // ── Support chat — 3-way messaging: customer ↔ staff ↔ admin ─────────────
+  let _supportConvs = [];
+  let _supportActiveConv = null;
+  let _supportMessages = [];
+  let _supportPollTimer = null;
+  let _supportMsgPollTimer = null;
+
+  function _isSupportView() {
+    if (lpGetCurrentPage() === 'support') return true;
+    return Array.from(document.querySelectorAll('h1,h2,h3,span,p')).some(
+      el => el.childElementCount === 0 &&
+        /^(Customer Service|Support|Help & Support)$/.test(el.textContent.trim())
+    );
+  }
+
+  function _getLpUser() {
+    const session = getSession();
+    if (!session) return null;
+    const user = session.user || {};
+    const meta = user.user_metadata || session.user_metadata || {};
+    return {
+      id:    user.id || session.user_id || null,
+      name:  (meta.full_name || meta.name || user.email || 'Customer').trim(),
+      email: user.email || session.email || '',
+      role:  _lpCurrentRole,
+    };
+  }
+
+  function _tsRelative(iso) {
+    if (!iso) return '';
+    const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+    if (m < 1) return 'just now';
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h ago`;
+    return `${Math.floor(h / 24)}d ago`;
+  }
+
+  async function _fetchConversations() {
+    const me = _getLpUser();
+    if (!me || !me.id) return;
+    try {
+      const isPriv = me.role === 'admin' || me.role === 'staff';
+      const url = isPriv
+        ? '/api/support/conversations'
+        : `/api/support/conversations?user_id=${me.id}`;
+      const r = await fetch(url);
+      if (r.ok) { _supportConvs = await r.json(); _renderSupportList(); }
+    } catch {}
+  }
+
+  async function _fetchMessages(convId) {
+    try {
+      const r = await fetch(`/api/support/conversations/${convId}/messages`);
+      if (r.ok) { _supportMessages = await r.json(); _renderMessages(); }
+    } catch {}
+  }
+
+  function _renderSupportList() {
+    const panel = document.getElementById('lp-support-panel');
+    if (!panel) return;
+    const me = _getLpUser();
+    const isPriv = me && (me.role === 'admin' || me.role === 'staff');
+    const list = panel.querySelector('.lp-sup-list');
+    if (!list) return;
+
+    if (_supportConvs.length === 0) {
+      list.innerHTML = `<div class="lp-sup-empty">${isPriv ? 'No open conversations.' : 'No conversations yet.<br>Start one to get help.'}</div>`;
+      return;
+    }
+    list.innerHTML = _supportConvs.map(c => {
+      const name = isPriv ? (c.user_name || c.user_email || 'Customer') : (c.subject || 'Support Request');
+      const preview = (c.last_message || 'No messages yet').slice(0, 70);
+      const stCls = c.status === 'closed' ? 'closed' : c.status === 'pending' ? 'pend' : 'open';
+      const stLbl = c.status === 'closed' ? 'CLOSED' : c.status === 'pending' ? 'PENDING' : 'OPEN';
+      const active = _supportActiveConv && _supportActiveConv.id === c.id ? 'active' : '';
+      return `
+        <div class="lp-sup-conv-row ${active}" data-cid="${c.id}">
+          <div class="lp-sup-conv-top">
+            <span class="lp-sup-conv-name">${name}</span>
+            <span class="lp-sup-st ${stCls}">${stLbl}</span>
+            <span class="lp-sup-ts">${_tsRelative(c.updated_at)}</span>
+          </div>
+          <div class="lp-sup-preview">${preview}</div>
+        </div>`;
+    }).join('');
+
+    list.querySelectorAll('.lp-sup-conv-row').forEach(row =>
+      row.addEventListener('click', () => {
+        const c = _supportConvs.find(x => x.id === row.dataset.cid);
+        if (c) _openConversation(c);
+      })
+    );
+  }
+
+  function _renderMessages() {
+    const panel = document.getElementById('lp-support-panel');
+    if (!panel) return;
+    const msgs = panel.querySelector('.lp-sup-messages');
+    if (!msgs) return;
+    const me = _getLpUser();
+    if (_supportMessages.length === 0) {
+      msgs.innerHTML = '<div class="lp-sup-msg-empty">Send a message below.</div>';
+      return;
+    }
+    msgs.innerHTML = _supportMessages.map(m => {
+      const isMine = me && m.sender_id === me.id;
+      const roleTag = m.sender_role === 'admin' ? '🛡 Admin' : m.sender_role === 'staff' ? '👤 Staff' : '';
+      const safeMsg = m.message.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+      return `
+        <div class="lp-sup-msg ${isMine ? 'mine' : 'theirs'}">
+          <div class="lp-sup-msg-meta">
+            ${roleTag ? `<span class="lp-sup-role-tag">${roleTag}</span>` : ''}
+            <span class="lp-sup-msg-author">${m.sender_name}</span>
+            <span class="lp-sup-msg-ts">${_tsRelative(m.created_at)}</span>
+          </div>
+          <div class="lp-sup-bubble">${safeMsg}</div>
+        </div>`;
+    }).join('');
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  function _openConversation(conv) {
+    _supportActiveConv = conv;
+    clearInterval(_supportMsgPollTimer);
+    const panel = document.getElementById('lp-support-panel');
+    if (!panel) return;
+    const me = _getLpUser();
+    const isPriv = me && (me.role === 'admin' || me.role === 'staff');
+
+    panel.querySelector('.lp-sup-list-view').style.display  = 'none';
+    const tv = panel.querySelector('.lp-sup-thread-view');
+    tv.style.display = 'flex';
+
+    const title = isPriv ? (conv.user_name || conv.user_email || 'Customer') : (conv.subject || 'Support Request');
+    panel.querySelector('.lp-sup-thread-title').textContent = title;
+
+    const actBox = panel.querySelector('.lp-sup-thread-actions');
+    if (isPriv) {
+      actBox.innerHTML = conv.status === 'closed'
+        ? '<button class="lp-sup-act-btn reopen" data-act="open">↺ Reopen</button>'
+        : '<button class="lp-sup-act-btn close-btn" data-act="closed">✓ Close</button>';
+      actBox.querySelector('[data-act]').addEventListener('click', async function () {
+        const newStatus = this.dataset.act;
+        const r = await fetch(`/api/support/conversations/${conv.id}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: newStatus }),
+        });
+        if (r.ok) {
+          conv.status = newStatus;
+          _openConversation(conv);
+          _fetchConversations();
+        }
+      });
+    } else {
+      actBox.innerHTML = '';
+    }
+
+    _fetchMessages(conv.id);
+    _supportMsgPollTimer = setInterval(() => _fetchMessages(conv.id), 5000);
+    _renderSupportList();
+  }
+
+  async function _sendSupportMessage() {
+    const panel = document.getElementById('lp-support-panel');
+    if (!panel || !_supportActiveConv) return;
+    const ta  = panel.querySelector('.lp-sup-input');
+    const msg = (ta ? ta.value : '').trim();
+    if (!msg) return;
+    const me = _getLpUser();
+    if (!me) return;
+    ta.value = '';
+    ta.disabled = true;
+    try {
+      const senderRole = (me.role === 'admin' || me.role === 'staff') ? me.role : 'customer';
+      await fetch('/api/support/messages', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversation_id: _supportActiveConv.id,
+          sender_id: me.id, sender_name: me.name, sender_role: senderRole, message: msg,
+        }),
+      });
+      await _fetchMessages(_supportActiveConv.id);
+      await _fetchConversations();
+    } catch (e) { console.warn('[LP] send failed:', e.message); }
+    finally { ta.disabled = false; ta.focus(); }
+  }
+
+  function _startNewConversation() {
+    const panel = document.getElementById('lp-support-panel');
+    if (!panel) return;
+    const me = _getLpUser();
+    if (!me) return;
+    const listView = panel.querySelector('.lp-sup-list-view');
+
+    if (panel.querySelector('.lp-sup-new-view')) return;
+    const newDiv = document.createElement('div');
+    newDiv.className = 'lp-sup-new-view';
+    newDiv.innerHTML = `
+      <div class="lp-sup-new-hdr">
+        <button class="lp-sup-back-btn">← Back</button>
+        <span>New Support Request</span>
+      </div>
+      <input class="lp-sup-new-subject" placeholder="Subject (e.g. Payment issue)" maxlength="80">
+      <textarea class="lp-sup-new-msg" placeholder="Describe your issue…" rows="5"></textarea>
+      <button class="lp-sup-new-send-btn">Send Message</button>`;
+    listView.parentElement.insertBefore(newDiv, listView);
+    listView.style.display = 'none';
+
+    newDiv.querySelector('.lp-sup-back-btn').addEventListener('click', () => {
+      newDiv.remove(); listView.style.display = 'flex';
+    });
+    newDiv.querySelector('.lp-sup-new-send-btn').addEventListener('click', async () => {
+      const subject = newDiv.querySelector('.lp-sup-new-subject').value.trim() || 'Support Request';
+      const msg     = newDiv.querySelector('.lp-sup-new-msg').value.trim();
+      if (!msg) return;
+      const btn = newDiv.querySelector('.lp-sup-new-send-btn');
+      btn.disabled = true; btn.textContent = 'Sending…';
+      try {
+        const r = await fetch('/api/support/conversations', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: me.id, user_name: me.name, user_email: me.email, subject, first_message: msg }),
+        });
+        if (r.ok) {
+          const conv = await r.json();
+          newDiv.remove(); listView.style.display = 'flex';
+          await _fetchConversations();
+          if (conv && conv.id) _openConversation(conv);
+        }
+      } catch { btn.disabled = false; btn.textContent = 'Send Message'; }
+    });
+  }
+
+  function _openAdminChatWith(user) {
+    const existing = _supportConvs.find(c => c.user_id === user.id && c.status !== 'closed');
+    if (existing) {
+      _openSupportPanel();
+      setTimeout(() => _openConversation(existing), 300);
+    } else {
+      const me = _getLpUser();
+      if (!me) return;
+      fetch('/api/support/conversations', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: user.id, user_name: user.full_name || user.email,
+          user_email: user.email, subject: 'Admin Message',
+        }),
+      }).then(r => r.json()).then(conv => {
+        _openSupportPanel();
+        setTimeout(() => { _fetchConversations().then(() => { if (conv && conv.id) _openConversation(conv); }); }, 300);
+      }).catch(() => {});
+    }
+  }
+
+  function _openSupportPanel() {
+    const goTo = lpGetGoTo();
+    if (goTo) { goTo('support'); }
+  }
+
+  function injectSupportChat() {
+    const onSupport = _isSupportView();
+    const existing  = document.getElementById('lp-support-panel');
+
+    if (!onSupport) {
+      if (existing) {
+        clearInterval(_supportPollTimer);
+        clearInterval(_supportMsgPollTimer);
+        existing.remove();
+        _supportActiveConv = null;
+      }
+      return;
+    }
+    if (existing) return;
+
+    const me     = _getLpUser();
+    const isPriv = me && (me.role === 'admin' || me.role === 'staff');
+
+    const panel = document.createElement('div');
+    panel.id = 'lp-support-panel';
+    panel.innerHTML = `
+      <div class="lp-sup-header">
+        <span class="lp-sup-header-title">${isPriv ? '📬 Support Inbox' : '💬 Customer Support'}</span>
+        ${isPriv ? `<span class="lp-sup-role-badge">${me.role === 'admin' ? 'Admin' : 'Staff'}</span>` : ''}
+      </div>
+      <div class="lp-sup-body">
+        <div class="lp-sup-list-view">
+          <div class="lp-sup-list-hdr">
+            <span>${isPriv ? 'All Conversations' : 'My Conversations'}</span>
+            ${!isPriv ? '<button class="lp-sup-new-btn">+ New Request</button>' : ''}
+          </div>
+          <div class="lp-sup-list"><div class="lp-sup-loading">Loading…</div></div>
+        </div>
+        <div class="lp-sup-thread-view" style="display:none;flex-direction:column">
+          <div class="lp-sup-thread-hdr">
+            <button class="lp-sup-thread-back">← Back</button>
+            <span class="lp-sup-thread-title"></span>
+            <div class="lp-sup-thread-actions"></div>
+          </div>
+          <div class="lp-sup-messages"></div>
+          <div class="lp-sup-compose">
+            <textarea class="lp-sup-input" placeholder="Type a message…" rows="2"></textarea>
+            <button class="lp-sup-send-btn">Send</button>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(panel);
+    requestAnimationFrame(() => panel.classList.add('open'));
+
+    panel.querySelector('.lp-sup-thread-back').addEventListener('click', () => {
+      clearInterval(_supportMsgPollTimer);
+      _supportActiveConv = null;
+      panel.querySelector('.lp-sup-thread-view').style.display = 'none';
+      panel.querySelector('.lp-sup-list-view').style.display   = 'flex';
+      _fetchConversations();
+    });
+    const newBtn = panel.querySelector('.lp-sup-new-btn');
+    if (newBtn) newBtn.addEventListener('click', _startNewConversation);
+    panel.querySelector('.lp-sup-send-btn').addEventListener('click', _sendSupportMessage);
+    panel.querySelector('.lp-sup-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); _sendSupportMessage(); }
+    });
+
+    _fetchConversations();
+    _supportPollTimer = setInterval(_fetchConversations, 10000);
+  }
+
   let _guardDiagLast = 0;
   let _guardRafPending = false; // RAF debounce flag
 
@@ -3122,6 +3640,8 @@
     enlargePadCards();
     injectPadDrawEdit();
     injectAllPhotoOverlays();
+    injectAdminPanel();
+    injectSupportChat();
 
     // ── Throttled page-state diagnostic (once every 4 s) ──────────────────
     const _now = Date.now();
@@ -3372,6 +3892,11 @@
     const role = (session && session.access_token)
       ? await getUserRole(session.access_token)
       : 'renter';
+
+    // Cache full DB role (may include admin/staff not in JWT metadata)
+    const uid = (session && session.user && session.user.id) || (session && session.user_id);
+    if (uid) _fetchAndCacheRole(uid);
+    else if (role) { _lpCurrentRole = role; localStorage.setItem('lp_role_cache', role); }
 
     // Write real name into native app state for the Account pull-down
     const meta = (session && session.user_metadata) ||

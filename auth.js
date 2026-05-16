@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-16-Q';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-16-R';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -2918,7 +2918,12 @@
       mode = 'idle';
 
       if (prevMode === 'draw') {
-        // Reject tiny accidental taps
+        // Reject tiny accidental taps — quad may still be null if no pointermove fired
+        if (!quad) {
+          hint.textContent = 'Try dragging a larger area across your photo.';
+          renderQuad();
+          return;
+        }
         const w = (quad[1].x - quad[0].x), h = (quad[3].y - quad[0].y);
         if (w > 0.04 && h > 0.02) {
           hint.textContent = 'Looking good! Drag corners to adjust, or tap Save.';

@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-16-O';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-16-P';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -2014,6 +2014,19 @@
     container.appendChild(badge);
   }
 
+  // Element-based lister-page detection — mirrors the onDash logic in
+  // injectPadDrawEdit.  Used instead of lpGetCurrentPage() (fiber walk) because
+  // the fiber walk often returns null/wrong-page for the paddashboard view.
+  function _onListerPage() {
+    const leaf = el => el.childElementCount === 0 && el.getBoundingClientRect().width > 0;
+    return !!(
+      Array.from(document.querySelectorAll('button,a,span,p,div,h1,h2,h3'))
+        .find(el => leaf(el) && /^add new pad$/i.test(el.textContent.trim())) ||
+      Array.from(document.querySelectorAll('p,span,div,h1,h2,h3'))
+        .find(el => leaf(el) && /this month/i.test(el.textContent.trim()))
+    );
+  }
+
   function installPhotoClickHandlers() {
     // ── 1. LISTER: p2 pad-cards — <img> inside the SVG-overlay container ──────
     // The p2 component always renders svg[viewBox="0 0 100 70"] next to the img.
@@ -2046,22 +2059,18 @@
 
       wrap.addEventListener('click', e => {
         e.stopPropagation();
-        const latest    = getPadPropsFromEl(img) || data || {};
-        const pad       = (latest && latest.pad) || {};
-        const page      = lpGetCurrentPage();
-        const isLister  = page === 'paddashboard' || page === 'addpad' ||
-                          page === 'photo'        || page === 'photointro';
-        // Prefer fiber-sourced onEdit; fall back to clicking the native Edit btn
-        const resolvedOnEdit = (typeof latest.onEdit === 'function')
-          ? latest.onEdit
-          : (nativeEditBtn ? () => nativeEditBtn.click() : null);
+        const latest   = getPadPropsFromEl(img) || data || {};
+        const pad      = (latest && latest.pad) || {};
+        const isLister = _onListerPage();
+        // On lister pages always open OUR draw editor, bypassing the unreliable
+        // fiber-sourced onEdit which often returns null for the paddashboard view.
         openPhotoLightbox({
           photoUrl:       pad.photoUrl || img.src,
           box:            pad.box,
           color:          pad.color,
           name:           pad.name,
           isLister,
-          onEdit:         resolvedOnEdit,
+          onEdit:         isLister ? () => openPadDrawEditor(img) : null,
           onReplacePhoto: latest.onReplacePhoto || null,
         });
       });
@@ -2093,38 +2102,20 @@
 
       div.addEventListener('click', e => {
         e.stopPropagation();
-        // Re-read URL in case React has updated it (e.g. photo was changed)
         const freshBg  = div.style.background || div.style.backgroundImage || '';
         const freshUrl = (freshBg.match(/url\(["']?([^"')]+)["']?\)/) || [])[1] || photoUrl;
-        // On lister pages the photo div may belong to a pad component — try to
-        // get onEdit / onReplacePhoto from the fiber so the lightbox can show
-        // Redraw + Change Photo buttons (same as the SVG-overlay path does).
-        const page = lpGetCurrentPage();
-        const isListerPage = page === 'account' || page === 'paddashboard' ||
-                             page === 'photo'   || page === 'photointro';
-        const padData = isListerPage ? getPadPropsFromEl(div) : null;
-        // DOM fallback for onEdit when fiber walk returns null
-        let nativeEditBtn = null;
-        if (isListerPage && !(padData && padData.onEdit)) {
-          let el = div.parentElement;
-          for (let i = 0; i < 10 && el; i++, el = el.parentElement) {
-            const b = Array.from(el.querySelectorAll('button'))
-              .find(b => b.textContent.trim() === 'Edit');
-            if (b) { nativeEditBtn = b; break; }
-          }
-        }
-        const resolvedOnEdit = (padData && typeof padData.onEdit === 'function')
-          ? padData.onEdit
-          : (nativeEditBtn ? () => nativeEditBtn.click() : null);
-        const isLister = isListerPage && !!(resolvedOnEdit ||
-                         (padData && padData.onReplacePhoto));
+        const isLister = _onListerPage();
+        const padData  = getPadPropsFromEl(div);
+        const pad      = (padData && padData.pad) || {};
+        // On My Pads: always open our draw editor — bypasses the unreliable fiber onEdit
+        const fakeImg  = { src: freshUrl };
         openPhotoLightbox({
           photoUrl:       freshUrl,
-          box:            padData && padData.pad ? padData.pad.box   : null,
-          color:          padData && padData.pad ? padData.pad.color : null,
-          name:           padData && padData.pad ? padData.pad.name  : '',
+          box:            pad.box   || null,
+          color:          pad.color || null,
+          name:           pad.name  || '',
           isLister,
-          onEdit:         resolvedOnEdit,
+          onEdit:         isLister ? () => openPadDrawEditor(fakeImg) : null,
           onReplacePhoto: padData ? padData.onReplacePhoto : null,
         });
       });
@@ -2550,27 +2541,22 @@
       console.log('[Lily Pad] Draw edit btn injected');
     }
 
-    // Walk the same SVG elements that installPhotoClickHandlers uses — guarantees
-    // we always find the exact wrap+img even if img.src is set asynchronously.
+    // ── Path 1: SVG-overlay pad cards (img sibling of svg[viewBox="0 0 100 70"]) ─
+    // Uses the same selector as installPhotoClickHandlers / enlargePadCards.
     document.querySelectorAll('svg[viewBox="0 0 100 70"]').forEach(svg => {
       const wrap = svg.parentElement;
       if (!wrap) return;
       const img = wrap.querySelector('img');
       if (!img || !img.src) return;
-      // Skip anything inside our own modals (lightbox or draw editor)
       if (wrap.closest('#lp-lightbox,#lp-draw-editor')) return;
 
-      // Always ensure the button is present (React may have removed it)
       _ensureDrawBtn(img, wrap);
 
-      // First-time setup: mark and render overlay
       if (!img.dataset.lpDrawEdit) {
         img.dataset.lpDrawEdit = '1';
         overlayPadDrawing(img, wrap);
         return;
       }
-
-      // Subsequent ticks: only re-render overlay if saved data changed
       const saved = _loadPadBox(img.src);
       if (!saved) return;
       const newHash = JSON.stringify(saved);
@@ -2580,6 +2566,26 @@
         const freshSvg = wrap.querySelector('.lp-draw-overlay-svg');
         if (freshSvg) freshSvg.dataset.lpHash = newHash;
       }
+    });
+
+    // ── Path 2: background-image div photos ───────────────────────────────────
+    // My Pads may render photos as <div style="background:url(...)"> rather
+    // than <img>.  installPhotoClickHandlers already hooks the click; here we
+    // inject the "Edit drawing" button on the same div container.
+    document.querySelectorAll('div[style*="url("]').forEach(div => {
+      if (div.closest('#lp-lightbox,#lp-draw-editor')) return;
+      if (div.closest('.leaflet-tile-container,.leaflet-layer,.leaflet-pane,[class*="leaflet"]')) return;
+      const bg = div.style.background || div.style.backgroundImage || '';
+      const urlMatch = bg.match(/url\(["']?([^"')]+)["']?\)/);
+      if (!urlMatch) return;
+      const photoUrl = urlMatch[1];
+      if (!photoUrl.startsWith('http') && !photoUrl.startsWith('data:image')) return;
+      const h = div.offsetHeight || div.getBoundingClientRect().height;
+      if (h < 60) return;
+      // Use a synthetic img-like object: openPadDrawEditor only needs .src
+      const fakeImg = { src: photoUrl };
+      _ensureDrawBtn(fakeImg, div);
+      if (!div.dataset.lpDrawEdit) div.dataset.lpDrawEdit = '1';
     });
   }
 

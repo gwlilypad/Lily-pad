@@ -119,6 +119,49 @@
     };
   })();
 
+  // ── Poison the fake parking-spots array (ar[]) at the prototype level ───────
+  // The bundle initialises ar[] as a literal with ~105 items shaped like:
+  //   {id:number, addr:string, lat:number, lng:number, price:string, meta:string}
+  // Every time a map or listing component re-renders it calls ar.filter(…) or
+  // ar.map(…) to compute nearby spots.  By intercepting those calls and returning
+  // [] whenever the receiver looks like ar[], fake spots NEVER reach React state
+  // or the DOM — regardless of zooming, re-renders, or component remounts.
+  // Real Supabase listings use UUID string ids so isFakeSpotArr() stays false.
+  (function () {
+    function isFakeSpotArr(arr) {
+      if (!arr || arr.length === 0) return false;
+      const i = arr[0];
+      return i && typeof i === 'object' &&
+             typeof i.id     === 'number' && i.id < 5000 &&
+             typeof i.addr   === 'string' &&
+             typeof i.lat    === 'number' &&
+             typeof i.lng    === 'number';
+    }
+    const _filter  = Array.prototype.filter;
+    const _map     = Array.prototype.map;
+    const _forEach = Array.prototype.forEach;
+    const _reduce  = Array.prototype.reduce;
+    const _find    = Array.prototype.find;
+    const _some    = Array.prototype.some;
+    const _every   = Array.prototype.every;
+    const _flat    = Array.prototype.flat;
+    const _flatMap = Array.prototype.flatMap;
+
+    Array.prototype.filter  = function (fn, ctx)   { if (isFakeSpotArr(this)) return []; return _filter.call(this, fn, ctx); };
+    Array.prototype.map     = function (fn, ctx)   { if (isFakeSpotArr(this)) return []; return _map.call(this, fn, ctx); };
+    Array.prototype.forEach = function (fn, ctx)   { if (isFakeSpotArr(this)) return;    return _forEach.call(this, fn, ctx); };
+    Array.prototype.find    = function (fn, ctx)   { if (isFakeSpotArr(this)) return undefined; return _find.call(this, fn, ctx); };
+    Array.prototype.some    = function (fn, ctx)   { if (isFakeSpotArr(this)) return false;     return _some.call(this, fn, ctx); };
+    Array.prototype.every   = function (fn, ctx)   { if (isFakeSpotArr(this)) return true;      return _every.call(this, fn, ctx); };
+    Array.prototype.flat    = function (...a)       { if (isFakeSpotArr(this)) return [];        return _flat.apply(this, a); };
+    Array.prototype.flatMap = function (fn, ctx)   { if (isFakeSpotArr(this)) return [];        return _flatMap.call(this, fn, ctx); };
+    Array.prototype.reduce  = function (fn, ...rest) {
+      if (isFakeSpotArr(this)) return rest.length ? rest[0] : undefined;
+      return rest.length ? _reduce.call(this, fn, rest[0]) : _reduce.call(this, fn);
+    };
+    console.log('[Lily Pad] ar[] prototype intercepts installed');
+  })();
+
   // ── Patch window.fetch to add missing apikey to all Supabase requests ────────
   // The pre-built bundle's Supabase client has an empty key baked in at build
   // time. This intercept fixes every fetch to *.supabase.co that lacks apikey.
@@ -1502,7 +1545,8 @@
         const ll = e.layer.getLatLng();
         const key = String(ll.lat) + ',' + String(ll.lng);
         if (FAKE_LATLNGS.has(key)) {
-          setTimeout(() => { try { map.removeLayer(e.layer); } catch (_) {} }, 0);
+          // Remove synchronously (no setTimeout) to prevent even a 1-frame flash
+          try { map.removeLayer(e.layer); } catch (_) {}
         }
       });
     }

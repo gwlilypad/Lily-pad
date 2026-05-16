@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-16-E';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-16-G';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -1575,10 +1575,15 @@
   function injectPaddashboardBack() {
     const existing = document.getElementById('lp-pad-back');
 
-    // Detect paddashboard by its unique "Revenue & Payouts" header text
-    const onPage = !!Array.from(document.querySelectorAll('p,span,div')).find(el =>
-      el.childElementCount === 0 && el.textContent.trim() === 'Revenue & Payouts'
-    );
+    // Detect paddashboard by checking rendered UI elements — NOT body.textContent
+    // because that includes our own <script> tag text and causes false positives.
+    // Look for the "Add new pad" button/link that only appears on paddashboard.
+    const elTexts = el => el.childElementCount === 0 && el.getBoundingClientRect().width > 0;
+    const hasAddNewPad = !!Array.from(document.querySelectorAll('button,a,span,p,div,h1,h2,h3'))
+      .find(el => elTexts(el) && /^add new pad$/i.test(el.textContent.trim()));
+    const hasPayoutsThisMonth = !!Array.from(document.querySelectorAll('p,span,div,h1,h2,h3'))
+      .find(el => elTexts(el) && /this month/i.test(el.textContent.trim()));
+    const onPage = hasAddNewPad || hasPayoutsThisMonth;
     if (!existing) console.log('[Lily Pad] injectPaddashboardBack: onPage=', onPage);
 
     // Remove the button if we've navigated away
@@ -2132,6 +2137,79 @@
   //
   // Detection: DOM-based — fires whenever "What's the address?" is visible
   // regardless of which wizard flow (addpad, signup step 2, etc.) triggered it.
+  // Proactively harvest pad addresses while the user is on the My Pads
+  // (paddashboard) view and stash them in lp_saved_addresses so they are
+  // available as chip hints the moment the user taps "Add new pad".
+  // Runs from the guard every tick — idempotent via a version counter.
+  let _scrapeVersion = 0;
+  function _scrapePaddashboardAddresses() {
+    // Same element-based detection used by injectPaddashboardBack — avoids
+    // false positives from our own <script> text containing these strings.
+    const elTexts = el => el.childElementCount === 0 && el.getBoundingClientRect().width > 0;
+    const onDash =
+      !!Array.from(document.querySelectorAll('button,a,span,p,div,h1,h2,h3'))
+        .find(el => elTexts(el) && /^add new pad$/i.test(el.textContent.trim())) ||
+      !!Array.from(document.querySelectorAll('p,span,div,h1,h2,h3'))
+        .find(el => elTexts(el) && /this month/i.test(el.textContent.trim()));
+    if (!onDash) return;
+
+    const saved = (() => {
+      try { return JSON.parse(localStorage.getItem('lp_saved_addresses') || '[]'); } catch { return []; }
+    })();
+    const seen = new Set(saved);
+    let added = 0;
+
+    function tryAdd(a) {
+      const v = (a || '').trim();
+      if (!v || v.length < 5 || _LP_FAKE_ADDRS.has(v) || seen.has(v)) return;
+      if (!/^\d/.test(v)) return;   // must start with a house number
+      seen.add(v);
+      saved.unshift(v);
+      added++;
+    }
+
+    // Source A: fiber state — walk e2[] (pad list) for address fields
+    const root = document.getElementById('root');
+    if (root) {
+      const fk = Object.keys(root).find(k => k.startsWith('__reactFiber$'));
+      if (fk) {
+        (function walk(f, d) {
+          if (!f || d > 300) return;
+          let s = f.memoizedState;
+          while (s) {
+            const v = s.memoizedState;
+            if (Array.isArray(v) && v.length > 0 && v[0] &&
+                typeof (v[0].address || v[0].addr) === 'string') {
+              v.forEach(p => {
+                const a = (p.address || p.addr || '').trim();
+                if (a && !_LP_FAKE_ADDRS.has(a) && !/Austin,?\s*TX/i.test(p.city || ''))
+                  tryAdd(a);
+              });
+            }
+            s = s.next;
+          }
+          walk(f.child,   d + 1);
+          walk(f.sibling, d + 1);
+        })(root[fk], 0);
+      }
+    }
+
+    // Source B: DOM leaf text nodes that look like street addresses
+    // (start with a number, ≥8 chars, not already known)
+    document.querySelectorAll('p,span,div,li').forEach(el => {
+      if (el.childElementCount > 0) return;
+      const t = el.textContent.trim();
+      if (t.length >= 8 && t.length <= 80 && /^\d+\s+[A-Za-z]/.test(t) &&
+          !_LP_FAKE_ADDRS.has(t)) tryAdd(t);
+    });
+
+    if (added > 0) {
+      try { localStorage.setItem('lp_saved_addresses', JSON.stringify(saved.slice(0, 10))); } catch {}
+      console.log('[Lily Pad] Scraped', added, 'address(es) from paddashboard:', saved.slice(0, added));
+      _scrapeVersion++;
+    }
+  }
+
   function injectSameAddressHint() {
     if (document.getElementById('lp-same-addr')) return;
 
@@ -2233,12 +2311,34 @@
         'white-space:nowrap',
       ].join(';');
       chip.addEventListener('click', () => {
+        // Fill the address input via React's native setter so the bundle's
+        // onChange handler sees the new value properly.
         const setter = Object.getOwnPropertyDescriptor(
           window.HTMLInputElement.prototype, 'value').set;
         setter.call(addressInput, addr);
         addressInput.dispatchEvent(new Event('input',  { bubbles: true }));
         addressInput.dispatchEvent(new Event('change', { bubbles: true }));
+        addressInput.dispatchEvent(new Event('blur',   { bubbles: true }));
         row.remove();
+
+        // Save for future sessions
+        try {
+          const sv = JSON.parse(localStorage.getItem('lp_saved_addresses') || '[]');
+          if (!sv.includes(addr)) { sv.unshift(addr); localStorage.setItem('lp_saved_addresses', JSON.stringify(sv.slice(0, 10))); }
+        } catch {}
+
+        // Auto-advance to the next wizard step after a short tick so React
+        // has processed the input event and enabled the Next/Continue button.
+        setTimeout(() => {
+          const nextBtn = Array.from(document.querySelectorAll('button')).find(b => {
+            const t = b.textContent.trim().toLowerCase();
+            return t === 'next' || t === 'continue' || t === 'next step' || t === 'done';
+          });
+          if (nextBtn && !nextBtn.disabled) {
+            nextBtn.click();
+            console.log('[Lily Pad] Same-address chip: auto-advanced via', nextBtn.textContent.trim());
+          }
+        }, 120);
       });
       row.appendChild(chip);
     });
@@ -2329,17 +2429,15 @@
   // Inject "Edit drawing" pencil button on every pad photo thumbnail when on
   // the paddashboard (My Pads).  Re-runs on every guard tick; idempotent.
   function injectPadDrawEdit() {
-    // Detect the host pad-dashboard page by any of several text signals that
-    // appear there — "Revenue & Payouts" is one, but also "Add new pad" button,
-    // "Payouts", "Earnings", or the pad list heading.
-    const DASH_SIGNALS = [
-      'Revenue & Payouts', 'Revenue &amp; Payouts',
-      'Add new pad', 'Add New Pad',
-      'Payouts', 'Your pads', 'My pads', 'My Pads',
-    ];
-    const onDash = DASH_SIGNALS.some(sig =>
-      document.body.textContent.includes(sig)
-    );
+    // Detect paddashboard using rendered elements only — document.body.textContent
+    // includes our own <script> text and causes false positives.
+    const elTexts = el => el.childElementCount === 0 && el.getBoundingClientRect().width > 0;
+    const onDash =
+      !!Array.from(document.querySelectorAll('button,a,span,p,div,h1,h2,h3'))
+        .find(el => elTexts(el) && /^add new pad$/i.test(el.textContent.trim())) ||
+      !!Array.from(document.querySelectorAll('p,span,div,h1,h2,h3'))
+        .find(el => elTexts(el) && (/this month/i.test(el.textContent.trim()) ||
+                                    /revenue.*payouts|payouts/i.test(el.textContent.trim())));
     if (!onDash) {
       document.querySelectorAll('.lp-draw-edit-btn').forEach(el => el.remove());
       document.querySelectorAll('.lp-draw-overlay-svg').forEach(el => el.remove());
@@ -2666,6 +2764,7 @@
       clearFakePads();
       clearFakeListings();
       installPhotoClickHandlers();
+      _scrapePaddashboardAddresses();
       injectSameAddressHint();
       enlargePadCards();
       injectPadDrawEdit();

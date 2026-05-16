@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-16-P';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-16-Q';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -2159,7 +2159,13 @@
       added++;
     }
 
-    // Source A: fiber state — walk e2[] (pad list) for address fields
+    // Helper: extract address string from a pad object regardless of field name
+    function _padAddr(p) {
+      return (p.address || p.addr || p.street || p.streetAddress ||
+              p.streetAddr || p.location || p.fullAddress || p.line1 || '').trim();
+    }
+
+    // Source A: fiber state — walk for any array whose items have an address field
     const root = document.getElementById('root');
     if (root) {
       const fk = Object.keys(root).find(k => k.startsWith('__reactFiber$'));
@@ -2169,13 +2175,10 @@
           let s = f.memoizedState;
           while (s) {
             const v = s.memoizedState;
-            if (Array.isArray(v) && v.length > 0 && v[0] &&
-                typeof (v[0].address || v[0].addr) === 'string') {
-              v.forEach(p => {
-                const a = (p.address || p.addr || '').trim();
-                if (a && !_LP_FAKE_ADDRS.has(a) && !/Austin,?\s*TX/i.test(p.city || ''))
-                  tryAdd(a);
-              });
+            if (Array.isArray(v) && v.length > 0 && v[0] && typeof v[0] === 'object') {
+              const a0 = _padAddr(v[0]);
+              if (a0 && /^\d/.test(a0) && !_LP_FAKE_ADDRS.has(a0))
+                v.forEach(p => tryAdd(_padAddr(p)));
             }
             s = s.next;
           }
@@ -2185,9 +2188,16 @@
       }
     }
 
-    // Source B (DOM text) intentionally disabled — it captures concatenated
-    // metadata strings like "880 Oak Lane · Driveway · 2 spots" and "2 listings"
-    // which pass the fake-address check and pollute lp_saved_addresses.
+    // Source B: DOM text — scan leaf nodes for text that looks like a full address.
+    // Real addresses contain a comma ("123 Main St, Houston TX").
+    // UI strings ("0 spots saved", "$78 this month") do not.
+    // The ·-separated metadata filter is already in tryAdd() via _LP_FAKE_ADDRS/seen.
+    Array.from(document.querySelectorAll('p,span,div,h1,h2,h3,li'))
+      .filter(el => el.childElementCount === 0 && el.getBoundingClientRect().width > 0)
+      .forEach(el => {
+        const t = (el.textContent || '').trim();
+        if (t.includes(',') && /^\d+\s+[A-Za-z]/.test(t)) tryAdd(t);
+      });
 
     if (added > 0) {
       try { localStorage.setItem('lp_saved_addresses', JSON.stringify(saved.slice(0, 10))); } catch {}
@@ -2264,7 +2274,13 @@
       JSON.parse(localStorage.getItem('lp_saved_addresses') || '[]').forEach(addAddr);
     } catch {}
 
-    // Source 3: React fiber state — walk for e2[] (pad list) items
+    // Helper: extract address from a pad object regardless of field name
+    function _fiberPadAddr(p) {
+      return (p.address || p.addr || p.street || p.streetAddress ||
+              p.streetAddr || p.location || p.fullAddress || p.line1 || '').trim();
+    }
+
+    // Source 3: React fiber state — walk for any array of pad-like objects
     const root = document.getElementById('root');
     if (root) {
       const fk = Object.keys(root).find(k => k.startsWith('__reactFiber$'));
@@ -2274,11 +2290,10 @@
           let s = f.memoizedState;
           while (s) {
             const v = s.memoizedState;
-            if (Array.isArray(v) && v.length > 0 && v[0] &&
-                typeof (v[0].address || v[0].addr) === 'string') {
-              const a0 = (v[0].address || v[0].addr || '').trim();
-              if (a0 && !_LP_FAKE_ADDRS.has(a0))
-                v.forEach(p => addAddr(p.address || p.addr));
+            if (Array.isArray(v) && v.length > 0 && v[0] && typeof v[0] === 'object') {
+              const a0 = _fiberPadAddr(v[0]);
+              if (a0 && /^\d/.test(a0) && !_LP_FAKE_ADDRS.has(a0))
+                v.forEach(p => addAddr(_fiberPadAddr(p)));
             }
             s = s.next;
           }
@@ -2287,6 +2302,15 @@
         })(root[fk], 0);
       }
     }
+
+    // Source 4: DOM leaf-node text — real addresses always contain a comma
+    // ("1234 Main St, Houston TX").  UI strings ("0 spots saved") never do.
+    Array.from(document.querySelectorAll('p,span,div,h1,h2,h3,li'))
+      .filter(el => el.childElementCount === 0 && el.getBoundingClientRect().width > 0)
+      .forEach(el => {
+        const t = (el.textContent || '').trim();
+        if (t.includes(',') && /^\d+\s+[A-Za-z]/.test(t)) addAddr(t);
+      });
 
     console.log('[Lily Pad] injectSameAddressHint: input found, addrs=', addrs);
 

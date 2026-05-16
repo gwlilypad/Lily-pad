@@ -399,11 +399,12 @@
     const now = Date.now();
 
     // ── DOM scan (fast, NO cooldown — runs on every mutation) ────────────────
-    // Strategy A: find the "X PADS NEARBY" panel and hide every card inside it.
-    // Strategy B: scan mid-sized divs whose *combined* textContent contains a
-    //   distance string (e.g. "1.1 mi") — catches cards outside the panel too.
-    // Both use element.textContent so they work even when the bullet "·" and
-    // the distance number live in separate child <span> elements.
+    // Strategy A: walk UP from any "X PADS NEARBY" leaf node to find the
+    //   listings section container (has prices/distances, no tab-bar text).
+    //   Hide the whole container so cards + header disappear together.
+    // Strategy B: independently target each listing card by price+distance
+    //   combo — catches cards that Strategy A misses (e.g. panel not yet
+    //   tall enough to pass height checks, or differently-structured markup).
     if (!document.getElementById('lp-fake-css')) {
       const st = document.createElement('style');
       st.id = 'lp-fake-css';
@@ -411,53 +412,53 @@
       document.head.appendChild(st);
     }
     let scanHid = 0;
-
-    // Strategy A — "X PADS NEARBY" panel wipe
-    // Find the panel header, walk up to the scrollable list container, hide children.
     const nearbyRe = /\d+\s+PADS?\s+NEARBY/i;
-    const allDivs = Array.from(document.querySelectorAll('div,section,ul'));
-    for (const el of allDivs) {
-      if (el.dataset.lpFakePanel) continue; // already processed this panel
-      // Look for an element that IS the header line (small, short text)
-      if (el.offsetHeight > 0 && el.offsetHeight < 40 &&
-          el.children.length <= 4 && nearbyRe.test(el.textContent)) {
-        // Walk up to find the scroll/list container (first ancestor taller than ~120 px)
-        let panel = el;
-        for (let i = 0; i < 10 && panel.parentElement; i++) {
-          panel = panel.parentElement;
-          if (panel.offsetHeight > 120) break;
+    const priceRe  = /\$\s*\d+\s*\/\s*hr/i;
+    const distRe   = /\b\d+\.?\d*\s*mi\b/;
+
+    // Strategy A — hide the whole listings panel
+    // Find the leaf node whose text IS "X PADS NEARBY", then walk UP until we
+    // reach a container that contains prices/distances but NOT the "Park Now /
+    // Park Later" tab bar — that boundary is the listings section.
+    const allEls = document.querySelectorAll('*');
+    for (const el of allEls) {
+      if (el.dataset.lpFake || el.dataset.lpFakePanel) continue;
+      if (el.childElementCount !== 0) continue;
+      if (!nearbyRe.test(el.textContent.trim())) continue;
+      // Found the "X PADS NEARBY" leaf — walk up
+      let node = el.parentElement;
+      for (let i = 0; i < 18 && node && node !== document.body; i++) {
+        const txt = node.textContent;
+        // Listings section: has prices or distances but NOT the tab-bar text
+        if ((priceRe.test(txt) || distRe.test(txt)) &&
+            !txt.includes('Park Now') && !txt.includes('Park Later')) {
+          if (!node.dataset.lpFake) {
+            node.setAttribute('data-lp-fake', '1');
+            node.dataset.lpFakePanel = '1';
+            scanHid++;
+          }
+          break;
         }
-        panel.dataset.lpFakePanel = '1';
-        // Hide every direct child that looks like a card (≥ 60 px tall)
-        Array.from(panel.children).forEach(child => {
-          if (child.offsetHeight >= 60 && !child.dataset.lpFake) {
-            child.setAttribute('data-lp-fake', '1');
-            scanHid++;
-          }
-        });
-        // Also hide second-level children in case the list adds a wrapper
-        Array.from(panel.querySelectorAll(':scope > * > *')).forEach(child => {
-          if (child.offsetHeight >= 60 && !child.dataset.lpFake) {
-            child.setAttribute('data-lp-fake', '1');
-            scanHid++;
-          }
-        });
-        break;
+        node = node.parentElement;
       }
+      break; // only one PADS NEARBY panel at a time
     }
 
-    // Strategy B — textContent distance scan on mid-sized cards
-    const distRe = /\b\d+\.\d+\s*mi\b/;
-    for (const el of allDivs) {
-      if (!el.dataset.lpFake && el.offsetHeight >= 60 && el.offsetHeight <= 250 &&
-          el.children.length >= 1 && el.children.length <= 20 &&
-          distRe.test(el.textContent)) {
-        el.setAttribute('data-lp-fake', '1');
-        scanHid++;
-      }
+    // Strategy B — target individual listing cards by price + distance combo
+    // Works even when Strategy A can't find the panel container.
+    // Guard: skip anything containing tab-bar text (would be too broad).
+    for (const el of document.querySelectorAll('div,li')) {
+      if (el.dataset.lpFake || el.dataset.lpFakePanel) continue;
+      const txt = el.textContent;
+      if (!priceRe.test(txt) || !distRe.test(txt)) continue;
+      if (txt.includes('Park Now') || txt.includes('Park Later')) continue;
+      const h = el.offsetHeight;
+      if (h > 400) continue; // skip huge containers (whole sheet level)
+      el.setAttribute('data-lp-fake', '1');
+      scanHid++;
     }
 
-    if (scanHid > 0) console.log('[Lily Pad] DOM scan hid', scanHid, 'fake listing card(s)');
+    if (scanHid > 0) console.log('[Lily Pad] DOM scan hid', scanHid, 'fake listing element(s)');
 
     // ── Fiber walk (expensive — rate-limited to once per 400 ms) ─────────────
     if (now - _clearListingsCooldown < 400) return;

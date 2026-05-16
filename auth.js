@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-16-L';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-16-M';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -2512,32 +2512,13 @@
       document.querySelectorAll('.lp-draw-overlay-svg').forEach(el => el.remove());
       return;
     }
-    document.querySelectorAll('img[src]').forEach(img => {
-      if (img.dataset.lpDrawEdit) {
-        // Only re-render the overlay when the saved data has actually changed.
-        // Short-circuit entirely when no box is saved — avoids any DOM touch
-        // which would re-trigger the MutationObserver and loop.
-        const saved = _loadPadBox(img.src);
-        if (!saved) return; // nothing to show; overlayPadDrawing already cleaned stale
-        const newHash = JSON.stringify(saved);
-        const existingSvg = img.parentElement &&
-                            img.parentElement.querySelector('.lp-draw-overlay-svg');
-        if (!existingSvg || existingSvg.dataset.lpHash !== newHash) {
-          overlayPadDrawing(img);
-          const freshSvg = img.parentElement &&
-                           img.parentElement.querySelector('.lp-draw-overlay-svg');
-          if (freshSvg) freshSvg.dataset.lpHash = newHash;
-        }
-        return;
-      }
-      const rect = img.getBoundingClientRect();
-      if (rect.width < 60 || rect.height < 40) return; // skip tiny / off-screen
-      if (img.closest('#lp-lightbox,#lp-draw-editor')) return; // skip our own modals
-      img.dataset.lpDrawEdit = '1';
-      const parent = img.parentElement;
-      if (!parent) return;
+    // ── Helper: ensure the edit button exists in parent (idempotent) ──────────
+    // React reconciliation can silently remove our injected button whenever the
+    // pad card re-renders.  We call this from BOTH the first-discovery path AND
+    // the lpDrawEdit='1' fast-path so the button is always reinstated.
+    function _ensureDrawBtn(img, parent) {
+      if (parent.querySelector('.lp-draw-edit-btn')) return; // already there
       if (getComputedStyle(parent).position === 'static') parent.style.position = 'relative';
-
       const btn = document.createElement('button');
       btn.className = 'lp-draw-edit-btn';
       btn.title = 'Edit spot drawing';
@@ -2552,6 +2533,35 @@
         e.stopPropagation();
         openPadDrawEditor(img);
       });
+    }
+
+    document.querySelectorAll('img[src]').forEach(img => {
+      if (img.dataset.lpDrawEdit) {
+        // Image was already processed — but React may have removed the button.
+        // Re-inject it if missing, then check if the saved overlay needs updating.
+        const parent = img.parentElement;
+        if (parent) _ensureDrawBtn(img, parent);
+
+        // Only re-render the SVG overlay when the saved data has actually changed.
+        // Short-circuit when no box is saved to avoid any DOM mutation.
+        const saved = _loadPadBox(img.src);
+        if (!saved) return;
+        const newHash = JSON.stringify(saved);
+        const existingSvg = parent && parent.querySelector('.lp-draw-overlay-svg');
+        if (!existingSvg || existingSvg.dataset.lpHash !== newHash) {
+          overlayPadDrawing(img);
+          const freshSvg = parent && parent.querySelector('.lp-draw-overlay-svg');
+          if (freshSvg) freshSvg.dataset.lpHash = newHash;
+        }
+        return;
+      }
+      const rect = img.getBoundingClientRect();
+      if (rect.width < 60 || rect.height < 40) return; // skip tiny / off-screen
+      if (img.closest('#lp-lightbox,#lp-draw-editor')) return; // skip our own modals
+      img.dataset.lpDrawEdit = '1';
+      const parent = img.parentElement;
+      if (!parent) return;
+      _ensureDrawBtn(img, parent);
       overlayPadDrawing(img);
     });
   }

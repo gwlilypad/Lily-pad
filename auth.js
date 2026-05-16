@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-16-M';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-16-N';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -2226,13 +2226,18 @@
 
     // ── Step 2: Purge garbage from lp_saved_addresses ─────────────────────
     // Previous scraper runs may have stored metadata-concatenated strings
-    // like "880 Oak Lane · Driveway · 2 spots" or short counts like "2 listings".
-    // Clean those out now so they never appear as chips.
+    // like "880 Oak Lane · Driveway · 2 spots", UI count strings like
+    // "0 spots saved", or short counts like "2 listings". Clean those out.
+    // An address must start with a house number (≥1 digit) followed by a
+    // proper street word — not a UI word like spots/pads/saved/nearby/month.
+    const _addrSecondWordBlock =
+      /^\d+\s+(spots?|pads?|saved|available|nearby|this|listings?|month|items?|results?|entries|records|parking)\b/i;
     try {
       const raw = JSON.parse(localStorage.getItem('lp_saved_addresses') || '[]');
       const clean = raw.filter(v =>
         typeof v === 'string' && v.length >= 8 && /^\d+\s+[A-Za-z]/.test(v) &&
-        !v.includes('·') && !v.includes('listing') && !_LP_FAKE_ADDRS.has(v)
+        !v.includes('·') && !v.includes('listing') && !_LP_FAKE_ADDRS.has(v) &&
+        !_addrSecondWordBlock.test(v)
       );
       if (clean.length !== raw.length)
         localStorage.setItem('lp_saved_addresses', JSON.stringify(clean));
@@ -2243,10 +2248,11 @@
     const seen  = new Set();
     function addAddr(a) {
       const v = (a || '').trim();
-      // Reject: empty, fake demo address, metadata strings (contain ·), too short
       if (!v || v.length < 8 || seen.has(v)) return;
       if (_LP_FAKE_ADDRS.has(v)) return;
+      // Reject metadata strings (contain ·), count-strings ("0 spots saved"), non-addresses
       if (v.includes('·') || v.includes('listing') || !/^\d+\s+[A-Za-z]/.test(v)) return;
+      if (_addrSecondWordBlock.test(v)) return;
       seen.add(v);
       addrs.push(v);
     }
@@ -2512,13 +2518,25 @@
       document.querySelectorAll('.lp-draw-overlay-svg').forEach(el => el.remove());
       return;
     }
-    // ── Helper: ensure the edit button exists in parent (idempotent) ──────────
-    // React reconciliation can silently remove our injected button whenever the
-    // pad card re-renders.  We call this from BOTH the first-discovery path AND
-    // the lpDrawEdit='1' fast-path so the button is always reinstated.
-    function _ensureDrawBtn(img, parent) {
-      if (parent.querySelector('.lp-draw-edit-btn')) return; // already there
-      if (getComputedStyle(parent).position === 'static') parent.style.position = 'relative';
+    // ── Helper: find the correct pad-card photo wrap for an img ───────────────
+    // installPhotoClickHandlers marks the wrap (parent of svg[viewBox="0 0 100 70"])
+    // with dataset.lpLb='1', and enlargePadCards marks it with dataset.lpEnlarged='1'.
+    // The img returned by wrap.querySelector('img') may be several DOM levels BELOW
+    // the wrap, so img.parentElement ≠ wrap.  Walk up to find the real container.
+    function _findPadCardWrap(img) {
+      let el = img.parentElement;
+      for (let depth = 0; depth < 8 && el && el !== document.body; depth++) {
+        if (el.dataset.lpLb || el.dataset.lpEnlarged) return el;
+        el = el.parentElement;
+      }
+      return img.parentElement; // fallback — best-effort
+    }
+
+    // ── Helper: ensure the edit button exists in wrap (idempotent) ────────────
+    function _ensureDrawBtn(img, wrap) {
+      if (wrap.querySelector('.lp-draw-edit-btn')) return; // already there — no DOM mutation
+      // wrap already has position:relative from installPhotoClickHandlers/enlargePadCards
+      if (getComputedStyle(wrap).position === 'static') wrap.style.position = 'relative';
       const btn = document.createElement('button');
       btn.className = 'lp-draw-edit-btn';
       btn.title = 'Edit spot drawing';
@@ -2528,40 +2546,39 @@
           '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>' +
           '<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>' +
         '</svg>Edit drawing';
-      parent.appendChild(btn);
+      wrap.appendChild(btn);
       btn.addEventListener('click', e => {
         e.stopPropagation();
         openPadDrawEditor(img);
       });
+      console.log('[Lily Pad] Draw edit btn injected on', img.src.slice(-30));
     }
 
     document.querySelectorAll('img[src]').forEach(img => {
       if (img.dataset.lpDrawEdit) {
-        // Image was already processed — but React may have removed the button.
-        // Re-inject it if missing, then check if the saved overlay needs updating.
-        const parent = img.parentElement;
-        if (parent) _ensureDrawBtn(img, parent);
+        // Already processed — re-inject button if React reconciliation removed it
+        const wrap = _findPadCardWrap(img);
+        if (wrap) _ensureDrawBtn(img, wrap);
 
-        // Only re-render the SVG overlay when the saved data has actually changed.
-        // Short-circuit when no box is saved to avoid any DOM mutation.
+        // Only re-render SVG overlay when saved data changed; skip if none saved
         const saved = _loadPadBox(img.src);
         if (!saved) return;
         const newHash = JSON.stringify(saved);
-        const existingSvg = parent && parent.querySelector('.lp-draw-overlay-svg');
+        const existingSvg = wrap && wrap.querySelector('.lp-draw-overlay-svg');
         if (!existingSvg || existingSvg.dataset.lpHash !== newHash) {
           overlayPadDrawing(img);
-          const freshSvg = parent && parent.querySelector('.lp-draw-overlay-svg');
+          const freshSvg = wrap && wrap.querySelector('.lp-draw-overlay-svg');
           if (freshSvg) freshSvg.dataset.lpHash = newHash;
         }
         return;
       }
       const rect = img.getBoundingClientRect();
-      if (rect.width < 60 || rect.height < 40) return; // skip tiny / off-screen
-      if (img.closest('#lp-lightbox,#lp-draw-editor')) return; // skip our own modals
+      if (rect.width < 60 || rect.height < 40) return;
+      if (img.closest('#lp-lightbox,#lp-draw-editor')) return;
+      const wrap = _findPadCardWrap(img);
+      if (!wrap) return;
       img.dataset.lpDrawEdit = '1';
-      const parent = img.parentElement;
-      if (!parent) return;
-      _ensureDrawBtn(img, parent);
+      _ensureDrawBtn(img, wrap);
       overlayPadDrawing(img);
     });
   }

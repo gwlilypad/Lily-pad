@@ -416,20 +416,24 @@
     const priceRe  = /\$\s*\d+\s*\/\s*hr/i;
     const distRe   = /\b\d+\.?\d*\s*mi\b/;
 
-    // Strategy A — hide the whole listings panel
-    // Find the leaf node whose text IS "X PADS NEARBY", then walk UP until we
-    // reach a container that contains prices/distances but NOT the "Park Now /
-    // Park Later" tab bar — that boundary is the listings section.
-    const allEls = document.querySelectorAll('*');
-    for (const el of allEls) {
+    // Strategy A — hide the whole listings section.
+    // "8 PADS NEARBY" is often split across sibling spans so we can't require
+    // a leaf-only match.  Instead find the element with the SHORTEST textContent
+    // that still matches the pattern — that's the header row, not the whole sheet.
+    let nearbyEl   = null;
+    let nearbyLen  = Infinity;
+    for (const el of document.querySelectorAll('*')) {
       if (el.dataset.lpFake || el.dataset.lpFakePanel) continue;
-      if (el.childElementCount !== 0) continue;
-      if (!nearbyRe.test(el.textContent.trim())) continue;
-      // Found the "X PADS NEARBY" leaf — walk up
-      let node = el.parentElement;
-      for (let i = 0; i < 18 && node && node !== document.body; i++) {
+      const t = el.textContent.trim();
+      if (nearbyRe.test(t) && t.length < nearbyLen) { nearbyEl = el; nearbyLen = t.length; }
+    }
+    if (nearbyEl) {
+      // Walk UP from the header until we find an ancestor that contains prices
+      // or distances but NOT the tab-bar text (Park Now / Park Later).
+      // That boundary is the listings section — hide the whole thing.
+      let node = nearbyEl.parentElement;
+      for (let i = 0; i < 20 && node && node !== document.body; i++) {
         const txt = node.textContent;
-        // Listings section: has prices or distances but NOT the tab-bar text
         if ((priceRe.test(txt) || distRe.test(txt)) &&
             !txt.includes('Park Now') && !txt.includes('Park Later')) {
           if (!node.dataset.lpFake) {
@@ -441,24 +445,30 @@
         }
         node = node.parentElement;
       }
-      break; // only one PADS NEARBY panel at a time
     }
 
-    // Strategy B — target individual listing cards by price + distance combo
-    // Works even when Strategy A can't find the panel container.
-    // Guard: skip anything containing tab-bar text (would be too broad).
+    // Strategy B — target individual listing cards by price + distance combo.
+    // "Garage · Sarah L. · 1.5 mi  $5/hr" — that pair is unique to listing cards.
+    // Skip anything containing tab-bar text or obviously too-large (full sheet).
     for (const el of document.querySelectorAll('div,li')) {
       if (el.dataset.lpFake || el.dataset.lpFakePanel) continue;
       const txt = el.textContent;
       if (!priceRe.test(txt) || !distRe.test(txt)) continue;
       if (txt.includes('Park Now') || txt.includes('Park Later')) continue;
-      const h = el.offsetHeight;
-      if (h > 400) continue; // skip huge containers (whole sheet level)
+      if (el.offsetHeight > 500) continue; // skip full-sheet containers
       el.setAttribute('data-lp-fake', '1');
       scanHid++;
     }
 
-    if (scanHid > 0) console.log('[Lily Pad] DOM scan hid', scanHid, 'fake listing element(s)');
+    if (scanHid > 0) {
+      console.log('[Lily Pad] DOM scan hid', scanHid, 'fake listing element(s)');
+      // Schedule follow-up passes to catch React re-renders after the first hide
+      setTimeout(() => { _clearListingsCooldown = 0; clearFakeListings(); }, 250);
+      setTimeout(() => { _clearListingsCooldown = 0; clearFakeListings(); }, 700);
+    } else if (nearbyEl) {
+      // Panel is visible but scan found nothing new — retry shortly
+      setTimeout(() => clearFakeListings(), 300);
+    }
 
     // ── Fiber walk (expensive — rate-limited to once per 400 ms) ─────────────
     if (now - _clearListingsCooldown < 400) return;
@@ -470,12 +480,23 @@
 
     // helpers
     function isFakeArr(v) {
-      return Array.isArray(v) && v.length > 0 && v[0] &&
-             typeof v[0].addr === 'string' && typeof v[0].id === 'number';
+      if (!Array.isArray(v) || v.length === 0 || !v[0]) return false;
+      const item = v[0];
+      // Accept addr OR address field (bundle may use either)
+      const hasAddr = typeof item.addr === 'string' || typeof item.address === 'string';
+      // Accept numeric id OR small-integer string id (e.g. "42")
+      const id = item.id;
+      const hasNumId = typeof id === 'number' ||
+                       (typeof id === 'string' && /^\d+$/.test(id) && +id < 2000);
+      return hasAddr && hasNumId;
     }
     function isFakeSet(v) {
       if (!(v instanceof Set) || v.size === 0) return false;
-      for (const x of v) { if (typeof x !== 'number' || x > 500) return false; }
+      for (const x of v) {
+        if (typeof x === 'number') { if (x > 2000) return false; }
+        else if (typeof x === 'string') { if (!/^\d+$/.test(x) || +x > 2000) return false; }
+        else return false;
+      }
       return true;
     }
 
@@ -534,18 +555,27 @@
       }
 
       // ── Check memoizedProps for listing-card component ──────────────────
-      // Function components spread ar-item props: {addr, price, id, meta, lat, lng}
-      // Also handle wrapped variants: {spot:{addr,id}} or {pad:{addr,id}}
+      // Spread props: {addr|address, price|cost, id(number|string)}
+      // Wrapped props: {spot|pad|item|listing: {addr|address, price|cost, id}}
       const p = fiber.memoizedProps;
-      if (p && typeof p.id === 'number') {
-        if (typeof p.addr === 'string' && typeof p.price === 'string') {
+      if (p) {
+        const pid = p.id;
+        const pIsNumId = typeof pid === 'number' ||
+                         (typeof pid === 'string' && /^\d+$/.test(pid) && +pid < 2000);
+        const pHasAddr = typeof p.addr === 'string' || typeof p.address === 'string';
+        const pHasPrice = typeof p.price === 'string' || typeof p.cost === 'string';
+        if (pIsNumId && pHasAddr && pHasPrice) {
           hideFakeFiber(fiber);
-        }
-      } else if (p) {
-        const inner = p.spot || p.pad || p.item || p.listing;
-        if (inner && typeof inner.id === 'number' &&
-            typeof inner.addr === 'string' && typeof inner.price === 'string') {
-          hideFakeFiber(fiber);
+        } else {
+          const inner = p.spot || p.pad || p.item || p.listing;
+          if (inner) {
+            const iid = inner.id;
+            const iIsNumId = typeof iid === 'number' ||
+                             (typeof iid === 'string' && /^\d+$/.test(iid) && +iid < 2000);
+            const iHasAddr  = typeof inner.addr === 'string' || typeof inner.address === 'string';
+            const iHasPrice = typeof inner.price === 'string' || typeof inner.cost === 'string';
+            if (iIsNumId && iHasAddr && iHasPrice) hideFakeFiber(fiber);
+          }
         }
       }
 
@@ -2507,7 +2537,10 @@
         console.log('[Lily Pad] guard page-state:', JSON.stringify(leafTexts));
       }
     });
-    guard.observe(target, { childList: true, subtree: true });
+    guard.observe(target, {
+      childList: true, subtree: true,
+      attributes: true, attributeFilter: ['class', 'style', 'hidden', 'aria-hidden']
+    });
     window.__lpGuardObserver = guard;
   }
 

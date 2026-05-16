@@ -193,8 +193,22 @@
     } catch { return 'renter'; }
   }
 
-  // ── Read real user data from native app state or Supabase session ──────────
+  // ── Read real user data from Supabase session (preferred) or native state ─
   function getUserData() {
+    // Supabase session is authoritative — check it first so drAns/suAns (which
+    // may contain stale bundle-demo values) never shadow the real account name.
+    const session = getSession();
+    if (session) {
+      const meta  = (session.user && session.user.user_metadata)
+                 || session.user_metadata || {};
+      const email = (session.user && session.user.email) || session.email || '';
+      const name  = (meta.full_name || meta.name || '').trim();
+      if (name || email) {
+        const [firstName = '', ...rest] = name.split(' ');
+        return { firstName, lastName: rest.join(' '), fullName: name, email };
+      }
+    }
+    // Fallback: native app state written by writeUserToNativeState
     try {
       const raw = localStorage.getItem('lilypad.appState.v1');
       if (raw) {
@@ -210,15 +224,6 @@
         }
       }
     } catch {}
-    // Fallback: Supabase session
-    const session = getSession();
-    if (session) {
-      const meta = session.user_metadata || {};
-      const email = session.email || (session.user && session.user.email) || '';
-      const name = meta.full_name || meta.name || '';
-      const [firstName = '', ...rest] = name.split(' ');
-      return { firstName, lastName: rest.join(' '), fullName: name, email };
-    }
     return null;
   }
 
@@ -388,9 +393,11 @@
         const v = s.memoizedState;
 
         // useState hook whose value IS the fake listings array directly.
-        // Dispatching [] here is permanent — React will re-render with an empty
-        // list and won't restore the fakes because the state itself has changed.
+        // splice(0) empties the underlying ar[] object in-place so that future
+        // component mounts (which re-run useState(ar)) also get an empty array.
+        // dispatch([]) covers the currently-mounted instance immediately.
         if (isFakeArr(v)) {
+          v.splice(0);
           const dispatch = s.queue && s.queue.dispatch;
           if (typeof dispatch === 'function') {
             dispatch([]);
@@ -400,7 +407,8 @@
 
         // useMemo hook: memoizedState = [value, deps]
         if (Array.isArray(v) && v.length === 2 && isFakeArr(v[0])) {
-          v[0] = [];   // overwrite the cached memoized value
+          v[0].splice(0); // mutate the source array in-place too
+          v[0] = [];
           _clearListingsCooldown = now;
         }
 
@@ -1892,9 +1900,120 @@
         // Re-read URL in case React has updated it (e.g. photo was changed)
         const freshBg  = div.style.background || div.style.backgroundImage || '';
         const freshUrl = (freshBg.match(/url\(["']?([^"')]+)["']?\)/) || [])[1] || photoUrl;
-        openPhotoLightbox({ photoUrl: freshUrl, box: null, name: '', isLister: false });
+        // On lister pages the photo div may belong to a pad component — try to
+        // get onEdit / onReplacePhoto from the fiber so the lightbox can show
+        // Redraw + Change Photo buttons (same as the SVG-overlay path does).
+        const page = lpGetCurrentPage();
+        const isListerPage = page === 'account' || page === 'paddashboard' ||
+                             page === 'photo'   || page === 'photointro';
+        const padData = isListerPage ? getPadPropsFromEl(div) : null;
+        // DOM fallback for onEdit when fiber walk returns null
+        let nativeEditBtn = null;
+        if (isListerPage && !(padData && padData.onEdit)) {
+          let el = div.parentElement;
+          for (let i = 0; i < 10 && el; i++, el = el.parentElement) {
+            const b = Array.from(el.querySelectorAll('button'))
+              .find(b => b.textContent.trim() === 'Edit');
+            if (b) { nativeEditBtn = b; break; }
+          }
+        }
+        const resolvedOnEdit = (padData && typeof padData.onEdit === 'function')
+          ? padData.onEdit
+          : (nativeEditBtn ? () => nativeEditBtn.click() : null);
+        const isLister = isListerPage && !!(resolvedOnEdit ||
+                         (padData && padData.onReplacePhoto));
+        openPhotoLightbox({
+          photoUrl:       freshUrl,
+          box:            padData && padData.pad ? padData.pad.box   : null,
+          color:          padData && padData.pad ? padData.pad.color : null,
+          name:           padData && padData.pad ? padData.pad.name  : '',
+          isLister,
+          onEdit:         resolvedOnEdit,
+          onReplacePhoto: padData ? padData.onReplacePhoto : null,
+        });
       });
     });
+  }
+
+  // ── Same-address hint on the add-pad wizard ──────────────────────────────
+  // When the user starts adding a second pad, the address step shows a
+  // suggestion chip for any pad they already have — saves retyping.
+  function injectSameAddressHint() {
+    if (document.getElementById('lp-same-addr')) return;
+    if (lpGetCurrentPage() !== 'addpad') return;
+
+    // Address input has placeholder "Address" (confirmed literal in bundle)
+    const input = Array.from(document.querySelectorAll('input'))
+      .find(i => /^address$/i.test((i.placeholder || '').trim()));
+    if (!input) return;
+
+    // Walk fiber for real pads: UUID-style id + address or addr string
+    const addrs = [];
+    const seen  = new Set();
+    const root  = document.getElementById('root');
+    if (root) {
+      const fk = Object.keys(root).find(k => k.startsWith('__reactFiber$'));
+      if (fk) {
+        (function walk(f, d) {
+          if (!f || d > 250) return;
+          let s = f.memoizedState;
+          while (s) {
+            const v = s.memoizedState;
+            if (Array.isArray(v) && v.length > 0 && v[0]) {
+              const item = v[0];
+              const addr = item.address || item.addr || '';
+              // Real pads have a string UUID id (≥32 chars) and a non-empty address
+              if (typeof item.id === 'string' && item.id.length >= 32 &&
+                  typeof addr === 'string' && addr.trim()) {
+                v.forEach(p => {
+                  const a = (p.address || p.addr || '').trim();
+                  if (a && !seen.has(a)) { seen.add(a); addrs.push(a); }
+                });
+              }
+            }
+            s = s.next;
+          }
+          walk(f.child,   d + 1);
+          walk(f.sibling, d + 1);
+        })(root[fk], 0);
+      }
+    }
+    if (addrs.length === 0) return;
+
+    // Build a row of chips (one per unique existing-pad address)
+    const row = document.createElement('div');
+    row.id = 'lp-same-addr';
+    row.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;';
+    addrs.forEach(addr => {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.textContent = '↩ ' + addr;
+      chip.style.cssText = [
+        'padding:5px 10px',
+        'background:#f0f8e8',
+        'border:1.5px solid #8DD63F',
+        'border-radius:8px',
+        'font-size:12px',
+        'cursor:pointer',
+        "font-family:'DM Sans',sans-serif",
+        'color:#142A52',
+        'white-space:nowrap',
+      ].join(';');
+      chip.addEventListener('click', () => {
+        // Inject value via React's native setter so it triggers onChange
+        const setter = Object.getOwnPropertyDescriptor(
+          window.HTMLInputElement.prototype, 'value').set;
+        setter.call(input, addr);
+        input.dispatchEvent(new Event('input',  { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        row.remove();
+      });
+      row.appendChild(chip);
+    });
+
+    const parent = input.parentElement || input.closest('div');
+    if (parent) parent.insertAdjacentElement('afterend', row);
+    console.log('[Lily Pad] Same-address hint injected:', addrs);
   }
 
   function enlargePadCards() {
@@ -1924,6 +2043,7 @@
       clearFakePads();
       clearFakeListings();
       installPhotoClickHandlers();
+      injectSameAddressHint();
       enlargePadCards();
     });
     guard.observe(target, { childList: true, subtree: true });

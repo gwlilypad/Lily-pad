@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-16-J';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-16-K';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -2460,17 +2460,26 @@
   function overlayPadDrawing(img) {
     const parent = img.parentElement;
     if (!parent) return;
-    if (getComputedStyle(parent).position === 'static') parent.style.position = 'relative';
-    const old = parent.querySelector('.lp-draw-overlay-svg');
-    if (old) old.remove();
+    // ── Load data FIRST — only touch the DOM if there is something to render.
+    // Setting parent.style.position before this check triggers the MutationObserver
+    // (which watches 'style') on EVERY guard tick for images with no saved box,
+    // causing an infinite loop.
     const saved = _loadPadBox(img.src);
-    if (!saved) return;
     let pts;
     if (Array.isArray(saved) && saved.length === 4) {
       pts = saved;
     } else if (saved && saved.w > 0.01) {
       pts = _rectToQuad(saved);
-    } else return;
+    } else {
+      // No drawing saved for this image — remove any stale overlay and stop.
+      const stale = parent.querySelector('.lp-draw-overlay-svg');
+      if (stale) stale.remove();
+      return;
+    }
+    // Safe to touch the DOM now — we know we'll render
+    if (getComputedStyle(parent).position === 'static') parent.style.position = 'relative';
+    const old = parent.querySelector('.lp-draw-overlay-svg');
+    if (old) old.remove();
     const ns = 'http://www.w3.org/2000/svg';
     const svg = document.createElementNS(ns, 'svg');
     svg.setAttribute('viewBox', '0 0 100 100');
@@ -2506,9 +2515,11 @@
     document.querySelectorAll('img[src]').forEach(img => {
       if (img.dataset.lpDrawEdit) {
         // Only re-render the overlay when the saved data has actually changed.
-        // Calling overlayPadDrawing unconditionally on every guard tick appends
-        // a new SVG each time, which triggers the MutationObserver again → loop.
-        const newHash = JSON.stringify(_loadPadBox(img.src));
+        // Short-circuit entirely when no box is saved — avoids any DOM touch
+        // which would re-trigger the MutationObserver and loop.
+        const saved = _loadPadBox(img.src);
+        if (!saved) return; // nothing to show; overlayPadDrawing already cleaned stale
+        const newHash = JSON.stringify(saved);
         const existingSvg = img.parentElement &&
                             img.parentElement.querySelector('.lp-draw-overlay-svg');
         if (!existingSvg || existingSvg.dataset.lpHash !== newHash) {

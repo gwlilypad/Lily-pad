@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-16-AC';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-16-AD';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -99,14 +99,55 @@
   })();
 
   // ── Block fake pad sample data from ever persisting ─────────────────────────
-  // ── Pad storage constants (used by localStorage proxy AND address hint) ──
-  const _LP_PADS_KEY   = 'lilypad.pads.v1';
-  const _LP_FAKE_ADDRS = new Set(['142 Maple Street', '880 Oak Lane']);
-  const _lpRawGet      = Storage.prototype.getItem; // unpatched getter for bypassing our filter
+  // All bundle-hardcoded pads/spots use numeric IDs (1, 2, 3…).
+  // Real user-created pads use UUID strings.  Any item with typeof id === 'number'
+  // is guaranteed to be demo/fake data and is silently discarded everywhere.
+  const _LP_PADS_KEY = 'lilypad.pads.v1';
+  const _lpRawGet    = Storage.prototype.getItem; // unpatched getter
 
-  // ── Intercept lilypad.pads.v1 ─────────────────────────────────────────────
-  // Allow REAL user-created pads to persist between sessions.
-  // Silently drop the two hardcoded demo-pad entries so they never load.
+  // Helper: is this array full of real (UUID-id) items?
+  function _lpOnlyReal(arr) {
+    if (!Array.isArray(arr)) return arr;
+    return arr.filter(p => p && typeof p.id !== 'number');
+  }
+
+  // ── One-time nuclear localStorage sweep ──────────────────────────────────
+  // Runs immediately on page load — before React hydrates — and removes every
+  // numeric-id item from every lilypad.* localStorage key.
+  (function _nukeFakeLocalStorage() {
+    try {
+      const keys = [];
+      for (let i = 0; i < localStorage.length; i++) keys.push(localStorage.key(i));
+      for (const key of keys) {
+        if (!key || !key.startsWith('lilypad.')) continue;
+        const raw = _lpRawGet.call(localStorage, key);
+        if (!raw) continue;
+        let data;
+        try { data = JSON.parse(raw); } catch { continue; }
+        if (Array.isArray(data)) {
+          const cleaned = _lpOnlyReal(data);
+          if (cleaned.length < data.length) {
+            if (cleaned.length === 0) localStorage.removeItem(key);
+            else Storage.prototype.setItem.call(localStorage, key, JSON.stringify(cleaned));
+            console.log(`[LP] Purged ${data.length - cleaned.length} fake entries from ${key}`);
+          }
+        } else if (data && typeof data === 'object') {
+          // appState.v1 embeds arrays under various keys — clean those too
+          let dirty = false;
+          for (const k of Object.keys(data)) {
+            if (Array.isArray(data[k])) {
+              const cleaned = _lpOnlyReal(data[k]);
+              if (cleaned.length < data[k].length) { data[k] = cleaned; dirty = true; }
+            }
+          }
+          if (dirty) Storage.prototype.setItem.call(localStorage, key, JSON.stringify(data));
+        }
+      }
+    } catch (e) { console.warn('[LP] nukeFakeLocalStorage error', e); }
+  })();
+
+  // ── Intercept lilypad.pads.v1 on every future read/write ─────────────────
+  // Ensures fake pads can never re-enter storage even after a hot-reload.
   (function () {
     const _set = Storage.prototype.setItem;
     Storage.prototype.getItem = function (key) {
@@ -114,24 +155,15 @@
       const raw = _lpRawGet.call(this, key);
       if (!raw) return null;
       try {
-        const pads = JSON.parse(raw);
-        const real = pads.filter(p =>
-          typeof p.id !== 'number' &&
-          !_LP_FAKE_ADDRS.has(p.address) && !_LP_FAKE_ADDRS.has(p.addr)
-        );
+        const real = _lpOnlyReal(JSON.parse(raw));
         return real.length > 0 ? JSON.stringify(real) : null;
       } catch { return null; }
     };
     Storage.prototype.setItem = function (key, value) {
       if (key !== _LP_PADS_KEY) { _set.call(this, key, value); return; }
       try {
-        const pads = JSON.parse(value);
-        const real = pads.filter(p =>
-          typeof p.id !== 'number' &&
-          !_LP_FAKE_ADDRS.has(p.address) && !_LP_FAKE_ADDRS.has(p.addr)
-        );
+        const real = _lpOnlyReal(JSON.parse(value));
         if (real.length > 0) _set.call(this, key, JSON.stringify(real));
-        // if all were fake, write nothing — keeps localStorage clean
       } catch {}
     };
   })();
@@ -405,11 +437,16 @@
              typeof v[0].id === 'number' &&
              (v[0].firstName || v[0].type === 'host' || v[0].type === 'driver');
     }
-    // The e2 driver-spot array (flat pad objects with string addresses)
+    // Lister-pad array: any array where items have numeric ids AND look like pads
+    // (have address, photoUrl, or type fields).  Numeric id = guaranteed fake.
     function isFakeSpotArr(v) {
-      return Array.isArray(v) && v.length > 0 && v[0] &&
-             typeof v[0].id === 'number' && typeof v[0].address === 'string' &&
-             (v[0].address === '142 Maple Street' || v[0].address === '880 Oak Lane');
+      if (!Array.isArray(v) || v.length === 0 || !v[0]) return false;
+      const first = v[0];
+      return typeof first.id === 'number' && (
+        typeof first.address === 'string' ||
+        typeof first.photoUrl === 'string' ||
+        typeof first.addr    === 'string'
+      );
     }
 
     function walk(fiber, depth) {

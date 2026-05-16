@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-16-Z';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-16-AB';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -1861,6 +1861,24 @@
     return null;
   }
 
+  function drawQuadOnCanvas(canvas, pts) {
+    if (!pts || pts.length < 3) return;
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x * W, pts[0].y * H);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x * W, pts[i].y * H);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(76,175,80,0.28)';
+    ctx.fill();
+    ctx.strokeStyle = '#4caf50';
+    ctx.lineWidth = Math.max(2.5, W * 0.004);
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+    ctx.restore();
+  }
+
   function drawBoxOnLightboxCanvas(canvas, box, color, name) {
     const ctx = canvas.getContext('2d');
     const W = canvas.width, H = canvas.height;
@@ -1917,6 +1935,7 @@
   }
 
   function openPhotoLightbox({ photoUrl, srcKey, box, color, name, isLister, onEdit, onReplacePhoto }) {
+    console.log('[LP] openLb photoUrl=…' + (photoUrl||'').slice(-60) + ' srcKey=…' + (srcKey||'').slice(-60));
     closeLightbox();
     const lb = document.createElement('div');
     lb.id = 'lp-lightbox';
@@ -1949,9 +1968,12 @@
     const _lkSrc = srcKey || photoUrl;
     function _applyLbOverlay() {
       const lbWrap = lb.querySelector('#lp-lb-wrap');
+      console.log('[LP] lbApply wrap=' + !!lbWrap + ' lkSrc=' + JSON.stringify((_lkSrc || '').slice(-40)));
       if (!lbWrap || !_lkSrc) return;
-      console.log('[LP] lbApply src=…' + _lkSrc.slice(-60) + ' found=' + !!_loadPadBox(_lkSrc));
+      const found = !!_loadPadBox(_lkSrc);
+      console.log('[LP] lbApply found=' + found);
       overlayPadDrawing({ src: _lkSrc }, lbWrap);
+      console.log('[LP] lbApply done svgInDom=' + !!lbWrap.querySelector('.lp-draw-overlay-svg'));
     }
     _applyLbOverlay();                           // immediate (catches cached images)
     setTimeout(_applyLbOverlay, 150);            // after CSS layout commits
@@ -1970,8 +1992,16 @@
       if (!wrap) return;
       canvas.width  = wrap.offsetWidth  || img.naturalWidth  || 360;
       canvas.height = wrap.offsetHeight || img.naturalHeight || 240;
+      console.log('[LP] render W=' + canvas.width + ' H=' + canvas.height + ' lkSrc=…' + (_lkSrc||'').slice(-40));
       drawBoxOnLightboxCanvas(canvas, box, color || '#8DD63F', name);
-      // Re-apply the drawing overlay after canvas redraw (canvas clears the area)
+      // Draw saved quad overlay directly on canvas — bypasses all SVG/DOM timing issues
+      const saved = _loadPadBox(_lkSrc);
+      let pts = null;
+      if (Array.isArray(saved) && saved.length >= 3) pts = saved;
+      else if (saved && saved.w > 0.01) pts = _rectToQuad(saved);
+      console.log('[LP] render quad pts=' + (pts ? pts.length : 'null'));
+      if (pts) drawQuadOnCanvas(canvas, pts);
+      // SVG overlay is also attempted for belt-and-suspenders
       _applyLbOverlay();
     }
     if (img.complete && img.naturalWidth) render();

@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-16-Y';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-16-Z';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -1943,6 +1943,20 @@
     document.body.appendChild(lb);
     requestAnimationFrame(() => lb.classList.add('open'));
 
+    // ── Independent drawing overlay for the lightbox ───────────────────────
+    // Injected separately from render() so canvas timing issues can't block it.
+    // Retries at 150 ms and 400 ms to survive any React re-render race.
+    const _lkSrc = srcKey || photoUrl;
+    function _applyLbOverlay() {
+      const lbWrap = lb.querySelector('#lp-lb-wrap');
+      if (!lbWrap || !_lkSrc) return;
+      console.log('[LP] lbApply src=…' + _lkSrc.slice(-60) + ' found=' + !!_loadPadBox(_lkSrc));
+      overlayPadDrawing({ src: _lkSrc }, lbWrap);
+    }
+    _applyLbOverlay();                           // immediate (catches cached images)
+    setTimeout(_applyLbOverlay, 150);            // after CSS layout commits
+    setTimeout(_applyLbOverlay, 400);            // belt-and-suspenders
+
     // Close via explicit buttons only — backdrop tap intentionally does NOT close
     // (avoids accidental dismissal when the user taps around the photo)
     lb.querySelector('#lp-lb-x').addEventListener('click', closeLightbox);
@@ -1957,12 +1971,8 @@
       canvas.width  = wrap.offsetWidth  || img.naturalWidth  || 360;
       canvas.height = wrap.offsetHeight || img.naturalHeight || 240;
       drawBoxOnLightboxCanvas(canvas, box, color || '#8DD63F', name);
-      // Overlay the quad-polygon drawing — look up by srcKey (thumbnail img.src)
-      // which is what _savePadBox used, falling back to photoUrl if not provided.
-      const lookupSrc = srcKey || photoUrl;
-      console.log('[LP] lb render lookupSrc=…' + lookupSrc.slice(-60) + ' found=' + !!_loadPadBox(lookupSrc));
-      const lookupImg = { src: lookupSrc };
-      overlayPadDrawing(lookupImg, wrap);
+      // Re-apply the drawing overlay after canvas redraw (canvas clears the area)
+      _applyLbOverlay();
     }
     if (img.complete && img.naturalWidth) render();
     else img.addEventListener('load', render);

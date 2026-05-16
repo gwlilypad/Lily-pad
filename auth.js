@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-16-T';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-16-U';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -2116,6 +2116,7 @@
         const fakeImg  = { src: freshUrl };
         openPhotoLightbox({
           photoUrl:       freshUrl,
+          srcKey:         freshUrl, // matches _savePadBox key (from background-image URL)
           box:            pad.box   || null,
           color:          pad.color || null,
           name:           pad.name  || '',
@@ -2570,8 +2571,20 @@
       console.log('[Lily Pad] Draw edit btn injected');
     }
 
+    // ── Shared: idempotent overlay helper ────────────────────────────────────
+    function _applyOverlay(fakeImg, container) {
+      const saved = _loadPadBox(fakeImg.src);
+      if (!saved) return;
+      const newHash = JSON.stringify(saved);
+      const existingSvg = container.querySelector('.lp-draw-overlay-svg');
+      if (!existingSvg || existingSvg.dataset.lpHash !== newHash) {
+        overlayPadDrawing(fakeImg, container);
+        const freshSvg = container.querySelector('.lp-draw-overlay-svg');
+        if (freshSvg) freshSvg.dataset.lpHash = newHash;
+      }
+    }
+
     // ── Path 1: SVG-overlay pad cards (img sibling of svg[viewBox="0 0 100 70"]) ─
-    // Uses the same selector as installPhotoClickHandlers / enlargePadCards.
     document.querySelectorAll('svg[viewBox="0 0 100 70"]').forEach(svg => {
       const wrap = svg.parentElement;
       if (!wrap) return;
@@ -2580,27 +2593,14 @@
       if (wrap.closest('#lp-lightbox,#lp-draw-editor')) return;
 
       _ensureDrawBtn(img, wrap);
-
-      if (!img.dataset.lpDrawEdit) {
-        img.dataset.lpDrawEdit = '1';
-        overlayPadDrawing(img, wrap);
-        return;
-      }
-      const saved = _loadPadBox(img.src);
-      if (!saved) return;
-      const newHash = JSON.stringify(saved);
-      const existingSvg = wrap.querySelector('.lp-draw-overlay-svg');
-      if (!existingSvg || existingSvg.dataset.lpHash !== newHash) {
-        overlayPadDrawing(img, wrap);
-        const freshSvg = wrap.querySelector('.lp-draw-overlay-svg');
-        if (freshSvg) freshSvg.dataset.lpHash = newHash;
-      }
+      if (!wrap.dataset.lpDrawEdit) wrap.dataset.lpDrawEdit = '1';
+      _applyOverlay({ src: img.src }, wrap);
     });
 
     // ── Path 2: background-image div photos ───────────────────────────────────
     // My Pads may render photos as <div style="background:url(...)"> rather
     // than <img>.  installPhotoClickHandlers already hooks the click; here we
-    // inject the "Edit drawing" button on the same div container.
+    // inject the "Edit drawing" button AND overlay the saved spot polygon.
     document.querySelectorAll('div[style*="url("]').forEach(div => {
       if (div.closest('#lp-lightbox,#lp-draw-editor')) return;
       if (div.closest('.leaflet-tile-container,.leaflet-layer,.leaflet-pane,[class*="leaflet"]')) return;
@@ -2611,10 +2611,10 @@
       if (!photoUrl.startsWith('http') && !photoUrl.startsWith('data:image')) return;
       const h = div.offsetHeight || div.getBoundingClientRect().height;
       if (h < 60) return;
-      // Use a synthetic img-like object: openPadDrawEditor only needs .src
       const fakeImg = { src: photoUrl };
       _ensureDrawBtn(fakeImg, div);
       if (!div.dataset.lpDrawEdit) div.dataset.lpDrawEdit = '1';
+      _applyOverlay(fakeImg, div);
     });
   }
 

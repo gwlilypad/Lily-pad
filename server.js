@@ -381,7 +381,9 @@ app.get('/', (req, res) => {
   html = html.replace('<div id="root"></div>', () => `${authOverlay}<div id="root"></div>`);
   html = html.replace('</body>',             () => `<script>${authJSFinal}</script></body>`);
 
-  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Surrogate-Control', 'no-store');
   res.send(html);
 });
 

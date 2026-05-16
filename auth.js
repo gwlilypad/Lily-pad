@@ -345,6 +345,35 @@
   let _clearListingsCooldown = 0;
   function clearFakeListings() {
     const now = Date.now();
+
+    // ── DOM text-scan (fast, NO cooldown — runs on every mutation) ────────────
+    // Fake ar[] items always render a "· X.X mi" distance string.  Hide the
+    // nearest card-like ancestor (≥ 60 px) immediately.  Because this runs on
+    // every DOM mutation it catches cards that React just re-rendered.
+    if (!document.getElementById('lp-fake-css')) {
+      const st = document.createElement('style');
+      st.id = 'lp-fake-css';
+      st.textContent = '[data-lp-fake]{display:none!important}';
+      document.head.appendChild(st);
+    }
+    const miRe = /·\s*\d+\.\d+\s*mi/;
+    const walker2 = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    let tn2, scanHid = 0;
+    while ((tn2 = walker2.nextNode())) {
+      if (miRe.test(tn2.nodeValue)) {
+        let el = tn2.parentElement;
+        for (let i = 0; i < 12 && el && el !== document.body; i++, el = el.parentElement) {
+          if (el.offsetHeight >= 60 && !el.dataset.lpFake) {
+            el.setAttribute('data-lp-fake', '1');
+            scanHid++;
+            break;
+          }
+        }
+      }
+    }
+    if (scanHid > 0) console.log('[Lily Pad] DOM scan hid', scanHid, 'fake listing cards');
+
+    // ── Fiber walk (expensive — rate-limited to once per 400 ms) ─────────────
     if (now - _clearListingsCooldown < 400) return;
 
     const root = document.getElementById('root');
@@ -364,15 +393,6 @@
     }
 
     let forceRenderDispatch = null;
-
-    // Inject a one-time CSS rule so any element we mark [data-lp-fake]
-    // stays hidden even if React re-renders and patches it.
-    if (!document.getElementById('lp-fake-css')) {
-      const st = document.createElement('style');
-      st.id = 'lp-fake-css';
-      st.textContent = '[data-lp-fake]{display:none!important}';
-      document.head.appendChild(st);
-    }
 
     function hideFakeFiber(fiber) {
       // Walk DOWN to the first HTMLElement stateNode (card's root div)
@@ -397,6 +417,7 @@
         // component mounts (which re-run useState(ar)) also get an empty array.
         // dispatch([]) covers the currently-mounted instance immediately.
         if (isFakeArr(v)) {
+          console.log('[Lily Pad] Splicing fake listings array (len=' + v.length + ')');
           v.splice(0);
           const dispatch = s.queue && s.queue.dispatch;
           if (typeof dispatch === 'function') {
@@ -447,31 +468,7 @@
 
     walk(root[fk], 0);
 
-    // ── DOM text-scan fallback ──────────────────────────────────────────────
-    // Any listing card that survived the fiber walk gets caught here.
-    // The fake ar[] meta field always produces "· X.X mi" distance text
-    // (e.g. "Garage · 1.1 mi") — real Supabase listings don't exist yet, but
-    // when they do, their distance format will differ.  We hide the nearest
-    // card-like ancestor (first element ≥ 60 px tall that contains the node).
-    const miRe = /·\s*\d+\.\d+\s*mi/;
-    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-    const toHide = [];
-    let tn;
-    while ((tn = walker.nextNode())) {
-      if (miRe.test(tn.nodeValue)) {
-        let el = tn.parentElement;
-        // Walk up to find a card-like container (≥ 60 px tall, not body/root)
-        for (let i = 0; i < 12 && el && el !== document.body; i++, el = el.parentElement) {
-          if (el.offsetHeight >= 60) { toHide.push(el); break; }
-        }
-      }
-    }
-    toHide.forEach(el => {
-      if (!el.dataset.lpFake) {
-        el.setAttribute('data-lp-fake', '1');
-        _clearListingsCooldown = now;
-      }
-    });
+    // (DOM text-scan now runs unconditionally at the top of clearFakeListings)
 
     // If we patched useMemo values but the saved-Set dispatch wasn't found,
     // force a re-render through any boolean useState to pick up the patched Q
@@ -1379,113 +1376,111 @@
   }
 
   // ── Back button on My Pads (paddashboard) page ────────────────────────────
+  // Rendered as a position:fixed overlay so it is always visible regardless of
+  // the host page's stacking context, overflow, or background colour.
   function injectPaddashboardBack() {
-    if (document.getElementById('lp-pad-back')) return;
+    const existing = document.getElementById('lp-pad-back');
 
     // Detect paddashboard by its unique "Revenue & Payouts" header text
-    const anchor = Array.from(document.querySelectorAll('p,span,div')).find(el =>
+    const onPage = !!Array.from(document.querySelectorAll('p,span,div')).find(el =>
       el.childElementCount === 0 && el.textContent.trim() === 'Revenue & Payouts'
     );
-    if (!anchor) return;
 
-    // Walk up to find the page-level container (the dark-blue header section)
-    let headerSection = anchor;
-    for (let i = 0; i < 8; i++) {
-      if (!headerSection.parentElement) break;
-      headerSection = headerSection.parentElement;
-      const bg = headerSection.style.background || '';
-      if (bg.includes('#0E1F40') || bg.includes('#142A52') ||
-          bg.includes('rgb(14') || bg.includes('rgb(20')) break;
-    }
+    // Remove the button if we've navigated away
+    if (existing && !onPage) { existing.remove(); return; }
+    if (!onPage || existing) return;
 
     const btn = document.createElement('button');
     btn.id = 'lp-pad-back';
     btn.innerHTML =
-      '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" ' +
-      'stroke="rgba(255,255,255,0.80)" stroke-width="2.2" stroke-linecap="round" ' +
+      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" ' +
+      'stroke="currentColor" stroke-width="2.5" stroke-linecap="round" ' +
       'stroke-linejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>' +
-      '<span style="font-family:\'DM Sans\',sans-serif;font-size:13px;' +
-      'color:rgba(255,255,255,0.80);font-weight:600">Back</span>';
+      '<span style="font-size:13px;font-weight:600;font-family:\'DM Sans\',sans-serif">Back</span>';
     btn.setAttribute('style', [
+      'position:fixed',
+      'top:14px',
+      'left:14px',
+      'z-index:9999',
       'display:flex',
       'align-items:center',
       'gap:5px',
-      'background:none',
+      'background:rgba(14,31,64,0.82)',
+      'color:#fff',
       'border:none',
+      'border-radius:20px',
+      'padding:6px 14px 6px 10px',
       'cursor:pointer',
-      'padding:6px 0 10px',
-      'flex-shrink:0',
+      'box-shadow:0 2px 8px rgba(0,0,0,0.28)',
+      'backdrop-filter:blur(4px)',
+      '-webkit-backdrop-filter:blur(4px)',
     ].join(';'));
 
     btn.addEventListener('click', function () {
-      document.getElementById('lp-pad-back')?.remove();
+      btn.remove();
       if (!callGoTo('find')) {
-        // Fallback: click the bottom tab-bar map/find button
-        const tab = Array.from(document.querySelectorAll('.tab-bar button, button'))
+        const tab = Array.from(document.querySelectorAll('button'))
           .find(b => /map|find|home/i.test(b.textContent));
         if (tab) tab.click();
       }
     });
 
-    // Prepend into the header section so it sits at the very top
-    headerSection.insertBefore(btn, headerSection.firstChild);
-    console.log('[Lily Pad] Paddashboard back button injected');
+    document.body.appendChild(btn);
+    console.log('[Lily Pad] Paddashboard back button injected (fixed overlay)');
   }
 
   // ── Back button on pad detail (account) page ──────────────────────────────
   // Detected by the "Change photo" button (unique to this single-pad view).
+  // Rendered as a position:fixed overlay — always visible on top of the photo.
   // Navigates back to paddashboard (My Pads list).
   function injectPadAccountBack() {
-    if (document.getElementById('lp-pad-account-back')) return;
+    const existing = document.getElementById('lp-pad-account-back');
 
     // "Change photo" only exists on the individual pad detail/account page
-    const changePhotoBtn = Array.from(document.querySelectorAll('button'))
+    const onPage = !!Array.from(document.querySelectorAll('button'))
       .find(b => b.childElementCount === 0 && b.textContent.trim() === 'Change photo');
-    if (!changePhotoBtn) return;
 
-    // Walk up to find the photo-card container (it will have a background-image
-    // set to the pad's photo URL, making it a reliable stop condition)
-    let headerSection = changePhotoBtn;
-    for (let i = 0; i < 12; i++) {
-      if (!headerSection.parentElement || headerSection.parentElement === document.body) break;
-      headerSection = headerSection.parentElement;
-      const bg = getComputedStyle(headerSection).backgroundImage;
-      if (bg && bg !== 'none') break;
-    }
+    // Remove if we've navigated away
+    if (existing && !onPage) { existing.remove(); return; }
+    if (!onPage || existing) return;
 
     const btn = document.createElement('button');
     btn.id = 'lp-pad-account-back';
     btn.innerHTML =
-      '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" ' +
-      'stroke="rgba(255,255,255,0.80)" stroke-width="2.2" stroke-linecap="round" ' +
+      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" ' +
+      'stroke="currentColor" stroke-width="2.5" stroke-linecap="round" ' +
       'stroke-linejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>' +
-      '<span style="font-family:\'DM Sans\',sans-serif;font-size:13px;' +
-      'color:rgba(255,255,255,0.80);font-weight:600">Back</span>';
+      '<span style="font-size:13px;font-weight:600;font-family:\'DM Sans\',sans-serif">Back</span>';
     btn.setAttribute('style', [
+      'position:fixed',
+      'top:14px',
+      'left:14px',
+      'z-index:9999',
       'display:flex',
       'align-items:center',
       'gap:5px',
-      'background:none',
+      'background:rgba(14,31,64,0.82)',
+      'color:#fff',
       'border:none',
+      'border-radius:20px',
+      'padding:6px 14px 6px 10px',
       'cursor:pointer',
-      'padding:6px 0 10px',
-      'flex-shrink:0',
-      'position:relative',
-      'z-index:200',
+      'box-shadow:0 2px 8px rgba(0,0,0,0.28)',
+      'backdrop-filter:blur(4px)',
+      '-webkit-backdrop-filter:blur(4px)',
     ].join(';'));
 
     btn.addEventListener('click', function () {
-      document.getElementById('lp-pad-account-back')?.remove();
+      btn.remove();
       if (!callGoTo('paddashboard')) {
-        // Fallback: try direct fiber call like injectDeepBackButton does
         _lpGoToFn = null;
         const fresh = lpGetGoTo();
         if (fresh) fresh('paddashboard');
       }
     });
 
-    headerSection.insertBefore(btn, headerSection.firstChild);
-    console.log('[Lily Pad] Pad account back button injected');
+    document.body.appendChild(btn);
+    console.log('[Lily Pad] Pad account back button injected (fixed overlay)');
   }
 
   // ── Guards ────────────────────────────────────────────────────────────────

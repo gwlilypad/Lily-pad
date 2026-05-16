@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-16-R';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-16-S';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -1957,6 +1957,8 @@
       canvas.width  = wrap.offsetWidth  || img.naturalWidth  || 360;
       canvas.height = wrap.offsetHeight || img.naturalHeight || 240;
       drawBoxOnLightboxCanvas(canvas, box, color || '#8DD63F', name);
+      // Overlay the quad-polygon drawing (new format) as an SVG on the wrap
+      overlayPadDrawing(img, wrap);
     }
     if (img.complete && img.naturalWidth) render();
     else img.addEventListener('load', render);

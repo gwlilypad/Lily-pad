@@ -668,7 +668,7 @@ body.lp-photo-fs .canvas-wrap canvas {
   height: 100%;
   pointer-events: none;
   z-index: 10;
-  overflow: visible;
+  overflow: hidden;
 }
 
 /* ── Drawing editor modal ───────────────────────────────────────────────── */

@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-16-V';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-16-W';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -2508,6 +2508,8 @@
     }
     // Safe to touch the DOM now — we know we'll render
     if (getComputedStyle(parent).position === 'static') parent.style.position = 'relative';
+    // Clip the overlay to the photo container so the polygon never bleeds outside
+    if (getComputedStyle(parent).overflow === 'visible') parent.style.overflow = 'hidden';
     const old = parent.querySelector('.lp-draw-overlay-svg');
     if (old) old.remove();
     const ns = 'http://www.w3.org/2000/svg';

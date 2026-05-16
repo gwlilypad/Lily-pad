@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-16-I';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-16-J';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -2505,7 +2505,18 @@
     }
     document.querySelectorAll('img[src]').forEach(img => {
       if (img.dataset.lpDrawEdit) {
-        overlayPadDrawing(img); // keep overlay fresh
+        // Only re-render the overlay when the saved data has actually changed.
+        // Calling overlayPadDrawing unconditionally on every guard tick appends
+        // a new SVG each time, which triggers the MutationObserver again → loop.
+        const newHash = JSON.stringify(_loadPadBox(img.src));
+        const existingSvg = img.parentElement &&
+                            img.parentElement.querySelector('.lp-draw-overlay-svg');
+        if (!existingSvg || existingSvg.dataset.lpHash !== newHash) {
+          overlayPadDrawing(img);
+          const freshSvg = img.parentElement &&
+                           img.parentElement.querySelector('.lp-draw-overlay-svg');
+          if (freshSvg) freshSvg.dataset.lpHash = newHash;
+        }
         return;
       }
       const rect = img.getBoundingClientRect();
@@ -2571,11 +2582,14 @@
     }
 
     // ── Interaction state ─────────────────────────────────────────────────────
-    // mode: 'idle' | 'draw' | 'move' | 'corner'
-    let mode           = 'idle';
-    let drawStart      = { x: 0, y: 0 };
-    let moveDelta      = { dx: 0, dy: 0 }; // pointer offset from centroid (move)
-    let activeCorner   = -1;               // index into quad[] being dragged
+    // mode: 'idle' | 'draw' | 'move' | 'corner' | 'rotate'
+    let mode                = 'idle';
+    let drawStart           = { x: 0, y: 0 };
+    let moveDelta           = { dx: 0, dy: 0 }; // offset from centroid (move)
+    let activeCorner        = -1;               // index into quad[] being dragged
+    let rotateStartAngle    = 0;                // atan2 angle at drag start (rotate)
+    let rotateStartQuad     = null;             // quad snapshot at drag start (rotate)
+    let rotateStartCentroid = null;             // centroid snapshot at drag start
 
     // ── DOM ───────────────────────────────────────────────────────────────────
     const modal = document.createElement('div');
@@ -2597,7 +2611,6 @@
         '</div>' +
         '<div class="lp-de-footer">' +
           '<button class="lp-de-clear">Clear</button>' +
-          '<button class="lp-de-rotate">&#x21BB; Rotate</button>' +
           '<button class="lp-de-save">Save</button>' +
         '</div>' +
       '</div>';
@@ -2607,13 +2620,13 @@
     const bgHit    = modal.querySelector('.lp-de-bg-hit');
     const saveBtn  = modal.querySelector('.lp-de-save');
     const clearBtn = modal.querySelector('.lp-de-clear');
-    const rotateBtn= modal.querySelector('.lp-de-rotate');
     const closeBtn = modal.querySelector('.lp-de-close');
     const hint     = modal.querySelector('.lp-de-hint');
     const ns       = 'http://www.w3.org/2000/svg';
 
     // Dynamic SVG elements (rebuilt by renderQuad)
     let svgPoly = null, svgTab = null, svgLabel = null;
+    let svgRotLine = null, svgRotHandle = null;
     let svgCorners = []; // 4 circle elements
 
     // Normalise a pointer/touch event to 0-1 coords over the SVG
@@ -2640,11 +2653,13 @@
     }
 
     // Rebuild the SVG visuals from the current quad.
-    // DOM paint order: bgHit (back) → svgPoly → svgTab → svgLabel → svgCorners (front)
+    // DOM paint order: bgHit → svgPoly → svgTab → svgLabel → svgCorners → svgRotLine → svgRotHandle
     function renderQuad() {
-      if (svgPoly)  { svgPoly.remove();  svgPoly  = null; }
-      if (svgTab)   { svgTab.remove();   svgTab   = null; }
-      if (svgLabel) { svgLabel.remove(); svgLabel = null; }
+      if (svgPoly)      { svgPoly.remove();      svgPoly      = null; }
+      if (svgTab)       { svgTab.remove();       svgTab       = null; }
+      if (svgLabel)     { svgLabel.remove();     svgLabel     = null; }
+      if (svgRotLine)   { svgRotLine.remove();   svgRotLine   = null; }
+      if (svgRotHandle) { svgRotHandle.remove(); svgRotHandle = null; }
       svgCorners.forEach(c => c.remove());
       svgCorners = [];
 
@@ -2710,6 +2725,35 @@
         boxSvg.appendChild(c);
         svgCorners.push(c);
       });
+
+      // Rotate handle — circle above the shape connected by a dashed stem.
+      // Drag it to rotate to any angle.
+      const rotStemX  = cen.x * 100;
+      const rotStemY0 = topY  * 100;
+      const rotHY     = Math.max(4, topY * 100 - 18); // 18 SVG units above top, clamped
+      svgRotLine = document.createElementNS(ns, 'line');
+      svgRotLine.setAttribute('x1', rotStemX);
+      svgRotLine.setAttribute('y1', rotStemY0);
+      svgRotLine.setAttribute('x2', rotStemX);
+      svgRotLine.setAttribute('y2', rotHY);
+      svgRotLine.setAttribute('stroke',          '#4caf50');
+      svgRotLine.setAttribute('stroke-width',    '1.5');
+      svgRotLine.setAttribute('stroke-dasharray','2.5,2');
+      svgRotLine.setAttribute('vector-effect',   'non-scaling-stroke');
+      svgRotLine.setAttribute('pointer-events',  'none');
+      boxSvg.appendChild(svgRotLine);
+
+      svgRotHandle = document.createElementNS(ns, 'circle');
+      svgRotHandle.setAttribute('cx', rotStemX);
+      svgRotHandle.setAttribute('cy', rotHY);
+      svgRotHandle.setAttribute('r',  '6');
+      svgRotHandle.setAttribute('fill',         '#fff');
+      svgRotHandle.setAttribute('stroke',       '#4caf50');
+      svgRotHandle.setAttribute('stroke-width', '2.5');
+      svgRotHandle.setAttribute('vector-effect','non-scaling-stroke');
+      svgRotHandle.style.cursor     = 'grab';
+      svgRotHandle.dataset.lpRole   = 'rotate';
+      boxSvg.appendChild(svgRotHandle);
     }
 
     renderQuad();
@@ -2722,7 +2766,14 @@
       const p    = normXY(e);
       const role = e.target.dataset.lpRole;
 
-      if (role === 'corner') {
+      if (role === 'rotate') {
+        mode = 'rotate';
+        const cen = centroid();
+        rotateStartAngle    = Math.atan2(p.y - cen.y, p.x - cen.x);
+        rotateStartQuad     = quad.map(pt => ({ x: pt.x, y: pt.y }));
+        rotateStartCentroid = { x: cen.x, y: cen.y };
+        hint.textContent = 'Drag to rotate to any angle';
+      } else if (role === 'corner') {
         // Move only this corner; others stay put
         mode = 'corner';
         activeCorner = parseInt(e.target.dataset.lpCorner, 10);
@@ -2773,6 +2824,20 @@
           i === activeCorner ? clamp01(p) : { x: pt.x, y: pt.y }
         );
         quad = newQuad;
+      } else if (mode === 'rotate') {
+        // Rotate all corners around the centroid snapshot from drag start.
+        // Using startQuad (not live quad) avoids accumulated floating-point drift.
+        const cen     = rotateStartCentroid;
+        const newAngle = Math.atan2(p.y - cen.y, p.x - cen.x);
+        const delta    = newAngle - rotateStartAngle;
+        const cos      = Math.cos(delta), sin = Math.sin(delta);
+        quad = rotateStartQuad.map(pt => {
+          const dx = pt.x - cen.x, dy = pt.y - cen.y;
+          return clamp01({
+            x: cen.x + dx * cos - dy * sin,
+            y: cen.y + dx * sin + dy * cos,
+          });
+        });
       }
       renderQuad();
     });
@@ -2807,22 +2872,6 @@
       quad = null;
       renderQuad();
       hint.textContent = 'Spot cleared — drag on the photo to draw a new one';
-    });
-
-    rotateBtn.addEventListener('click', () => {
-      if (!quad) { hint.textContent = 'Draw a spot first to rotate it.'; return; }
-      const deg = 15 * Math.PI / 180;
-      const cos = Math.cos(deg), sin = Math.sin(deg);
-      const cen = centroid();
-      quad = quad.map(pt => {
-        const dx = pt.x - cen.x, dy = pt.y - cen.y;
-        return clamp01({
-          x: cen.x + dx * cos - dy * sin,
-          y: cen.y + dx * sin + dy * cos,
-        });
-      });
-      renderQuad();
-      hint.textContent = 'Rotated 15° — tap again to rotate more';
     });
 
     function closeModal() { modal.remove(); }

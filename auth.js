@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-16-X';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-16-Y';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -1959,7 +1959,9 @@
       drawBoxOnLightboxCanvas(canvas, box, color || '#8DD63F', name);
       // Overlay the quad-polygon drawing — look up by srcKey (thumbnail img.src)
       // which is what _savePadBox used, falling back to photoUrl if not provided.
-      const lookupImg = { src: srcKey || photoUrl };
+      const lookupSrc = srcKey || photoUrl;
+      console.log('[LP] lb render lookupSrc=…' + lookupSrc.slice(-60) + ' found=' + !!_loadPadBox(lookupSrc));
+      const lookupImg = { src: lookupSrc };
       overlayPadDrawing(lookupImg, wrap);
     }
     if (img.complete && img.naturalWidth) render();
@@ -2459,16 +2461,27 @@
 
   // Stable per-image key for localStorage (blob URLs are stable within a session)
   function _padBoxKey(src) {
+    // Strip query-string before hashing — Supabase signed URLs include a
+    // rotating ?token=... that changes on every render, so we must normalize
+    // to the path-only part to get a stable storage key.
+    const normalized = src ? src.split('?')[0] : (src || '');
     let h = 5381;
-    const s = src.slice(-150);
+    const s = normalized.slice(-150);
     for (let i = 0; i < s.length; i++) h = (((h << 5) + h) ^ s.charCodeAt(i)) >>> 0;
     return 'lp_padbox_' + h.toString(36);
   }
   function _savePadBox(src, box) {
-    try { localStorage.setItem(_padBoxKey(src), JSON.stringify(box)); } catch {}
+    const key = _padBoxKey(src);
+    console.log('[LP] savePadBox key=' + key + ' src=…' + src.slice(-60));
+    try { localStorage.setItem(key, JSON.stringify(box)); } catch {}
   }
   function _loadPadBox(src) {
-    try { return JSON.parse(localStorage.getItem(_padBoxKey(src)) || 'null'); } catch { return null; }
+    const key = _padBoxKey(src);
+    try {
+      const val = JSON.parse(localStorage.getItem(key) || 'null');
+      if (val) console.log('[LP] loadPadBox HIT key=' + key + ' src=…' + src.slice(-60));
+      return val;
+    } catch { return null; }
   }
 
   // Convert legacy {cx,cy,w,h} rectangle to quad array
@@ -2600,6 +2613,7 @@
 
       _ensureDrawBtn(img, wrap);
       if (!wrap.dataset.lpDrawEdit) wrap.dataset.lpDrawEdit = '1';
+      wrap.dataset.lpPhotoSrc = img.src; // store URL for reliable post-save refresh
       _applyOverlay({ src: img.src }, wrap);
     });
 
@@ -2620,6 +2634,7 @@
       const fakeImg = { src: photoUrl };
       _ensureDrawBtn(fakeImg, div);
       if (!div.dataset.lpDrawEdit) div.dataset.lpDrawEdit = '1';
+      div.dataset.lpPhotoSrc = photoUrl; // store URL for reliable post-save refresh
       _applyOverlay(fakeImg, div);
     });
   }
@@ -3030,9 +3045,16 @@
       }
       _savePadBox(img.src, quad);
       closeModal();
-      // Immediately re-render overlays on all photos — localStorage doesn't
-      // fire a DOM mutation so the MutationObserver guard won't catch this.
-      requestAnimationFrame(() => injectAllPhotoOverlays());
+      // Directly refresh every tagged container — more reliable than URL re-matching
+      // because data-lp-photo-src was set at the same time the edit button was
+      // created (same URL, same _padBoxKey hash).
+      document.querySelectorAll('[data-lp-photo-src]').forEach(c => {
+        if (c.closest('#lp-lightbox,#lp-draw-editor')) return;
+        overlayPadDrawing({ src: c.dataset.lpPhotoSrc }, c);
+      });
+      // Belt-and-suspenders: also run the full overlay scan after a short delay
+      // in case React re-rendered the containers between closeModal() and here.
+      setTimeout(() => injectAllPhotoOverlays(), 250);
       showLpToast('Spot saved!');
       console.log('[Lily Pad] Pad drawing saved (quad):', JSON.stringify(quad));
     });

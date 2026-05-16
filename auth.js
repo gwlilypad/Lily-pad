@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-16-U';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-16-V';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -2618,6 +2618,47 @@
     });
   }
 
+  // ── Photo overlay on ALL pages (lister + customer/driver) ────────────────
+  // Renders the saved green polygon on any pad photo that has one stored in
+  // localStorage — no page-gate, so customers see the spot on listing views
+  // just as the lister does on My Pads.  Edit-button injection is still
+  // lister-only (inside injectPadDrawEdit).  Idempotent: checks a hash so
+  // it only touches the DOM when the saved drawing has actually changed.
+  function injectAllPhotoOverlays() {
+    function _tryOverlay(src, container) {
+      const saved = _loadPadBox(src);
+      if (!saved) return;
+      const newHash = JSON.stringify(saved);
+      const existing = container.querySelector('.lp-draw-overlay-svg');
+      if (existing && existing.dataset.lpHash === newHash) return;
+      overlayPadDrawing({ src }, container);
+      const fresh = container.querySelector('.lp-draw-overlay-svg');
+      if (fresh) fresh.dataset.lpHash = newHash;
+    }
+
+    // Path A: img inside SVG-overlay card container
+    document.querySelectorAll('svg[viewBox="0 0 100 70"]').forEach(svg => {
+      const wrap = svg.parentElement;
+      if (!wrap || wrap.closest('#lp-lightbox,#lp-draw-editor')) return;
+      const img = wrap.querySelector('img');
+      if (img && img.src) _tryOverlay(img.src, wrap);
+    });
+
+    // Path B: background-image photo divs (driver listing / booking views)
+    document.querySelectorAll('div[style*="url("]').forEach(div => {
+      if (div.closest('#lp-lightbox,#lp-draw-editor')) return;
+      if (div.closest('.leaflet-tile-container,.leaflet-layer,.leaflet-pane,[class*="leaflet"]')) return;
+      const bg = div.style.background || div.style.backgroundImage || '';
+      const m  = bg.match(/url\(["']?([^"')]+)["']?\)/);
+      if (!m) return;
+      const photoUrl = m[1];
+      if (!photoUrl.startsWith('http') && !photoUrl.startsWith('data:image')) return;
+      const h = div.offsetHeight || div.getBoundingClientRect().height;
+      if (h < 60) return;
+      _tryOverlay(photoUrl, div);
+    });
+  }
+
   // Show a brief toast notification
   function showLpToast(msg) {
     const t = document.createElement('div');
@@ -3011,6 +3052,7 @@
     injectSameAddressHint();
     enlargePadCards();
     injectPadDrawEdit();
+    injectAllPhotoOverlays();
 
     // ── Throttled page-state diagnostic (once every 4 s) ──────────────────
     const _now = Date.now();

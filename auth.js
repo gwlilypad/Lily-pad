@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-16-C';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-16-D';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -2135,27 +2135,28 @@
   function injectSameAddressHint() {
     if (document.getElementById('lp-same-addr')) return;
 
-    // Detect the address step purely from DOM text — works for both flows
-    const onAddrStep = Array.from(document.querySelectorAll('*')).some(el =>
-      el.childElementCount === 0 && /what.s the address\??/i.test(el.textContent.trim())
-    );
-    if (!onAddrStep) return;
-
-    // Find the address input — placeholder differs between wizard flows:
-    //   addpad wizard   → "123 Main St, City, State"
-    //   signup wizard   → "Address" or similar
-    // Accept any visible text input whose placeholder suggests an address.
+    // Primary trigger: find the address input by its placeholder text.
+    // The wizard uses "123 Main St, City, State" when adding a pad from the
+    // host dashboard, and "Address" / similar in the initial signup flow.
+    // We don't require "What's the address?" text to be a leaf node because
+    // the bundle often splits it across sibling <span> elements.
     const input =
       Array.from(document.querySelectorAll('input[type="text"],input:not([type])')).find(i => {
         const ph = (i.placeholder || '').toLowerCase();
         return ph.includes('address') || ph.includes('main st') ||
                ph.includes('city')   || ph.includes('state');
-      }) ||
-      // Broadest fallback: first visible unfilled text input on the page
+      });
+    // Also accept the first visible, unfilled text input when the "What's the
+    // address?" question (or "Add your lily pad" header) is visible nearby.
+    const hasAddrContext = Array.from(document.querySelectorAll('*')).some(el =>
+      /what.s the address|add your lily pad/i.test(el.textContent) && el.offsetHeight > 0
+    );
+    const finalInput = input || (hasAddrContext &&
       Array.from(document.querySelectorAll('input')).find(i =>
         (!i.type || i.type === 'text') && !i.value && i.getBoundingClientRect().width > 0
-      );
-    if (!input) return;
+      ));
+    if (!finalInput) return;
+    const addressInput = finalInput;
 
     // Collect existing-pad addresses from three sources ─────────────────────
     const addrs = [];
@@ -2165,13 +2166,17 @@
       if (v && !_LP_FAKE_ADDRS.has(v) && !seen.has(v)) { seen.add(v); addrs.push(v); }
     }
 
-    // Source 1: lilypad.pads.v1 in localStorage — raw read bypasses our filter
+    // Source 1: lilypad.pads.v1 raw read (bypasses our filter).
+    // Accept any pad whose address is not a known fake address — do NOT
+    // filter by id type because the bundle wizard creates real pads with
+    // numeric ids (Date.now() or sequential) just like the fake demo data.
     try {
       const raw = _lpRawGet.call(localStorage, _LP_PADS_KEY);
       if (raw) {
         JSON.parse(raw)
-          .filter(p => typeof p.id !== 'number' &&
-                       !_LP_FAKE_ADDRS.has(p.address) && !_LP_FAKE_ADDRS.has(p.addr))
+          .filter(p => !_LP_FAKE_ADDRS.has(p.address) && !_LP_FAKE_ADDRS.has(p.addr) &&
+                       (p.address || p.addr || '').trim() &&
+                       !/Austin,?\s*TX/i.test(p.city || ''))
           .forEach(p => addAddr(p.address || p.addr));
       }
     } catch {}
@@ -2230,23 +2235,23 @@
       chip.addEventListener('click', () => {
         const setter = Object.getOwnPropertyDescriptor(
           window.HTMLInputElement.prototype, 'value').set;
-        setter.call(input, addr);
-        input.dispatchEvent(new Event('input',  { bubbles: true }));
-        input.dispatchEvent(new Event('change', { bubbles: true }));
+        setter.call(addressInput, addr);
+        addressInput.dispatchEvent(new Event('input',  { bubbles: true }));
+        addressInput.dispatchEvent(new Event('change', { bubbles: true }));
         row.remove();
       });
       row.appendChild(chip);
     });
 
-    const parent = input.parentElement || input.closest('div');
+    const parent = addressInput.parentElement || addressInput.closest('div');
     if (parent) parent.insertAdjacentElement('afterend', row);
 
     // Wire up auto-save on blur so the address is remembered for next time
     // even if the user doesn't use a chip (typed it manually)
-    if (!input.dataset.lpAddrSave) {
-      input.dataset.lpAddrSave = '1';
-      input.addEventListener('blur', () => {
-        const v = input.value.trim();
+    if (!addressInput.dataset.lpAddrSave) {
+      addressInput.dataset.lpAddrSave = '1';
+      addressInput.addEventListener('blur', () => {
+        const v = addressInput.value.trim();
         if (!v || _LP_FAKE_ADDRS.has(v)) return;
         try {
           const saved = JSON.parse(localStorage.getItem('lp_saved_addresses') || '[]');
@@ -2324,8 +2329,16 @@
   // Inject "Edit drawing" pencil button on every pad photo thumbnail when on
   // the paddashboard (My Pads).  Re-runs on every guard tick; idempotent.
   function injectPadDrawEdit() {
-    const onDash = !!Array.from(document.querySelectorAll('*')).find(el =>
-      el.childElementCount === 0 && el.textContent.trim() === 'Revenue & Payouts'
+    // Detect the host pad-dashboard page by any of several text signals that
+    // appear there — "Revenue & Payouts" is one, but also "Add new pad" button,
+    // "Payouts", "Earnings", or the pad list heading.
+    const DASH_SIGNALS = [
+      'Revenue & Payouts', 'Revenue &amp; Payouts',
+      'Add new pad', 'Add New Pad',
+      'Payouts', 'Your pads', 'My pads', 'My Pads',
+    ];
+    const onDash = DASH_SIGNALS.some(sig =>
+      document.body.textContent.includes(sig)
     );
     if (!onDash) {
       document.querySelectorAll('.lp-draw-edit-btn').forEach(el => el.remove());

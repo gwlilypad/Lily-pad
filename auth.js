@@ -2124,6 +2124,281 @@
     });
   }
 
+  // ── Pad drawing editor ────────────────────────────────────────────────────
+  // Lets the pad owner click a thumbnail photo on paddashboard and redraw /
+  // adjust the parking-spot box on that photo, then saves it.
+
+  // Stable per-image key for localStorage (blob URLs are stable within a session)
+  function _padBoxKey(src) {
+    let h = 5381;
+    const s = src.slice(-150);
+    for (let i = 0; i < s.length; i++) h = (((h << 5) + h) ^ s.charCodeAt(i)) >>> 0;
+    return 'lp_padbox_' + h.toString(36);
+  }
+  function _savePadBox(src, box) {
+    try { localStorage.setItem(_padBoxKey(src), JSON.stringify(box)); } catch {}
+  }
+  function _loadPadBox(src) {
+    try { return JSON.parse(localStorage.getItem(_padBoxKey(src)) || 'null'); } catch { return null; }
+  }
+
+  // Overlay the saved drawing as a green SVG rect on a thumbnail image
+  function overlayPadDrawing(img) {
+    const parent = img.parentElement;
+    if (!parent) return;
+    if (getComputedStyle(parent).position === 'static') parent.style.position = 'relative';
+    const old = parent.querySelector('.lp-draw-overlay-svg');
+    if (old) old.remove();
+    const box = _loadPadBox(img.src);
+    if (!box || !(box.w > 0.01)) return;
+    const { cx, cy, w, h } = box;
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', '0 0 100 100');
+    svg.setAttribute('preserveAspectRatio', 'none');
+    svg.className = 'lp-draw-overlay-svg';
+    const r = document.createElementNS(ns, 'rect');
+    r.setAttribute('x',      (cx - w / 2) * 100);
+    r.setAttribute('y',      (cy - h / 2) * 100);
+    r.setAttribute('width',   w * 100);
+    r.setAttribute('height',  h * 100);
+    r.setAttribute('fill',   'rgba(76,175,80,0.25)');
+    r.setAttribute('stroke', '#4caf50');
+    r.setAttribute('stroke-width', '2');
+    r.setAttribute('vector-effect', 'non-scaling-stroke');
+    r.setAttribute('rx', '2');
+    svg.appendChild(r);
+    parent.appendChild(svg);
+  }
+
+  // Inject "Edit drawing" pencil button on every pad photo thumbnail when on
+  // the paddashboard (My Pads).  Re-runs on every guard tick; idempotent.
+  function injectPadDrawEdit() {
+    const onDash = !!Array.from(document.querySelectorAll('*')).find(el =>
+      el.childElementCount === 0 && el.textContent.trim() === 'Revenue & Payouts'
+    );
+    if (!onDash) {
+      document.querySelectorAll('.lp-draw-edit-btn').forEach(el => el.remove());
+      document.querySelectorAll('.lp-draw-overlay-svg').forEach(el => el.remove());
+      return;
+    }
+    document.querySelectorAll('img[src]').forEach(img => {
+      if (img.dataset.lpDrawEdit) {
+        overlayPadDrawing(img); // keep overlay fresh
+        return;
+      }
+      const rect = img.getBoundingClientRect();
+      if (rect.width < 60 || rect.height < 40) return; // skip tiny / off-screen
+      img.dataset.lpDrawEdit = '1';
+      const parent = img.parentElement;
+      if (!parent) return;
+      if (getComputedStyle(parent).position === 'static') parent.style.position = 'relative';
+
+      const btn = document.createElement('button');
+      btn.className = 'lp-draw-edit-btn';
+      btn.title = 'Edit spot drawing';
+      btn.innerHTML =
+        '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+          'stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
+          '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>' +
+          '<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>' +
+        '</svg>Edit drawing';
+      parent.appendChild(btn);
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        openPadDrawEditor(img);
+      });
+      overlayPadDrawing(img);
+    });
+  }
+
+  // Show a brief toast notification
+  function showLpToast(msg) {
+    const t = document.createElement('div');
+    t.className = 'lp-toast';
+    t.textContent = msg;
+    document.body.appendChild(t);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => t.classList.add('lp-toast-visible'));
+    });
+    setTimeout(() => {
+      t.classList.remove('lp-toast-visible');
+      setTimeout(() => t.remove(), 300);
+    }, 2500);
+  }
+
+  // Full-screen drawing editor modal
+  function openPadDrawEditor(img) {
+    if (document.getElementById('lp-draw-editor')) return;
+
+    const existingBox = _loadPadBox(img.src) || { cx: 0.5, cy: 0.5, w: 0, h: 0, angle: 0 };
+    let box = { ...existingBox };
+
+    const modal = document.createElement('div');
+    modal.id = 'lp-draw-editor';
+    modal.innerHTML =
+      '<div class="lp-de-bg"></div>' +
+      '<div class="lp-de-inner">' +
+        '<div class="lp-de-header">' +
+          '<span class="lp-de-title">Edit Parking Spot</span>' +
+          '<button class="lp-de-close">&#x2715;</button>' +
+        '</div>' +
+        '<div class="lp-de-hint">Drag on the photo to draw your spot</div>' +
+        '<div class="lp-de-canvas-wrap">' +
+          '<img class="lp-de-photo" src="' + img.src + '" alt="Pad photo" draggable="false">' +
+          '<canvas class="lp-de-canvas"></canvas>' +
+          '<svg class="lp-de-box-svg" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>' +
+        '</div>' +
+        '<div class="lp-de-footer">' +
+          '<button class="lp-de-clear">Clear</button>' +
+          '<button class="lp-de-save">Save</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(modal);
+
+    const canvas   = modal.querySelector('.lp-de-canvas');
+    const boxSvg   = modal.querySelector('.lp-de-box-svg');
+    const saveBtn  = modal.querySelector('.lp-de-save');
+    const clearBtn = modal.querySelector('.lp-de-clear');
+    const closeBtn = modal.querySelector('.lp-de-close');
+    const hint     = modal.querySelector('.lp-de-hint');
+    const ns = 'http://www.w3.org/2000/svg';
+
+    function renderBox() {
+      while (boxSvg.firstChild) boxSvg.removeChild(boxSvg.firstChild);
+      if (!box || !(box.w > 0.01)) return;
+      const { cx, cy, w, h } = box;
+
+      // Main rectangle
+      const rect = document.createElementNS(ns, 'rect');
+      rect.setAttribute('x',      (cx - w / 2) * 100);
+      rect.setAttribute('y',      (cy - h / 2) * 100);
+      rect.setAttribute('width',   w * 100);
+      rect.setAttribute('height',  h * 100);
+      rect.setAttribute('fill',   'rgba(76,175,80,0.25)');
+      rect.setAttribute('stroke', '#4caf50');
+      rect.setAttribute('stroke-width', '2');
+      rect.setAttribute('vector-effect', 'non-scaling-stroke');
+      rect.setAttribute('rx', '2');
+      boxSvg.appendChild(rect);
+
+      // Corner handles
+      [[cx - w/2, cy - h/2],[cx + w/2, cy - h/2],
+       [cx - w/2, cy + h/2],[cx + w/2, cy + h/2]].forEach(([px, py]) => {
+        const c = document.createElementNS(ns, 'circle');
+        c.setAttribute('cx',  px * 100);
+        c.setAttribute('cy',  py * 100);
+        c.setAttribute('r',   '3.5');
+        c.setAttribute('fill',         '#fff');
+        c.setAttribute('stroke',       '#4caf50');
+        c.setAttribute('stroke-width', '1.5');
+        c.setAttribute('vector-effect','non-scaling-stroke');
+        boxSvg.appendChild(c);
+      });
+
+      // Label
+      const lbl = document.createElementNS(ns, 'text');
+      lbl.setAttribute('x', cx * 100);
+      lbl.setAttribute('y', (cy - h / 2) * 100 - 2);
+      lbl.setAttribute('text-anchor',  'middle');
+      lbl.setAttribute('font-size',    '5');
+      lbl.setAttribute('font-family',  'DM Sans, sans-serif');
+      lbl.setAttribute('font-weight',  '600');
+      lbl.setAttribute('fill',         '#4caf50');
+      lbl.setAttribute('vector-effect','non-scaling-stroke');
+      lbl.textContent = 'Your spot';
+      boxSvg.appendChild(lbl);
+    }
+    renderBox();
+
+    // ── Drawing interaction (drag to draw a new rectangle) ──────────────────
+    let drawing  = false;
+    let drawStart = { x: 0, y: 0 };
+
+    function normXY(e) {
+      const r = canvas.getBoundingClientRect();
+      const t = e.touches ? (e.touches[0] || e.changedTouches[0]) : e;
+      return {
+        x: Math.max(0, Math.min(1, (t.clientX - r.left) / r.width)),
+        y: Math.max(0, Math.min(1, (t.clientY - r.top)  / r.height)),
+      };
+    }
+
+    canvas.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      drawing   = true;
+      drawStart = normXY(e);
+      canvas.setPointerCapture(e.pointerId);
+      hint.textContent = 'Release to set your spot';
+    });
+
+    canvas.addEventListener('pointermove', e => {
+      if (!drawing) return;
+      e.preventDefault();
+      const { x, y } = normXY(e);
+      box = {
+        cx: (drawStart.x + x) / 2,
+        cy: (drawStart.y + y) / 2,
+        w:  Math.abs(x - drawStart.x),
+        h:  Math.abs(y - drawStart.y),
+        angle: 0,
+      };
+      renderBox();
+    });
+
+    canvas.addEventListener('pointerup', e => {
+      if (!drawing) return;
+      e.preventDefault();
+      drawing = false;
+      const { x, y } = normXY(e);
+      const w = Math.abs(x - drawStart.x);
+      const h = Math.abs(y - drawStart.y);
+      if (w > 0.04 && h > 0.02) {
+        box = { cx: (drawStart.x + x) / 2, cy: (drawStart.y + y) / 2, w, h, angle: 0 };
+        renderBox();
+        hint.textContent = 'Looking good! Tap Save to apply.';
+      } else {
+        hint.textContent = 'Try dragging a larger area across the photo.';
+      }
+    });
+
+    canvas.addEventListener('pointercancel', () => { drawing = false; });
+    canvas.addEventListener('touchstart',    e => e.preventDefault(), { passive: false });
+
+    // ── Buttons ─────────────────────────────────────────────────────────────
+    clearBtn.addEventListener('click', () => {
+      box = { cx: 0.5, cy: 0.5, w: 0, h: 0, angle: 0 };
+      renderBox();
+      hint.textContent = 'Drag on the photo to draw your spot';
+    });
+
+    function closeModal() { modal.remove(); }
+
+    closeBtn.addEventListener('click', closeModal);
+    modal.querySelector('.lp-de-bg').addEventListener('click', closeModal);
+
+    saveBtn.addEventListener('click', () => {
+      _savePadBox(img.src, box);
+
+      // Try to update the bundle's h2 canvas if on the padAccount page
+      const bundleCanvas = document.querySelector('.canvas-wrap canvas');
+      if (bundleCanvas && box.w > 0.01) {
+        const hook = findH2BoxHook(bundleCanvas);
+        if (hook) {
+          hook.dispatch(prev => ({ ...prev, ...box }));
+          console.log('[Lily Pad] Pad box pushed to bundle fiber:', box);
+        }
+      }
+
+      overlayPadDrawing(img);
+      closeModal();
+      showLpToast('Spot drawing saved!');
+      console.log('[Lily Pad] Pad drawing saved:', JSON.stringify(box));
+    });
+
+    console.log('[Lily Pad] Pad draw editor opened');
+  }
+
   let _guardDiagLast = 0;
   function startGuard() {
     if (window.__lpGuardObserver) return;
@@ -2142,6 +2417,7 @@
       installPhotoClickHandlers();
       injectSameAddressHint();
       enlargePadCards();
+      injectPadDrawEdit();
 
       // ── Throttled page-state diagnostic (once every 4 s) ──────────────────
       const _now = Date.now();

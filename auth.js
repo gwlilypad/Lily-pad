@@ -346,32 +346,66 @@
   function clearFakeListings() {
     const now = Date.now();
 
-    // ── DOM text-scan (fast, NO cooldown — runs on every mutation) ────────────
-    // Fake ar[] items always render a "· X.X mi" distance string.  Hide the
-    // nearest card-like ancestor (≥ 60 px) immediately.  Because this runs on
-    // every DOM mutation it catches cards that React just re-rendered.
+    // ── DOM scan (fast, NO cooldown — runs on every mutation) ────────────────
+    // Strategy A: find the "X PADS NEARBY" panel and hide every card inside it.
+    // Strategy B: scan mid-sized divs whose *combined* textContent contains a
+    //   distance string (e.g. "1.1 mi") — catches cards outside the panel too.
+    // Both use element.textContent so they work even when the bullet "·" and
+    // the distance number live in separate child <span> elements.
     if (!document.getElementById('lp-fake-css')) {
       const st = document.createElement('style');
       st.id = 'lp-fake-css';
       st.textContent = '[data-lp-fake]{display:none!important}';
       document.head.appendChild(st);
     }
-    const miRe = /·\s*\d+\.\d+\s*mi/;
-    const walker2 = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-    let tn2, scanHid = 0;
-    while ((tn2 = walker2.nextNode())) {
-      if (miRe.test(tn2.nodeValue)) {
-        let el = tn2.parentElement;
-        for (let i = 0; i < 12 && el && el !== document.body; i++, el = el.parentElement) {
-          if (el.offsetHeight >= 60 && !el.dataset.lpFake) {
-            el.setAttribute('data-lp-fake', '1');
-            scanHid++;
-            break;
-          }
+    let scanHid = 0;
+
+    // Strategy A — "X PADS NEARBY" panel wipe
+    // Find the panel header, walk up to the scrollable list container, hide children.
+    const nearbyRe = /\d+\s+PADS?\s+NEARBY/i;
+    const allDivs = Array.from(document.querySelectorAll('div,section,ul'));
+    for (const el of allDivs) {
+      if (el.dataset.lpFakePanel) continue; // already processed this panel
+      // Look for an element that IS the header line (small, short text)
+      if (el.offsetHeight > 0 && el.offsetHeight < 40 &&
+          el.children.length <= 4 && nearbyRe.test(el.textContent)) {
+        // Walk up to find the scroll/list container (first ancestor taller than ~120 px)
+        let panel = el;
+        for (let i = 0; i < 10 && panel.parentElement; i++) {
+          panel = panel.parentElement;
+          if (panel.offsetHeight > 120) break;
         }
+        panel.dataset.lpFakePanel = '1';
+        // Hide every direct child that looks like a card (≥ 60 px tall)
+        Array.from(panel.children).forEach(child => {
+          if (child.offsetHeight >= 60 && !child.dataset.lpFake) {
+            child.setAttribute('data-lp-fake', '1');
+            scanHid++;
+          }
+        });
+        // Also hide second-level children in case the list adds a wrapper
+        Array.from(panel.querySelectorAll(':scope > * > *')).forEach(child => {
+          if (child.offsetHeight >= 60 && !child.dataset.lpFake) {
+            child.setAttribute('data-lp-fake', '1');
+            scanHid++;
+          }
+        });
+        break;
       }
     }
-    if (scanHid > 0) console.log('[Lily Pad] DOM scan hid', scanHid, 'fake listing cards');
+
+    // Strategy B — textContent distance scan on mid-sized cards
+    const distRe = /\b\d+\.\d+\s*mi\b/;
+    for (const el of allDivs) {
+      if (!el.dataset.lpFake && el.offsetHeight >= 60 && el.offsetHeight <= 250 &&
+          el.children.length >= 1 && el.children.length <= 20 &&
+          distRe.test(el.textContent)) {
+        el.setAttribute('data-lp-fake', '1');
+        scanHid++;
+      }
+    }
+
+    if (scanHid > 0) console.log('[Lily Pad] DOM scan hid', scanHid, 'fake listing card(s)');
 
     // ── Fiber walk (expensive — rate-limited to once per 400 ms) ─────────────
     if (now - _clearListingsCooldown < 400) return;

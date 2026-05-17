@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-16-AM';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-16-AN';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -3997,17 +3997,7 @@
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); _sendSupportMessage(); }
     });
 
-    // For customers with no existing conversations, jump straight to the new-request
-    // form so they aren't staring at an empty list.  Once conversations exist the
-    // list shows normally on every subsequent open.
-    _fetchConversations().then(() => {
-      if (!isPriv && !_lpAutoOpenedNew && _supportConvs.length === 0) {
-        _lpAutoOpenedNew = true;
-        if (panel.isConnected && !panel.querySelector('.lp-sup-new-view')) {
-          _startNewConversation();
-        }
-      }
-    });
+    _fetchConversations();
     _supportPollTimer = setInterval(_fetchConversations, 10000);
   }
 

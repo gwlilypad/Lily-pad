@@ -1594,3 +1594,54 @@ body.lp-photo-fs .canvas-wrap canvas {
 /* ── Support: new-message flash on incoming bubble ──────────────────────── */
 @keyframes lp-msg-flash { 0% { opacity:0.4; transform:translateY(4px); } 100% { opacity:1; transform:none; } }
 .lp-sup-msg-new { animation: lp-msg-flash 0.35s ease-out; }
+
+/* ── Admin native-chat bridge: real-message overlay ─────────────────────── */
+#lp-admin-msg-overlay {
+  max-height: 340px;
+  overflow-y: auto;
+  padding: 12px 14px;
+  background: rgba(10,20,45,0.85);
+  border: 1px solid rgba(90,140,255,0.25);
+  border-radius: 12px;
+  margin: 10px 0 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+#lp-admin-msg-overlay::before {
+  content: '💬 Lily Pad — live conversation';
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  color: rgba(120,170,255,0.7);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.lp-adm-msg {
+  display: flex;
+  flex-direction: column;
+  max-width: 80%;
+}
+.lp-adm-right { align-self: flex-end; align-items: flex-end; }
+.lp-adm-left  { align-self: flex-start; align-items: flex-start; }
+.lp-adm-bubble {
+  padding: 8px 12px;
+  border-radius: 16px;
+  font-size: 13px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+.lp-adm-right .lp-adm-bubble { background: #4ade80; color: #0a1428; border-bottom-right-radius: 4px; }
+.lp-adm-left  .lp-adm-bubble { background: #1e2d50; color: #e2e8f0; border-bottom-left-radius: 4px; }
+.lp-adm-meta {
+  font-size: 10px;
+  color: rgba(180,200,255,0.5);
+  margin-top: 3px;
+}
+.lp-adm-empty {
+  text-align: center;
+  color: rgba(180,200,255,0.4);
+  font-size: 12px;
+  padding: 14px 0;
+}

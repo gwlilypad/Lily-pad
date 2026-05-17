@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-17-BF';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-17-C1';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -3530,6 +3530,13 @@
   let _drawerPrevMsgCount = 0;   // kept for legacy ref; full-rerender now used
   let _supportViewMissCount = 0; // consecutive "not on support" guard cycles (debounce)
 
+  // ── Admin native-chat-detail bridge state ─────────────────────────────────
+  // Tracks the conversation whose messages we're mirroring into the admin's
+  // native "Reply as Admin" view so both sides share the same data source.
+  let _lpAdminDetailConv  = null;
+  let _lpAdminDetailPoll  = null;
+  let _lpAdminDetailCount = 0;
+
   // ── Unread tracking ───────────────────────────────────────────────────────
   // Tracks the last timestamp (ms) each conversation was read, stored in
   // localStorage so it survives page refreshes.
@@ -4339,6 +4346,179 @@
     });
   }
 
+  // ── Admin native-chat-detail bridge ──────────────────────────────────────
+  // When an admin/staff user is on the native "Reply as Admin" detail page,
+  // we inject a real-Supabase message overlay above the reply compose area
+  // AND piggyback every reply submission to our /api/support/messages endpoint.
+  // This is the root fix for the two-system disconnect: the native interface
+  // writes to the SPA's own backend; our drawer reads from Supabase.  Both
+  // are now bridged through this function.
+  async function _patchAdminNativeChatPage() {
+    const me = _getLpUser();
+    if (!me || (me.role !== 'admin' && me.role !== 'staff')) return;
+
+    const replyTA = document.querySelector('textarea[placeholder*="Reply as Admin"]');
+
+    if (!replyTA) {
+      // Left the admin detail page — clean up
+      if (_lpAdminDetailPoll) {
+        clearInterval(_lpAdminDetailPoll);
+        _lpAdminDetailPoll  = null;
+        _lpAdminDetailConv  = null;
+        _lpAdminDetailCount = 0;
+        const ol = document.getElementById('lp-admin-msg-overlay');
+        if (ol) ol.remove();
+      }
+      return;
+    }
+
+    // Already wired — poll handles live updates; nothing more to do here
+    if (replyTA.dataset.lpAdminWired) return;
+    replyTA.dataset.lpAdminWired = '1';
+
+    // ── Identify the customer's conversation ────────────────────────────────
+    // The native page renders the customer's email somewhere in its DOM.
+    // Scan leaf-text nodes for an email pattern (skip internal/system emails).
+    let convEmail = null;
+    Array.from(document.querySelectorAll('*')).some(el => {
+      if (el.childElementCount > 0) return false;
+      const t = el.textContent.trim();
+      const m = t.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/);
+      if (m && !/supabase|replit|railway|gmail\.com.*supabase/i.test(m[0])) {
+        convEmail = m[0].toLowerCase();
+        return true;
+      }
+      return false;
+    });
+
+    // Ensure conversation list is loaded
+    if (_supportConvs.length === 0) await _fetchConversations();
+
+    // Prefer the most recent open conversation for this customer
+    const conv =
+      _supportConvs.find(c => c.user_email && c.user_email.toLowerCase() === convEmail && c.status !== 'closed') ||
+      _supportConvs.find(c => c.user_email && c.user_email.toLowerCase() === convEmail);
+
+    if (!conv) {
+      console.warn('[LP] Admin detail bridge: no Supabase conv found for email', convEmail);
+      return;
+    }
+
+    _lpAdminDetailConv  = conv;
+    _lpAdminDetailCount = 0;
+    console.log('[LP] Admin detail bridge: wired conv', conv.id, 'for', convEmail);
+
+    // ── Inject real-message overlay above the reply compose area ────────────
+    let overlay = document.getElementById('lp-admin-msg-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'lp-admin-msg-overlay';
+      // Walk up from textarea until we find a container we can insert before
+      let anchor = replyTA.parentElement;
+      for (let i = 0; i < 5 && anchor && anchor.parentElement; i++) {
+        if (anchor.parentElement !== document.body) { anchor = anchor.parentElement; break; }
+      }
+      if (anchor && anchor.parentElement) {
+        anchor.parentElement.insertBefore(overlay, anchor);
+      } else {
+        document.body.appendChild(overlay);
+      }
+    }
+
+    // Render messages into overlay; skip if count unchanged
+    const _renderAdminOverlay = async () => {
+      if (!_lpAdminDetailConv) return;
+      try {
+        const r = await fetch(`/api/support/conversations/${_lpAdminDetailConv.id}/messages`);
+        if (!r.ok) return;
+        const msgs = await r.json();
+        const newCount = msgs ? msgs.length : 0;
+        if (newCount === _lpAdminDetailCount && newCount > 0) return;
+        _lpAdminDetailCount = newCount;
+
+        if (newCount === 0) {
+          overlay.innerHTML = '<div class="lp-adm-empty">No messages in Lily Pad system yet.</div>';
+          return;
+        }
+        overlay.innerHTML = msgs.map(m => {
+          const isAdm  = m.sender_role === 'admin' || m.sender_role === 'staff';
+          const safe   = (m.message || '')
+            .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+          const who    = isAdm ? ('🛡 ' + (m.sender_name || 'Admin')) : ('👤 ' + (m.sender_name || 'Customer'));
+          return `<div class="lp-adm-msg ${isAdm ? 'lp-adm-right' : 'lp-adm-left'}">
+            <div class="lp-adm-bubble">${safe}</div>
+            <div class="lp-adm-meta">${who} · ${_tsRelative(m.created_at)}</div>
+          </div>`;
+        }).join('');
+        overlay.scrollTop = overlay.scrollHeight;
+      } catch {}
+    };
+
+    await _renderAdminOverlay();
+
+    // Poll for new messages every 3 s (same cadence as customer drawer)
+    clearInterval(_lpAdminDetailPoll);
+    _lpAdminDetailPoll = setInterval(_renderAdminOverlay, 3000);
+
+    // ── Intercept reply submissions → also write to Supabase ────────────────
+    // We use capture=true so our handler fires BEFORE React's synthetic handler.
+    // We capture the message text first (React will clear the textarea), then
+    // post to our API asynchronously — the native flow still completes normally.
+    const _doAdminSend = async (msg) => {
+      if (!msg || !_lpAdminDetailConv) return;
+      try {
+        const r = await fetch('/api/support/messages', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            conversation_id: _lpAdminDetailConv.id,
+            sender_id:   me.id,
+            sender_name: me.name,
+            sender_role: 'admin',
+            message:     msg,
+          }),
+        });
+        if (r.ok) {
+          _lpAdminDetailCount = 0; // force overlay re-render
+          _renderAdminOverlay();
+          console.log('[LP] Admin reply mirrored to Supabase:', msg.slice(0, 60));
+        } else {
+          console.warn('[LP] Admin reply mirror failed:', r.status, await r.json().catch(() => ({})));
+        }
+      } catch (e) { console.warn('[LP] Admin reply mirror error:', e.message); }
+    };
+
+    // Find the "Review" / send button near the textarea
+    const sendBtn = (() => {
+      let el = replyTA.parentElement;
+      for (let i = 0; i < 6 && el && el !== document.body; i++) {
+        const btn = Array.from(el.querySelectorAll('button'))
+          .find(b => b !== replyTA && b.textContent.trim().length > 0);
+        if (btn) return btn;
+        el = el.parentElement;
+      }
+      return null;
+    })();
+
+    if (sendBtn && !sendBtn.dataset.lpAdminWired) {
+      sendBtn.dataset.lpAdminWired = '1';
+      sendBtn.addEventListener('click', (e) => {
+        // Capture message BEFORE React's handler clears textarea
+        const msg = replyTA.value.trim();
+        // Let native behavior proceed (no stopPropagation)
+        // Mirror to Supabase after a short tick (50 ms) so React has settled
+        if (msg) setTimeout(() => _doAdminSend(msg), 50);
+      }, true); // capture phase
+    }
+
+    // Also intercept ⌘/Ctrl + Enter keyboard shortcut shown in the placeholder
+    replyTA.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        const msg = replyTA.value.trim();
+        if (msg) setTimeout(() => _doAdminSend(msg), 50);
+      }
+    });
+  }
+
   let _guardDiagLast  = 0;
   let _lpPageSaveTime = 0;      // throttle for sessionStorage page-save
   let _guardRafPending = false; // RAF debounce flag
@@ -4365,6 +4545,7 @@
     injectAdminPanel();
     injectSupportChat();
     injectSupportNavBadge();
+    _patchAdminNativeChatPage();
 
     // ── Throttled page-state diagnostic (once every 4 s) ──────────────────
     const _now = Date.now();

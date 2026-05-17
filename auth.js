@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-16-AH';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-16-AI';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -583,6 +583,18 @@
     if (found) console.log('[LP] hideFakePadCards: hid', found, 'fake pad elements');
   }
 
+  // ── Shared helper: position a fixed button INSIDE the app container ─────────
+  // The app renders in a centred phone-shaped #root div.  position:fixed with
+  // top/left=14 puts the button at the browser-window corner — outside the app.
+  // This helper reads #root's screen rect so the button lands inside the phone.
+  function _lpAppInset(topOffset, leftOffset) {
+    const root = document.getElementById('root');
+    const rect = root ? root.getBoundingClientRect() : null;
+    const t = rect ? rect.top  + (topOffset  || 14) : (topOffset  || 14);
+    const l = rect ? rect.left + (leftOffset || 14) : (leftOffset || 14);
+    return 'top:' + Math.round(t) + 'px;left:' + Math.round(l) + 'px';
+  }
+
   // ── Back button to exit the "Add your lily pad" wizard ────────────────────
   // The wizard page has heading "Add your lily pad." and shows "Step X of 6".
   // There is no built-in way to exit back to My Pads — this injects one.
@@ -603,7 +615,7 @@
       'stroke-linejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>' +
       '<span style="font-size:13px;font-weight:600;font-family:\'DM Sans\',sans-serif">My Pads</span>';
     btn.setAttribute('style', [
-      'position:fixed', 'top:14px', 'left:14px', 'z-index:9999',
+      'position:fixed', _lpAppInset(), 'z-index:9999',
       'display:flex', 'align-items:center', 'gap:5px',
       'background:rgba(14,31,64,0.82)', 'color:#fff',
       'border:none', 'border-radius:20px', 'padding:6px 14px 6px 10px',
@@ -1796,8 +1808,7 @@
       '<span style="font-size:13px;font-weight:600;font-family:\'DM Sans\',sans-serif">Back</span>';
     btn.setAttribute('style', [
       'position:fixed',
-      'top:14px',
-      'left:14px',
+      _lpAppInset(),
       'z-index:9999',
       'display:flex',
       'align-items:center',
@@ -1851,8 +1862,7 @@
       '<span style="font-size:13px;font-weight:600;font-family:\'DM Sans\',sans-serif">Back</span>';
     btn.setAttribute('style', [
       'position:fixed',
-      'top:14px',
-      'left:14px',
+      _lpAppInset(),
       'z-index:9999',
       'display:flex',
       'align-items:center',

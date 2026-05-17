@@ -1299,6 +1299,44 @@ body.lp-photo-fs .canvas-wrap canvas {
   font-weight: 700;
   cursor: pointer;
 }
+.lp-sup-new-send-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+/* ── Admin: customer search inside support new-chat ──────────────────────── */
+.lp-sup-new-search {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 10px;
+  padding: 11px 14px;
+  color: #fff;
+  font-size: 14px;
+  outline: none;
+  font-family: inherit;
+}
+.lp-sup-new-search::placeholder { color: rgba(255,255,255,0.3); }
+.lp-sup-new-search:focus { border-color: rgba(141,214,63,0.45); }
+.lp-sup-search-results {
+  flex: 1;
+  overflow-y: auto;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.lp-sup-search-hint {
+  color: rgba(255,255,255,0.38);
+  font-size: 13px;
+  text-align: center;
+  padding: 24px 16px;
+}
+.lp-sup-search-row {
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  cursor: pointer;
+  transition: background 0.14s;
+}
+.lp-sup-search-row:last-child { border-bottom: none; }
+.lp-sup-search-row:hover { background: rgba(141,214,63,0.08); }
+.lp-sup-search-name { font-size: 14px; font-weight: 600; color: #fff; }
+.lp-sup-search-email { font-size: 12px; color: rgba(255,255,255,0.42); margin-top: 2px; }
 /* ── Support: header back button ─────────────────────────────────────────── */
 .lp-sup-hdr-back {
   background: none;

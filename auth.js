@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-16-AK';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-16-AL';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -3795,8 +3795,87 @@
           newDiv.remove(); listView.style.display = 'flex';
           await _fetchConversations();
           if (conv && conv.id) _openConversation(conv);
+        } else {
+          const err = await r.json().catch(() => ({}));
+          console.warn('[LP] create conversation failed:', r.status, err);
+          btn.disabled = false; btn.textContent = 'Send Message';
         }
-      } catch { btn.disabled = false; btn.textContent = 'Send Message'; }
+      } catch (e) {
+        console.warn('[LP] create conversation error:', e.message);
+        btn.disabled = false; btn.textContent = 'Send Message';
+      }
+    });
+  }
+
+  function _startAdminNewChat() {
+    const panel = document.getElementById('lp-support-panel');
+    if (!panel) return;
+    const listView = panel.querySelector('.lp-sup-list-view');
+    if (panel.querySelector('.lp-sup-new-view')) return;
+
+    const newDiv = document.createElement('div');
+    newDiv.className = 'lp-sup-new-view';
+    newDiv.innerHTML = `
+      <div class="lp-sup-new-hdr">
+        <button class="lp-sup-back-btn">← Back</button>
+        <span>Start Chat with Customer</span>
+      </div>
+      <input class="lp-sup-new-search" placeholder="Search customer by name or email…" autocomplete="off">
+      <div class="lp-sup-search-results"><div class="lp-sup-search-hint">Type a name or email to search</div></div>`;
+    listView.parentElement.insertBefore(newDiv, listView);
+    listView.style.display = 'none';
+
+    newDiv.querySelector('.lp-sup-back-btn').addEventListener('click', () => {
+      newDiv.remove();
+      listView.style.display = 'flex';
+    });
+
+    let _searchTimer = null;
+    let _allUsers = null;
+    newDiv.querySelector('.lp-sup-new-search').addEventListener('input', async function () {
+      const q = this.value.trim().toLowerCase();
+      const results = newDiv.querySelector('.lp-sup-search-results');
+      clearTimeout(_searchTimer);
+      if (!q) {
+        results.innerHTML = '<div class="lp-sup-search-hint">Type a name or email to search</div>';
+        return;
+      }
+      results.innerHTML = '<div class="lp-sup-search-hint">Searching…</div>';
+      _searchTimer = setTimeout(async () => {
+        try {
+          if (!_allUsers) {
+            const r = await fetch('/api/admin/users');
+            _allUsers = r.ok ? await r.json() : [];
+          }
+          const matched = _allUsers.filter(u =>
+            (u.full_name || '').toLowerCase().includes(q) ||
+            (u.email || '').toLowerCase().includes(q)
+          ).slice(0, 12);
+          if (matched.length === 0) {
+            results.innerHTML = '<div class="lp-sup-search-hint">No customers found</div>';
+            return;
+          }
+          results.innerHTML = matched.map(u => {
+            const name = (u.full_name || u.email || 'Unknown').replace(/"/g, '&quot;');
+            const email = (u.email || '').replace(/"/g, '&quot;');
+            return `<div class="lp-sup-search-row" data-uid="${u.id}" data-name="${name}" data-email="${email}">
+              <div class="lp-sup-search-name">${u.full_name || u.email || 'Unknown'}</div>
+              <div class="lp-sup-search-email">${u.email || ''}</div>
+            </div>`;
+          }).join('');
+          results.querySelectorAll('.lp-sup-search-row').forEach(row => {
+            row.addEventListener('click', () => {
+              const user = { id: row.dataset.uid, full_name: row.dataset.name, email: row.dataset.email };
+              newDiv.remove();
+              listView.style.display = 'flex';
+              _openAdminChatWith(user);
+            });
+          });
+        } catch (e) {
+          console.warn('[LP] customer search error:', e.message);
+          results.innerHTML = '<div class="lp-sup-search-hint">Search failed — try again</div>';
+        }
+      }, 350);
     });
   }
 
@@ -3873,7 +3952,7 @@
         <div class="lp-sup-list-view">
           <div class="lp-sup-list-hdr">
             <span>${isPriv ? 'All Conversations' : 'My Conversations'}</span>
-            ${!isPriv ? '<button class="lp-sup-new-btn">+ New Request</button>' : ''}
+            <button class="lp-sup-new-btn">${isPriv ? '+ New Chat' : '+ New Request'}</button>
           </div>
           <div class="lp-sup-list"><div class="lp-sup-loading">Loading…</div></div>
         </div>
@@ -3910,7 +3989,7 @@
       _fetchConversations();
     });
     const newBtn = panel.querySelector('.lp-sup-new-btn');
-    if (newBtn) newBtn.addEventListener('click', _startNewConversation);
+    if (newBtn) newBtn.addEventListener('click', isPriv ? _startAdminNewChat : _startNewConversation);
     panel.querySelector('.lp-sup-send-btn').addEventListener('click', _sendSupportMessage);
     panel.querySelector('.lp-sup-input').addEventListener('keydown', e => {
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); _sendSupportMessage(); }

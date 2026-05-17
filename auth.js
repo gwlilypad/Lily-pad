@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-17-AS';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-17-BF';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -4078,6 +4078,10 @@
       if (!r.ok) {
         console.warn('[LP] sendDrawerMessage failed:', r.status, await r.json().catch(() => ({})));
       } else {
+        // Reset the count guard so the post-send fetch ALWAYS triggers a
+        // re-render regardless of any racing poll that may have already
+        // incremented _drawerPrevMsgCount to the new value.
+        _drawerPrevMsgCount = 0;
         await _fetchDrawerMessages(_drawerActiveConv.id);
         await _fetchConversations();
       }
@@ -4259,10 +4263,16 @@
     const onSupport = _isSupportView();
 
     if (!onSupport) {
-      // Leaving support page — tear down everything.
-      // _isSupportView() is now highly reliable (checks our own injected element
-      // #lp-real-conv-list which React removes when navigating away), so no
-      // debounce is needed and we can tear down immediately.
+      // Only do a full teardown when we are CERTAIN the user has navigated away.
+      // lpGetCurrentPage() can return null during React mid-renders (fiber tree is
+      // being rebuilt) even while still on the support page.  Tearing down on a
+      // null read kills _drawerMsgPoll and clears _drawerActiveConv, which is why
+      // admin replies stop showing — the poll is dead.
+      //
+      // Safe teardown rule: currentPage must be a known, non-null, non-support page.
+      const currentPage = lpGetCurrentPage();
+      if (currentPage === null || currentPage === 'support') return; // stay alive
+
       clearInterval(_supportPollTimer);
       _supportPollTimer = null;
       clearInterval(_drawerMsgPoll);
@@ -4659,14 +4669,24 @@
 
     navigateToMap(role, () => {
       if (_savedPage) {
-        // Give the map a moment to settle before jumping to the saved page
-        setTimeout(() => {
+        // Retry loop: lpGetGoTo() does a fiber walk which can fail if React
+        // hasn't fully committed the context yet.  Poll up to 10 times with
+        // 250 ms gaps (2.5 s total window) starting 800 ms after nav completes.
+        let _restoreTries = 0;
+        const _tryRestore = () => {
           const goTo = lpGetGoTo();
           if (goTo) {
-            console.log('[Lily Pad] Restoring page after refresh:', _savedPage);
+            console.log('[Lily Pad] Restoring page after refresh:', _savedPage, '(try', _restoreTries + 1, ')');
             goTo(_savedPage);
+            return;
           }
-        }, 600);
+          if (++_restoreTries < 10) {
+            setTimeout(_tryRestore, 250);
+          } else {
+            console.warn('[Lily Pad] Page restore failed — goTo not found after retries');
+          }
+        };
+        setTimeout(_tryRestore, 800);
       }
     });
   }

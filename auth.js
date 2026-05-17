@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-16-AQ';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-17-AR';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -3527,7 +3527,8 @@
   // ── Chat drawer state ──────────────────────────────────────────────────────
   let _drawerActiveConv   = null;
   let _drawerMsgPoll      = null;
-  let _drawerPrevMsgCount = 0;
+  let _drawerPrevMsgCount = 0;   // kept for legacy ref; full-rerender now used
+  let _supportViewMissCount = 0; // consecutive "not on support" guard cycles (debounce)
 
   // ── Unread tracking ───────────────────────────────────────────────────────
   // Tracks the last timestamp (ms) each conversation was read, stored in
@@ -3985,7 +3986,7 @@
     drawer.querySelector('.lp-drawer-messages').innerHTML = '<div class="lp-drawer-empty">Loading…</div>';
     drawer.classList.add('open');
     _fetchDrawerMessages(conv.id);
-    _drawerMsgPoll = setInterval(() => _fetchDrawerMessages(conv.id), 5000);
+    _drawerMsgPoll = setInterval(() => _fetchDrawerMessages(conv.id), 3000);
     _renderRealConvList(); // refresh list (active highlight + unread dots)
     injectSupportNavBadge();
   }
@@ -4011,14 +4012,16 @@
     if (!drawer || !_drawerActiveConv) return;
     const me = _getLpUser();
     const container = drawer.querySelector('.lp-drawer-messages');
+
+    // Full re-render every time — avoids prevCount drift bugs where new messages
+    // (e.g. admin replies) get silently skipped due to stale incremental state.
+    container.innerHTML = '';
     if (!msgs || msgs.length === 0) {
       container.innerHTML = '<div class="lp-drawer-empty">No messages yet — say hi!</div>';
+      _drawerPrevMsgCount = 0;
       return;
     }
-    const prevCount = _drawerPrevMsgCount;
-    if (prevCount === 0) container.innerHTML = '';
-    msgs.forEach((m, idx) => {
-      if (idx < prevCount) return;
+    msgs.forEach((m) => {
       const isMine  = me && m.sender_id === me.id;
       const roleTag = m.sender_role === 'admin' ? '🛡 Admin' : m.sender_role === 'staff' ? '👤 Staff' : '';
       const safeMsg = (m.message || m.body || '')
@@ -4245,10 +4248,17 @@
     const onSupport = _isSupportView();
 
     if (!onSupport) {
-      // Leaving support page — tear down everything
+      // Debounce: React re-renders can cause brief false-negatives from _isSupportView.
+      // Only tear down after 4 consecutive guard cycles that all agree we've left.
+      _supportViewMissCount++;
+      if (_supportViewMissCount < 4) return;
+      _supportViewMissCount = 0;
+
+      // Confirmed leaving support page — tear down everything
       clearInterval(_supportPollTimer);
       _supportPollTimer = null;
       clearInterval(_drawerMsgPoll);
+      _drawerMsgPoll      = null;
       _drawerActiveConv   = null;
       _drawerPrevMsgCount = 0;
       const drawer = document.getElementById('lp-chat-drawer');
@@ -4259,6 +4269,9 @@
       if (oldPanel) oldPanel.remove();
       return;
     }
+
+    // We're on the support page — reset miss counter
+    _supportViewMissCount = 0;
 
     // On the support page — ensure drawer is injected, native page is patched
     _lpLoadSeen();
@@ -4611,7 +4624,30 @@
       setTimeout(tryWrite, 400);
     }
 
-    navigateToMap(role, () => {});
+    // ── Restore page after browser refresh ──────────────────────────────────
+    // On refresh the React SPA always boots to the landing/home page.
+    // We save the user's current page before every unload (see beforeunload in
+    // init), then restore it here after the map has fully loaded.
+    const _savedPage = (() => {
+      try {
+        const p = sessionStorage.getItem('lp_last_page');
+        sessionStorage.removeItem('lp_last_page');
+        return p;
+      } catch { return null; }
+    })();
+
+    navigateToMap(role, () => {
+      if (_savedPage) {
+        // Give the map a moment to settle before jumping to the saved page
+        setTimeout(() => {
+          const goTo = lpGetGoTo();
+          if (goTo) {
+            console.log('[Lily Pad] Restoring page after refresh:', _savedPage);
+            goTo(_savedPage);
+          }
+        }, 600);
+      }
+    });
   }
 
   // ── Init ──────────────────────────────────────────────────────────────────
@@ -4620,6 +4656,20 @@
     wireSignOut();
     wireAuthForms();
     startGuard();
+
+    // ── Save current page before browser refresh so afterAuth can restore it ──
+    window.addEventListener('beforeunload', () => {
+      try {
+        const page = lpGetCurrentPage();
+        // Only save non-trivial pages — the map ('find') is the natural landing;
+        // skip 'landing' and null so we don't accidentally restore auth screens.
+        if (page && page !== 'landing' && page !== 'find') {
+          sessionStorage.setItem('lp_last_page', page);
+        } else {
+          sessionStorage.removeItem('lp_last_page');
+        }
+      } catch {}
+    });
 
     if (SUPABASE_OK) {
       const session = getSession();

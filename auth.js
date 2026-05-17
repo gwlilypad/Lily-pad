@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-16-AP';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-16-AQ';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -3524,6 +3524,11 @@
   let _supportPrevMsgCount = 0; // detect new incoming messages
   let _lpAutoOpenedNew = false;  // fire new-request form once per session if no convs
 
+  // ── Chat drawer state ──────────────────────────────────────────────────────
+  let _drawerActiveConv   = null;
+  let _drawerMsgPoll      = null;
+  let _drawerPrevMsgCount = 0;
+
   // ── Unread tracking ───────────────────────────────────────────────────────
   // Tracks the last timestamp (ms) each conversation was read, stored in
   // localStorage so it survives page refreshes.
@@ -3594,7 +3599,8 @@
       const r = await fetch(url);
       if (r.ok) {
         _supportConvs = await r.json();
-        _renderSupportList();
+        _renderSupportList();    // legacy panel list (no-op if panel not present)
+        _renderRealConvList();  // native-page real conversation list
         _lpUpdateHeaderBadge();
         injectSupportNavBadge();
       }
@@ -3883,22 +3889,17 @@
   async function _deleteConversation(conv) {
     if (!confirm(`Delete this conversation permanently? This cannot be undone.`)) return;
     await fetch(`/api/support/conversations/${conv.id}`, { method: 'DELETE' });
-    _supportActiveConv = null;
-    _supportPrevMsgCount = 0;
-    clearInterval(_supportMsgPollTimer);
-    const panel = document.getElementById('lp-support-panel');
-    if (panel) {
-      panel.querySelector('.lp-sup-thread-view').style.display = 'none';
-      panel.querySelector('.lp-sup-list-view').style.display   = 'flex';
-    }
+    clearInterval(_drawerMsgPoll);
+    _drawerActiveConv   = null;
+    _drawerPrevMsgCount = 0;
+    _closeDrawerConv();
     await _fetchConversations();
   }
 
   function _openAdminChatWith(user) {
     const existing = _supportConvs.find(c => c.user_id === user.id && c.status !== 'closed');
     if (existing) {
-      _openSupportPanel();
-      setTimeout(() => _openConversation(existing), 300);
+      _openDrawerConv(existing);
     } else {
       const me = _getLpUser();
       if (!me) return;
@@ -3909,117 +3910,364 @@
           user_email: user.email, subject: 'Admin Message',
         }),
       }).then(r => r.json()).then(conv => {
-        _openSupportPanel();
-        setTimeout(() => { _fetchConversations().then(() => { if (conv && conv.id) _openConversation(conv); }); }, 300);
+        _fetchConversations().then(() => { if (conv && conv.id) _openDrawerConv(conv); });
       }).catch(() => {});
     }
   }
 
-  function _openSupportPanel() {
-    const goTo = lpGetGoTo();
-    if (goTo) { goTo('support'); }
+  // ── Bottom chat drawer ────────────────────────────────────────────────────
+  function _injectChatDrawer() {
+    if (document.getElementById('lp-chat-drawer')) return;
+    const drawer = document.createElement('div');
+    drawer.id = 'lp-chat-drawer';
+    drawer.innerHTML = `
+      <div class="lp-drawer-handle-area">
+        <div class="lp-drawer-handle"></div>
+        <span class="lp-drawer-title"></span>
+        <button class="lp-drawer-close" title="Close">✕</button>
+      </div>
+      <div class="lp-drawer-status-row" style="display:none"></div>
+      <div class="lp-drawer-messages"></div>
+      <div class="lp-drawer-compose">
+        <textarea class="lp-drawer-input" placeholder="Type a message…" rows="2"></textarea>
+        <button class="lp-drawer-send">Send</button>
+      </div>`;
+    document.body.appendChild(drawer);
+    drawer.querySelector('.lp-drawer-close').addEventListener('click', _closeDrawerConv);
+    drawer.querySelector('.lp-drawer-send').addEventListener('click', _sendDrawerMessage);
+    drawer.querySelector('.lp-drawer-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); _sendDrawerMessage(); }
+    });
   }
 
-  // Creates and opens the full support chat panel.
-  // Called directly for admin/staff, or via the trigger button for customers.
-  function _openSupportPanel() {
-    const existing = document.getElementById('lp-support-panel');
-    if (existing) return;
-    const trigBtn = document.getElementById('lp-sup-trigger-btn');
-    if (trigBtn) trigBtn.remove();
+  function _openDrawerConv(conv) {
+    _drawerActiveConv   = conv;
+    _drawerPrevMsgCount = 0;
+    clearInterval(_drawerMsgPoll);
+    _lpMarkSeen(conv.id);
+
+    const drawer = document.getElementById('lp-chat-drawer');
+    if (!drawer) { _injectChatDrawer(); return _openDrawerConv(conv); }
 
     const me     = _getLpUser();
     const isPriv = me && (me.role === 'admin' || me.role === 'staff');
 
+    drawer.querySelector('.lp-drawer-title').textContent =
+      isPriv ? (conv.user_name || conv.user_email || 'Customer') : (conv.subject || 'Support Chat');
+
+    // Admin/staff action row
+    const statusRow = drawer.querySelector('.lp-drawer-status-row');
+    if (isPriv) {
+      const stCls = conv.status === 'closed' ? 'closed' : conv.status === 'pending' ? 'pend' : 'open';
+      const stLbl = conv.status === 'closed' ? 'CLOSED' : conv.status === 'pending' ? 'PENDING' : 'OPEN';
+      const toggleBtn = conv.status === 'closed'
+        ? `<button class="lp-drawer-act-btn green" data-act="open">↺ Reopen</button>`
+        : `<button class="lp-drawer-act-btn" data-act="closed">✓ Close</button>`;
+      statusRow.innerHTML = `
+        <span class="lp-rconv-status ${stCls}">${stLbl}</span>
+        ${toggleBtn}
+        <button class="lp-drawer-act-btn red" data-act="delete">🗑 Delete</button>`;
+      statusRow.style.display = 'flex';
+      statusRow.querySelector('[data-act="delete"]').addEventListener('click', () => _deleteConversation(conv));
+      statusRow.querySelector('[data-act]:not([data-act="delete"])').addEventListener('click', async function () {
+        const newStatus = this.dataset.act;
+        const r = await fetch(`/api/support/conversations/${conv.id}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: newStatus }),
+        });
+        if (r.ok) { conv.status = newStatus; await _fetchConversations(); _openDrawerConv(conv); }
+      });
+    } else {
+      statusRow.style.display = 'none';
+      statusRow.innerHTML = '';
+    }
+
+    drawer.querySelector('.lp-drawer-messages').innerHTML = '<div class="lp-drawer-empty">Loading…</div>';
+    drawer.classList.add('open');
+    _fetchDrawerMessages(conv.id);
+    _drawerMsgPoll = setInterval(() => _fetchDrawerMessages(conv.id), 5000);
+    _renderRealConvList(); // refresh list (active highlight + unread dots)
+    injectSupportNavBadge();
+  }
+
+  function _closeDrawerConv() {
+    clearInterval(_drawerMsgPoll);
+    _drawerActiveConv   = null;
+    _drawerPrevMsgCount = 0;
+    const drawer = document.getElementById('lp-chat-drawer');
+    if (drawer) drawer.classList.remove('open');
+    _renderRealConvList();
+  }
+
+  async function _fetchDrawerMessages(convId) {
+    try {
+      const r = await fetch(`/api/support/conversations/${convId}/messages`);
+      if (r.ok) _renderDrawerMessages(await r.json());
+    } catch {}
+  }
+
+  function _renderDrawerMessages(msgs) {
+    const drawer = document.getElementById('lp-chat-drawer');
+    if (!drawer || !_drawerActiveConv) return;
+    const me = _getLpUser();
+    const container = drawer.querySelector('.lp-drawer-messages');
+    if (!msgs || msgs.length === 0) {
+      container.innerHTML = '<div class="lp-drawer-empty">No messages yet — say hi!</div>';
+      return;
+    }
+    const prevCount = _drawerPrevMsgCount;
+    if (prevCount === 0) container.innerHTML = '';
+    msgs.forEach((m, idx) => {
+      if (idx < prevCount) return;
+      const isMine  = me && m.sender_id === me.id;
+      const roleTag = m.sender_role === 'admin' ? '🛡 Admin' : m.sender_role === 'staff' ? '👤 Staff' : '';
+      const safeMsg = (m.message || m.body || '')
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+      const el = document.createElement('div');
+      el.className = `lp-drawer-msg ${isMine ? 'mine' : 'theirs'}`;
+      el.innerHTML = `
+        <div class="lp-drawer-bubble">${safeMsg}</div>
+        <div class="lp-drawer-msg-meta">
+          ${roleTag ? `<span class="lp-drawer-role-tag">${roleTag}</span>` : ''}
+          <span>${m.sender_name || ''}</span>
+          <span>${_tsRelative(m.created_at)}</span>
+        </div>`;
+      container.appendChild(el);
+    });
+    _drawerPrevMsgCount = msgs.length;
+    container.scrollTop = container.scrollHeight;
+    if (_drawerActiveConv) { _lpMarkSeen(_drawerActiveConv.id); injectSupportNavBadge(); }
+  }
+
+  async function _sendDrawerMessage() {
+    if (!_drawerActiveConv) return;
+    const drawer = document.getElementById('lp-chat-drawer');
+    if (!drawer) return;
+    const ta  = drawer.querySelector('.lp-drawer-input');
+    const msg = (ta ? ta.value : '').trim();
+    if (!msg) return;
+    const me = _getLpUser();
+    if (!me) return;
+    ta.value = '';
+    ta.disabled = true;
+    const sendBtn = drawer.querySelector('.lp-drawer-send');
+    if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = 'Sending…'; }
+    try {
+      const senderRole = (me.role === 'admin' || me.role === 'staff') ? me.role : 'customer';
+      const r = await fetch('/api/support/messages', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversation_id: _drawerActiveConv.id,
+          sender_id: me.id, sender_name: me.name, sender_role: senderRole, message: msg,
+        }),
+      });
+      if (!r.ok) {
+        console.warn('[LP] sendDrawerMessage failed:', r.status, await r.json().catch(() => ({})));
+      } else {
+        await _fetchDrawerMessages(_drawerActiveConv.id);
+        await _fetchConversations();
+      }
+    } catch (e) { console.warn('[LP] sendDrawerMessage error:', e.message); }
+    finally {
+      ta.disabled = false;
+      if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = 'Send'; }
+      ta.focus();
+    }
+  }
+
+  // Patch the native support page: wire "Chat with a rep", hide fake rows, inject real list.
+  function _patchNativeSupportPage() {
+    // Wire "Chat with a rep" button
+    Array.from(document.querySelectorAll('button, div[role="button"], a')).forEach(el => {
+      if (el.dataset.lpWired) return;
+      if (/^Chat with a rep$/i.test(el.textContent.trim()) || /^Chat with us$/i.test(el.textContent.trim())) {
+        el.dataset.lpWired = '1';
+        el.addEventListener('click', e => { e.stopPropagation(); _openNewChatModal(); }, true);
+      }
+    });
+    // Hide native fake conversation rows
+    Array.from(document.querySelectorAll('*')).forEach(el => {
+      if (el.dataset.lpHidden || el.id === 'lp-real-conv-list' || el.id === 'lp-chat-drawer') return;
+      if (el.childElementCount <= 4 && /^Live chat with a rep$/i.test(el.textContent.trim())) {
+        el.dataset.lpHidden = '1'; el.style.display = 'none';
+      }
+    });
+    // Inject our real conversation list once
+    if (!document.getElementById('lp-real-conv-list')) {
+      const hdrEl = Array.from(document.querySelectorAll('*')).find(
+        el => el.childElementCount === 0 && /YOUR CONVERSATIONS/i.test(el.textContent.trim())
+      );
+      const anchor = hdrEl ? (hdrEl.closest('[class]') || hdrEl.parentElement) : null;
+      const injected = document.createElement('div');
+      injected.id = 'lp-real-conv-list';
+      if (anchor && anchor.parentElement) {
+        anchor.parentElement.insertBefore(injected, anchor.nextSibling);
+      } else {
+        (document.querySelector('main,[role="main"]') || document.body).appendChild(injected);
+      }
+      _renderRealConvList();
+    }
+  }
+
+  function _renderRealConvList() {
+    const el = document.getElementById('lp-real-conv-list');
+    if (!el) return;
+    const me     = _getLpUser();
+    const isPriv = me && (me.role === 'admin' || me.role === 'staff');
     _lpLoadSeen();
+    if (_supportConvs.length === 0) {
+      el.innerHTML = `<div class="lp-rconv-empty">${
+        isPriv ? 'No open conversations.' : 'No conversations yet — tap "Chat with a rep" to start one.'
+      }</div>`;
+      return;
+    }
+    el.innerHTML = _supportConvs.map(c => {
+      const name    = isPriv ? (c.user_name || c.user_email || 'Customer') : (c.subject || 'Support Request');
+      const preview = (c.last_message || 'No messages yet').slice(0, 65);
+      const stCls   = c.status === 'closed' ? 'closed' : c.status === 'pending' ? 'pend' : 'open';
+      const stLbl   = c.status === 'closed' ? 'CLOSED' : c.status === 'pending' ? 'PENDING' : 'OPEN';
+      const active  = _drawerActiveConv && _drawerActiveConv.id === c.id;
+      const unread  = _lpIsUnread(c) && !(active);
+      return `
+        <div class="lp-rconv-row${active ? ' active' : ''}" data-cid="${c.id}">
+          <div class="lp-rconv-icon">💬</div>
+          <div class="lp-rconv-body">
+            <div class="lp-rconv-top">
+              <span class="lp-rconv-name">${name}</span>
+              <div style="display:flex;align-items:center;gap:6px">
+                <span class="lp-rconv-status ${stCls}">${stLbl}</span>
+                <span class="lp-rconv-time">${_tsRelative(c.updated_at || c.created_at)}</span>
+              </div>
+            </div>
+            <div class="lp-rconv-preview">${preview}</div>
+          </div>
+          ${unread ? '<div class="lp-rconv-unread-dot"></div>' : ''}
+        </div>`;
+    }).join('');
+    el.querySelectorAll('.lp-rconv-row').forEach(row =>
+      row.addEventListener('click', () => {
+        const c = _supportConvs.find(x => x.id === row.dataset.cid);
+        if (c) _openDrawerConv(c);
+      })
+    );
+  }
 
-    const panel = document.createElement('div');
-    panel.id = 'lp-support-panel';
-    panel.innerHTML = `
-      <div class="lp-sup-header">
-        <button class="lp-sup-hdr-back" title="Back">&#8592;</button>
-        <span class="lp-sup-header-title">${isPriv ? '📬 Support Inbox' : '💬 Customer Support'}</span>
-        ${isPriv ? `<span class="lp-sup-role-badge">${me.role === 'admin' ? 'Admin' : 'Staff'}</span>` : ''}
-        <span class="lp-sup-hdr-badge" id="lp-sup-hdr-badge" style="display:none">0</span>
-      </div>
-      <div class="lp-sup-body">
-        <div class="lp-sup-list-view">
-          <div class="lp-sup-list-hdr">
-            <span>${isPriv ? 'All Conversations' : 'My Conversations'}</span>
-            <button class="lp-sup-new-btn">${isPriv ? '+ New Chat' : '+ New Request'}</button>
-          </div>
-          <div class="lp-sup-list"><div class="lp-sup-loading">Loading…</div></div>
+  // New-chat modal (bottom sheet) — customer gets subject+message form, admin gets customer search.
+  function _openNewChatModal() {
+    if (document.getElementById('lp-new-chat-modal')) return;
+    const me = _getLpUser();
+    if (!me) return;
+    const isPriv = me.role === 'admin' || me.role === 'staff';
+    const modal = document.createElement('div');
+    modal.id = 'lp-new-chat-modal';
+    modal.innerHTML = `
+      <div class="lp-ncm-sheet">
+        <div class="lp-ncm-hdr">
+          <span class="lp-ncm-title">${isPriv ? 'Start Chat with Customer' : 'New Support Request'}</span>
+          <button class="lp-ncm-close">✕</button>
         </div>
-        <div class="lp-sup-thread-view" style="display:none;flex-direction:column">
-          <div class="lp-sup-thread-hdr">
-            <button class="lp-sup-thread-back">← Back</button>
-            <span class="lp-sup-thread-title"></span>
-            <div class="lp-sup-thread-actions"></div>
-          </div>
-          <div class="lp-sup-messages"></div>
-          <div class="lp-sup-compose">
-            <textarea class="lp-sup-input" placeholder="Type a message…" rows="2"></textarea>
-            <button class="lp-sup-send-btn">Send</button>
-          </div>
-        </div>
+        ${isPriv ? `
+          <input class="lp-ncm-input" id="lp-ncm-search" placeholder="Search customer by name or email…" autocomplete="off">
+          <div id="lp-ncm-results" style="margin-top:8px"></div>
+        ` : `
+          <input class="lp-ncm-input" id="lp-ncm-subject" placeholder="Subject (e.g. Payment issue)" maxlength="80">
+          <textarea class="lp-ncm-textarea" id="lp-ncm-msg" placeholder="Describe your issue…" rows="4"></textarea>
+          <button class="lp-ncm-send" id="lp-ncm-send-btn">Send Message</button>
+        `}
       </div>`;
-    document.body.appendChild(panel);
-    requestAnimationFrame(() => panel.classList.add('open'));
+    document.body.appendChild(modal);
+    modal.querySelector('.lp-ncm-close').addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
 
-    panel.querySelector('.lp-sup-hdr-back').addEventListener('click', () => {
-      clearInterval(_supportPollTimer);
-      clearInterval(_supportMsgPollTimer);
-      _supportActiveConv = null;
-      _lpAutoOpenedNew = false;
-      panel.remove();
-      // Everyone stays on the native support page; trigger btn re-appears via next guard cycle
-    });
-    panel.querySelector('.lp-sup-thread-back').addEventListener('click', () => {
-      clearInterval(_supportMsgPollTimer);
-      _supportActiveConv = null;
-      _supportPrevMsgCount = 0;
-      panel.querySelector('.lp-sup-thread-view').style.display = 'none';
-      panel.querySelector('.lp-sup-list-view').style.display   = 'flex';
-      _fetchConversations();
-    });
-    const newBtn = panel.querySelector('.lp-sup-new-btn');
-    if (newBtn) newBtn.addEventListener('click', isPriv ? _startAdminNewChat : _startNewConversation);
-    panel.querySelector('.lp-sup-send-btn').addEventListener('click', _sendSupportMessage);
-    panel.querySelector('.lp-sup-input').addEventListener('keydown', e => {
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); _sendSupportMessage(); }
-    });
-
-    _fetchConversations();
-    _supportPollTimer = setInterval(_fetchConversations, 10000);
+    if (isPriv) {
+      let _st = null, _allUsers = null;
+      modal.querySelector('#lp-ncm-search').addEventListener('input', async function () {
+        const q = this.value.trim().toLowerCase();
+        const res = modal.querySelector('#lp-ncm-results');
+        clearTimeout(_st);
+        if (!q) { res.innerHTML = '<div class="lp-rconv-empty" style="padding:8px 0">Type to search customers</div>'; return; }
+        res.innerHTML = '<div class="lp-rconv-empty" style="padding:8px 0">Searching…</div>';
+        _st = setTimeout(async () => {
+          try {
+            if (!_allUsers) { const r = await fetch('/api/admin/users'); _allUsers = r.ok ? await r.json() : []; }
+            const matched = _allUsers.filter(u =>
+              (u.full_name||'').toLowerCase().includes(q) || (u.email||'').toLowerCase().includes(q)
+            ).slice(0, 10);
+            if (!matched.length) { res.innerHTML = '<div class="lp-rconv-empty" style="padding:8px 0">No customers found</div>'; return; }
+            res.innerHTML = matched.map(u => `
+              <div class="lp-rconv-row" data-uid="${u.id}"
+                data-name="${(u.full_name||u.email||'').replace(/"/g,'&quot;')}"
+                data-email="${(u.email||'').replace(/"/g,'&quot;')}"
+                style="margin-bottom:6px">
+                <div class="lp-rconv-icon" style="font-size:14px">${(u.full_name||u.email||'?')[0].toUpperCase()}</div>
+                <div class="lp-rconv-body">
+                  <div class="lp-rconv-name">${u.full_name||u.email||'Unknown'}</div>
+                  <div class="lp-rconv-preview">${u.email||''}</div>
+                </div>
+              </div>`).join('');
+            res.querySelectorAll('.lp-rconv-row').forEach(row => row.addEventListener('click', () => {
+              modal.remove();
+              _openAdminChatWith({ id: row.dataset.uid, full_name: row.dataset.name, email: row.dataset.email });
+            }));
+          } catch { res.innerHTML = '<div class="lp-rconv-empty" style="padding:8px 0">Search failed — try again</div>'; }
+        }, 350);
+      });
+    } else {
+      modal.querySelector('#lp-ncm-send-btn').addEventListener('click', async () => {
+        const subject = (modal.querySelector('#lp-ncm-subject').value.trim()) || 'Support Request';
+        const msg     = modal.querySelector('#lp-ncm-msg').value.trim();
+        if (!msg) return;
+        const btn = modal.querySelector('#lp-ncm-send-btn');
+        btn.disabled = true; btn.textContent = 'Sending…';
+        try {
+          const r = await fetch('/api/support/conversations', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: me.id, user_name: me.name, user_email: me.email, subject, first_message: msg }),
+          });
+          if (r.ok) {
+            const conv = await r.json();
+            modal.remove();
+            await _fetchConversations();
+            if (conv && conv.id) _openDrawerConv(conv);
+          } else {
+            console.warn('[LP] create conv failed:', r.status);
+            btn.disabled = false; btn.textContent = 'Send Message';
+          }
+        } catch (e) {
+          console.warn('[LP] create conv error:', e.message);
+          btn.disabled = false; btn.textContent = 'Send Message';
+        }
+      });
+    }
   }
 
   function injectSupportChat() {
     const onSupport = _isSupportView();
-    const existing  = document.getElementById('lp-support-panel');
-    const trigBtn   = document.getElementById('lp-sup-trigger-btn');
 
     if (!onSupport) {
-      if (existing) {
-        clearInterval(_supportPollTimer);
-        clearInterval(_supportMsgPollTimer);
-        existing.remove();
-        _supportActiveConv = null;
-      }
+      // Leaving support page — tear down everything
+      clearInterval(_supportPollTimer);
+      _supportPollTimer = null;
+      clearInterval(_drawerMsgPoll);
+      _drawerActiveConv   = null;
+      _drawerPrevMsgCount = 0;
+      const drawer = document.getElementById('lp-chat-drawer');
+      if (drawer) drawer.remove();
+      const trigBtn = document.getElementById('lp-sup-trigger-btn');
       if (trigBtn) trigBtn.remove();
+      const oldPanel = document.getElementById('lp-support-panel');
+      if (oldPanel) oldPanel.remove();
       return;
     }
-    if (existing) return;
 
-    const me     = _getLpUser();
-    const isPriv = me && (me.role === 'admin' || me.role === 'staff');
+    // On the support page — ensure drawer is injected, native page is patched
+    _lpLoadSeen();
+    _injectChatDrawer();
+    _patchNativeSupportPage();
 
-    // Everyone sees the native support page first; trigger button opens our panel
-    if (!trigBtn) {
-      const btn = document.createElement('button');
-      btn.id = 'lp-sup-trigger-btn';
-      btn.textContent = isPriv ? '📬 Support Inbox' : '💬 My Conversations';
-      btn.addEventListener('click', _openSupportPanel);
-      document.body.appendChild(btn);
+    if (!_supportPollTimer) {
+      _fetchConversations();
+      _supportPollTimer = setInterval(_fetchConversations, 10000);
     }
   }
 

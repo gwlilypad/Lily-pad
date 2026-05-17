@@ -1052,6 +1052,28 @@ body.lp-photo-fs .canvas-wrap canvas {
 .lp-sheet-btn.ghost { color: rgba(255,255,255,0.45); }
 
 /* ── Support Chat panel ───────────────────────────────────────────────────── */
+#lp-sup-trigger-btn {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #4ade80;
+  color: #0f172a;
+  border: none;
+  border-radius: 24px;
+  padding: 14px 32px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  z-index: 99999;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.35);
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+#lp-sup-trigger-btn:active {
+  transform: translateX(-50%) scale(0.97);
+}
+
 #lp-support-panel {
   position: fixed;
   inset: 0;

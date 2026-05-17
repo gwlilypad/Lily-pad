@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-16-AN';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-16-AO';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -3920,20 +3920,13 @@
     if (goTo) { goTo('support'); }
   }
 
-  function injectSupportChat() {
-    const onSupport = _isSupportView();
-    const existing  = document.getElementById('lp-support-panel');
-
-    if (!onSupport) {
-      if (existing) {
-        clearInterval(_supportPollTimer);
-        clearInterval(_supportMsgPollTimer);
-        existing.remove();
-        _supportActiveConv = null;
-      }
-      return;
-    }
+  // Creates and opens the full support chat panel.
+  // Called directly for admin/staff, or via the trigger button for customers.
+  function _openSupportPanel() {
+    const existing = document.getElementById('lp-support-panel');
     if (existing) return;
+    const trigBtn = document.getElementById('lp-sup-trigger-btn');
+    if (trigBtn) trigBtn.remove();
 
     const me     = _getLpUser();
     const isPriv = me && (me.role === 'admin' || me.role === 'staff');
@@ -3979,8 +3972,12 @@
       _supportActiveConv = null;
       _lpAutoOpenedNew = false;
       panel.remove();
-      const goTo = lpGetGoTo();
-      if (goTo) goTo('find');
+      if (isPriv) {
+        // Staff/admin: navigate away from the support page
+        const goTo = lpGetGoTo();
+        if (goTo) goTo('find');
+      }
+      // Customers: stay on native support page — trigger btn re-appears via next guard cycle
     });
     panel.querySelector('.lp-sup-thread-back').addEventListener('click', () => {
       clearInterval(_supportMsgPollTimer);
@@ -3999,6 +3996,41 @@
 
     _fetchConversations();
     _supportPollTimer = setInterval(_fetchConversations, 10000);
+  }
+
+  function injectSupportChat() {
+    const onSupport = _isSupportView();
+    const existing  = document.getElementById('lp-support-panel');
+    const trigBtn   = document.getElementById('lp-sup-trigger-btn');
+
+    if (!onSupport) {
+      if (existing) {
+        clearInterval(_supportPollTimer);
+        clearInterval(_supportMsgPollTimer);
+        existing.remove();
+        _supportActiveConv = null;
+      }
+      if (trigBtn) trigBtn.remove();
+      return;
+    }
+    if (existing) return;
+
+    const me     = _getLpUser();
+    const isPriv = me && (me.role === 'admin' || me.role === 'staff');
+
+    if (isPriv) {
+      // Admin/staff: open the panel immediately (they need the inbox)
+      _openSupportPanel();
+    } else {
+      // Customer: let the native support page show; inject a tap-to-open button
+      if (!trigBtn) {
+        const btn = document.createElement('button');
+        btn.id = 'lp-sup-trigger-btn';
+        btn.textContent = '💬 My Conversations';
+        btn.addEventListener('click', _openSupportPanel);
+        document.body.appendChild(btn);
+      }
+    }
   }
 
   // ── Support nav badge: show unread count on the "Customer Service" nav entry ─

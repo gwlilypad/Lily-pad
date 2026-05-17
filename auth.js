@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-16-AD';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-16-AF';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -127,8 +127,9 @@
         if (Array.isArray(data)) {
           const cleaned = _lpOnlyReal(data);
           if (cleaned.length < data.length) {
-            if (cleaned.length === 0) localStorage.removeItem(key);
-            else Storage.prototype.setItem.call(localStorage, key, JSON.stringify(cleaned));
+            // Always write back (even empty []) so the bundle never falls back to
+            // its hardcoded initial state when it reads an absent key.
+            Storage.prototype.setItem.call(localStorage, key, JSON.stringify(cleaned));
             console.log(`[LP] Purged ${data.length - cleaned.length} fake entries from ${key}`);
           }
         } else if (data && typeof data === 'object') {
@@ -146,24 +147,38 @@
     } catch (e) { console.warn('[LP] nukeFakeLocalStorage error', e); }
   })();
 
+  // ── Pre-seed lilypad.pads.v1 with [] if absent ───────────────────────────
+  // If the key is missing entirely the bundle falls back to its hardcoded fake
+  // pads at React init time.  Writing an empty array before React runs stops
+  // that fallback from triggering.
+  (function () {
+    const existing = _lpRawGet.call(localStorage, _LP_PADS_KEY);
+    if (!existing) {
+      Storage.prototype.setItem.call(localStorage, _LP_PADS_KEY, '[]');
+      console.log('[LP] Pre-seeded lilypad.pads.v1 with []');
+    }
+  })();
+
   // ── Intercept lilypad.pads.v1 on every future read/write ─────────────────
   // Ensures fake pads can never re-enter storage even after a hot-reload.
+  // IMPORTANT: return '[]' (not null) when all entries are fake — returning
+  // null makes the bundle treat the key as absent and load its hardcoded fakes.
   (function () {
     const _set = Storage.prototype.setItem;
     Storage.prototype.getItem = function (key) {
       if (key !== _LP_PADS_KEY) return _lpRawGet.call(this, key);
       const raw = _lpRawGet.call(this, key);
-      if (!raw) return null;
+      if (!raw) return '[]';
       try {
         const real = _lpOnlyReal(JSON.parse(raw));
-        return real.length > 0 ? JSON.stringify(real) : null;
-      } catch { return null; }
+        return JSON.stringify(real);   // always return valid JSON, even '[]'
+      } catch { return '[]'; }
     };
     Storage.prototype.setItem = function (key, value) {
       if (key !== _LP_PADS_KEY) { _set.call(this, key, value); return; }
       try {
         const real = _lpOnlyReal(JSON.parse(value));
-        if (real.length > 0) _set.call(this, key, JSON.stringify(real));
+        _set.call(this, key, JSON.stringify(real));  // write even if empty
       } catch {}
     };
   })();
@@ -478,6 +493,69 @@
       walk(fiber.sibling, depth + 1);
     }
     walk(root[fk], 0);
+  }
+
+  // ── Known fake pad photo IDs (Unsplash) ───────────────────────────────────
+  // These are the exact photo IDs hardcoded in the bundle's demo lister pads.
+  // Any rendered <img> whose src contains one of these is from a fake pad card.
+  const _FAKE_PAD_PHOTO_IDS = [
+    'photo-1590674899484',   // 142 Maple Street
+    'photo-1448630360428',   // 880 Oak Lane
+    'photo-1568605114967',   // other demo
+    'photo-1597328540614',
+    'photo-1502672023488',
+    'photo-1494522358652',
+  ];
+
+  // ── Clear lp_padbox cache entries for fake pads at startup ───────────────
+  (function _clearFakePadboxCache() {
+    try {
+      const keys = [];
+      for (let i = 0; i < localStorage.length; i++) keys.push(localStorage.key(i));
+      for (const key of keys) {
+        if (!key || !key.startsWith('lp_padbox_')) continue;
+        const raw = _lpRawGet.call(localStorage, key);
+        if (!raw) continue;
+        if (_FAKE_PAD_PHOTO_IDS.some(id => raw.includes(id))) {
+          localStorage.removeItem(key);
+          console.log('[LP] Cleared fake padbox cache:', key);
+        }
+      }
+    } catch {}
+  })();
+
+  // ── DOM-level fake pad card hider ─────────────────────────────────────────
+  // The bundle hardcodes two lister-pad objects directly into React initial
+  // state (bypassing localStorage), so fiber-dispatch alone can't prevent
+  // them rendering.  This function walks the live DOM, finds any <img> whose
+  // src contains a known fake photo ID, then hides the nearest ancestor card
+  // element (first ancestor taller than 80 px).
+  function hideFakePadCards() {
+    if (!document.getElementById('lp-fake-css')) {
+      const st = document.createElement('style');
+      st.id = 'lp-fake-css';
+      st.textContent = '[data-lp-fake]{display:none!important}';
+      document.head.appendChild(st);
+    }
+    const imgs = document.querySelectorAll('img');
+    for (const img of imgs) {
+      const src = img.getAttribute('src') || img.src || '';
+      if (!_FAKE_PAD_PHOTO_IDS.some(id => src.includes(id))) continue;
+      // Already hidden
+      if (img.closest('[data-lp-fake="pad"]')) continue;
+      // Walk up to find the card container
+      let el = img.parentElement;
+      let hidden = false;
+      for (let i = 0; i < 10 && el && el !== document.body; i++) {
+        if (el.offsetHeight > 80) {
+          el.setAttribute('data-lp-fake', 'pad');
+          hidden = true;
+          break;
+        }
+        el = el.parentElement;
+      }
+      if (!hidden) img.setAttribute('data-lp-fake', 'pad');
+    }
   }
 
   // ── Clear fake driver-side listings ──────────────────────────────────────
@@ -1631,13 +1709,14 @@
 
     // Detect paddashboard by checking rendered UI elements — NOT body.textContent
     // because that includes our own <script> tag text and causes false positives.
-    // Look for the "Add new pad" button/link that only appears on paddashboard.
     const elTexts = el => el.childElementCount === 0 && el.getBoundingClientRect().width > 0;
+    const hasMyPads = !!Array.from(document.querySelectorAll('h1,h2,h3,p,span,div'))
+      .find(el => elTexts(el) && /^my pads$/i.test(el.textContent.trim()));
     const hasAddNewPad = !!Array.from(document.querySelectorAll('button,a,span,p,div,h1,h2,h3'))
       .find(el => elTexts(el) && /^add new pad$/i.test(el.textContent.trim()));
     const hasPayoutsThisMonth = !!Array.from(document.querySelectorAll('p,span,div,h1,h2,h3'))
       .find(el => elTexts(el) && /this month/i.test(el.textContent.trim()));
-    const onPage = hasAddNewPad || hasPayoutsThisMonth;
+    const onPage = hasMyPads || hasAddNewPad || hasPayoutsThisMonth;
     if (!existing) console.log('[Lily Pad] injectPaddashboardBack: onPage=', onPage);
 
     // Remove the button if we've navigated away
@@ -3670,6 +3749,7 @@
     injectPadAccountBack();
     removeFakeMapSpots();
     clearFakePads();
+    hideFakePadCards();
     clearFakeListings();
     installPhotoClickHandlers();
     _scrapePaddashboardAddresses();

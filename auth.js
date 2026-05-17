@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-16-AJ';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-16-AK';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -114,7 +114,15 @@
   // ── One-time nuclear localStorage sweep ──────────────────────────────────
   // Runs immediately on page load — before React hydrates — and removes every
   // numeric-id item from every lilypad.* localStorage key.
+  // Also force-clears keys known to hold fake staff/customer demo data.
   (function _nukeFakeLocalStorage() {
+    const FORCE_EMPTY_KEYS = [
+      'lilypad.admin.users.v1',
+      'lilypad.staff.v1',
+      'lilypad.customers.v1',
+      'lilypad.team.v1',
+      'lilypad.users.v1',
+    ];
     try {
       const keys = [];
       for (let i = 0; i < localStorage.length; i++) keys.push(localStorage.key(i));
@@ -143,6 +151,18 @@
           }
           if (dirty) Storage.prototype.setItem.call(localStorage, key, JSON.stringify(data));
         }
+      }
+      // Force-clear known fake-data keys to [] regardless
+      for (const key of FORCE_EMPTY_KEYS) {
+        const raw = _lpRawGet.call(localStorage, key);
+        if (!raw) continue;
+        try {
+          const data = JSON.parse(raw);
+          if (Array.isArray(data) && data.length > 0 && data.some(u => typeof u.id === 'number')) {
+            Storage.prototype.setItem.call(localStorage, key, '[]');
+            console.log(`[LP] Force-cleared fake data from ${key}`);
+          }
+        } catch {}
       }
     } catch (e) { console.warn('[LP] nukeFakeLocalStorage error', e); }
   })();
@@ -446,11 +466,20 @@
     const fk = Object.keys(root).find(k => k.startsWith('__reactFiber$'));
     if (!fk) return;
 
-    // A fake-user array: items have numeric ids AND firstName or type fields
+    // Fake-user array: any array whose first item has a numeric id AND
+    // any person-like field.  Real Supabase users always have UUID string ids.
     function isFakeUserArr(v) {
-      return Array.isArray(v) && v.length > 0 && v[0] &&
-             typeof v[0].id === 'number' &&
-             (v[0].firstName || v[0].type === 'host' || v[0].type === 'driver');
+      if (!Array.isArray(v) || v.length === 0 || !v[0]) return false;
+      const f = v[0];
+      if (typeof f.id !== 'number') return false;
+      return !!(
+        f.firstName || f.lastName || f.name ||
+        f.email     || f.phone    || f.avatar ||
+        f.type === 'host'  || f.type === 'driver' ||
+        f.type === 'staff' || f.type === 'admin'  ||
+        f.role === 'staff' || f.role === 'admin'  ||
+        f.role === 'customer'
+      );
     }
     // Lister-pad array: any array where items have numeric ids AND look like pads
     // (have address, photoUrl, or type fields).  Numeric id = guaranteed fake.
@@ -465,7 +494,7 @@
     }
 
     function walk(fiber, depth) {
-      if (!fiber || depth > 160) return;
+      if (!fiber || depth > 300) return;
       let s = fiber.memoizedState;
       while (s) {
         const v = s.memoizedState;

@@ -851,7 +851,7 @@ body.lp-photo-fs .canvas-wrap canvas {
 #lp-admin-panel {
   position: fixed;
   inset: 0;
-  z-index: 9000;
+  z-index: 100000;
   background: #0E1F40;
   color: #fff;
   font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -1055,7 +1055,7 @@ body.lp-photo-fs .canvas-wrap canvas {
 #lp-support-panel {
   position: fixed;
   inset: 0;
-  z-index: 9000;
+  z-index: 100000;
   background: #0E1F40;
   color: #fff;
   font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;

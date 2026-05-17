@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-16-AF';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-16-AH';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -525,11 +525,10 @@
   })();
 
   // ── DOM-level fake pad card hider ─────────────────────────────────────────
-  // The bundle hardcodes two lister-pad objects directly into React initial
-  // state (bypassing localStorage), so fiber-dispatch alone can't prevent
-  // them rendering.  This function walks the live DOM, finds any <img> whose
-  // src contains a known fake photo ID, then hides the nearest ancestor card
-  // element (first ancestor taller than 80 px).
+  // Pad cards in the "My Pads" list use an INLINE CSS background:
+  //   style={{ background: `url(${photoUrl}) center/cover` }}
+  // NOT <img> tags.  So we must query [style*="photo-id"] to find them.
+  // We also handle <img> tags used in the lightbox/detail view.
   function hideFakePadCards() {
     if (!document.getElementById('lp-fake-css')) {
       const st = document.createElement('style');
@@ -537,25 +536,90 @@
       st.textContent = '[data-lp-fake]{display:none!important}';
       document.head.appendChild(st);
     }
+    let found = 0;
+
+    // Strategy 1: inline-style background (the pad list card photo divs)
+    for (const photoId of _FAKE_PAD_PHOTO_IDS) {
+      const els = document.querySelectorAll('[style*="' + photoId + '"]');
+      for (const el of els) {
+        if (el.closest('[data-lp-fake]')) continue;
+        // The photo div is INSIDE the card — walk up to the card container
+        // (first ancestor that has 2+ children or height > 100)
+        let card = el.parentElement;
+        let hid = false;
+        for (let i = 0; i < 6 && card && card !== document.body; i++) {
+          if (card.children.length >= 2 || card.offsetHeight > 100) {
+            card.setAttribute('data-lp-fake', 'pad');
+            found++;
+            hid = true;
+            break;
+          }
+          card = card.parentElement;
+        }
+        if (!hid && !el.hasAttribute('data-lp-fake')) {
+          el.setAttribute('data-lp-fake', 'pad');
+          found++;
+        }
+      }
+    }
+
+    // Strategy 2: <img> tags (lightbox / detail view)
     const imgs = document.querySelectorAll('img');
     for (const img of imgs) {
       const src = img.getAttribute('src') || img.src || '';
       if (!_FAKE_PAD_PHOTO_IDS.some(id => src.includes(id))) continue;
-      // Already hidden
-      if (img.closest('[data-lp-fake="pad"]')) continue;
-      // Walk up to find the card container
+      if (img.closest('[data-lp-fake]')) continue;
       let el = img.parentElement;
-      let hidden = false;
       for (let i = 0; i < 10 && el && el !== document.body; i++) {
         if (el.offsetHeight > 80) {
           el.setAttribute('data-lp-fake', 'pad');
-          hidden = true;
+          found++;
           break;
         }
         el = el.parentElement;
       }
-      if (!hidden) img.setAttribute('data-lp-fake', 'pad');
     }
+
+    if (found) console.log('[LP] hideFakePadCards: hid', found, 'fake pad elements');
+  }
+
+  // ── Back button to exit the "Add your lily pad" wizard ────────────────────
+  // The wizard page has heading "Add your lily pad." and shows "Step X of 6".
+  // There is no built-in way to exit back to My Pads — this injects one.
+  function injectWizardExitBack() {
+    const existing = document.getElementById('lp-wizard-exit-back');
+    const leafTexts = el => el.childElementCount === 0;
+    const hasWizard = !!Array.from(document.querySelectorAll('h1,h2,h3,p,span,div'))
+      .find(el => leafTexts(el) && /add your lily pad/i.test(el.textContent.trim()));
+
+    if (existing && !hasWizard) { existing.remove(); return; }
+    if (!hasWizard || existing) return;
+
+    const btn = document.createElement('button');
+    btn.id = 'lp-wizard-exit-back';
+    btn.innerHTML =
+      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" ' +
+      'stroke="currentColor" stroke-width="2.5" stroke-linecap="round" ' +
+      'stroke-linejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>' +
+      '<span style="font-size:13px;font-weight:600;font-family:\'DM Sans\',sans-serif">My Pads</span>';
+    btn.setAttribute('style', [
+      'position:fixed', 'top:14px', 'left:14px', 'z-index:9999',
+      'display:flex', 'align-items:center', 'gap:5px',
+      'background:rgba(14,31,64,0.82)', 'color:#fff',
+      'border:none', 'border-radius:20px', 'padding:6px 14px 6px 10px',
+      'cursor:pointer', 'box-shadow:0 2px 8px rgba(0,0,0,0.28)',
+      'backdrop-filter:blur(4px)', '-webkit-backdrop-filter:blur(4px)',
+    ].join(';'));
+    btn.addEventListener('click', function () {
+      btn.remove();
+      if (!callGoTo('paddashboard')) {
+        const pads = Array.from(document.querySelectorAll('button'))
+          .find(b => /my pads/i.test(b.textContent));
+        if (pads) pads.click(); else window.history.back();
+      }
+    });
+    document.body.appendChild(btn);
+    console.log('[Lily Pad] Wizard exit back button injected');
   }
 
   // ── Clear fake driver-side listings ──────────────────────────────────────
@@ -1827,6 +1891,8 @@
     const guard = new MutationObserver(() => {
       hideUnwantedElements();
       injectSignInButton();
+      hideFakePadCards();   // hide fake pad cards the moment React renders them
+      clearFakePads();      // dispatch [] to any numeric-id pad state
     });
     guard.observe(root, { childList: true, subtree: true });
   }
@@ -3747,6 +3813,7 @@
     scheduleDeepBack();
     injectPaddashboardBack();
     injectPadAccountBack();
+    injectWizardExitBack();
     removeFakeMapSpots();
     clearFakePads();
     hideFakePadCards();

@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-16-AO';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-16-AP';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -3972,12 +3972,7 @@
       _supportActiveConv = null;
       _lpAutoOpenedNew = false;
       panel.remove();
-      if (isPriv) {
-        // Staff/admin: navigate away from the support page
-        const goTo = lpGetGoTo();
-        if (goTo) goTo('find');
-      }
-      // Customers: stay on native support page — trigger btn re-appears via next guard cycle
+      // Everyone stays on the native support page; trigger btn re-appears via next guard cycle
     });
     panel.querySelector('.lp-sup-thread-back').addEventListener('click', () => {
       clearInterval(_supportMsgPollTimer);
@@ -4018,18 +4013,13 @@
     const me     = _getLpUser();
     const isPriv = me && (me.role === 'admin' || me.role === 'staff');
 
-    if (isPriv) {
-      // Admin/staff: open the panel immediately (they need the inbox)
-      _openSupportPanel();
-    } else {
-      // Customer: let the native support page show; inject a tap-to-open button
-      if (!trigBtn) {
-        const btn = document.createElement('button');
-        btn.id = 'lp-sup-trigger-btn';
-        btn.textContent = '💬 My Conversations';
-        btn.addEventListener('click', _openSupportPanel);
-        document.body.appendChild(btn);
-      }
+    // Everyone sees the native support page first; trigger button opens our panel
+    if (!trigBtn) {
+      const btn = document.createElement('button');
+      btn.id = 'lp-sup-trigger-btn';
+      btn.textContent = isPriv ? '📬 Support Inbox' : '💬 My Conversations';
+      btn.addEventListener('click', _openSupportPanel);
+      document.body.appendChild(btn);
     }
   }
 

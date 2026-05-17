@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-16-AI';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-16-AJ';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -3492,6 +3492,35 @@
   let _supportMessages = [];
   let _supportPollTimer = null;
   let _supportMsgPollTimer = null;
+  let _supportPrevMsgCount = 0; // detect new incoming messages
+
+  // ── Unread tracking ───────────────────────────────────────────────────────
+  // Tracks the last timestamp (ms) each conversation was read, stored in
+  // localStorage so it survives page refreshes.
+  const _LP_SEEN_KEY = 'lp.support.seen';
+  let _lpUnreadMap = {};
+  function _lpLoadSeen() {
+    try { _lpUnreadMap = JSON.parse(localStorage.getItem(_LP_SEEN_KEY) || '{}'); } catch { _lpUnreadMap = {}; }
+  }
+  function _lpMarkSeen(convId) {
+    _lpUnreadMap[convId] = Date.now();
+    try { localStorage.setItem(_LP_SEEN_KEY, JSON.stringify(_lpUnreadMap)); } catch {}
+  }
+  function _lpIsUnread(conv) {
+    if (!conv.last_message) return false;
+    const seen = _lpUnreadMap[conv.id];
+    if (!seen) return true; // never opened
+    const lat = conv.last_message_at || conv.updated_at;
+    return lat ? (new Date(lat).getTime() > seen) : false;
+  }
+  function _lpUnreadCount() { return _supportConvs.filter(_lpIsUnread).length; }
+  function _lpUpdateHeaderBadge() {
+    const badge = document.getElementById('lp-sup-hdr-badge');
+    if (!badge) return;
+    const n = _lpUnreadCount();
+    badge.textContent = n;
+    badge.style.display = n > 0 ? '' : 'none';
+  }
 
   function _isSupportView() {
     if (lpGetCurrentPage() === 'support') return true;
@@ -3533,7 +3562,12 @@
         ? '/api/support/conversations'
         : `/api/support/conversations?user_id=${me.id}`;
       const r = await fetch(url);
-      if (r.ok) { _supportConvs = await r.json(); _renderSupportList(); }
+      if (r.ok) {
+        _supportConvs = await r.json();
+        _renderSupportList();
+        _lpUpdateHeaderBadge();
+        injectSupportNavBadge();
+      }
     } catch {}
   }
 
@@ -3562,11 +3596,13 @@
       const stCls = c.status === 'closed' ? 'closed' : c.status === 'pending' ? 'pend' : 'open';
       const stLbl = c.status === 'closed' ? 'CLOSED' : c.status === 'pending' ? 'PENDING' : 'OPEN';
       const active = _supportActiveConv && _supportActiveConv.id === c.id ? 'active' : '';
+      const unreadDot = _lpIsUnread(c) ? '<span class="lp-sup-unread-dot"></span>' : '';
       return `
         <div class="lp-sup-conv-row ${active}" data-cid="${c.id}">
           <div class="lp-sup-conv-top">
             <span class="lp-sup-conv-name">${name}</span>
             <span class="lp-sup-st ${stCls}">${stLbl}</span>
+            ${unreadDot}
             <span class="lp-sup-ts">${_tsRelative(c.updated_at)}</span>
           </div>
           <div class="lp-sup-preview">${preview}</div>
@@ -3591,25 +3627,39 @@
       msgs.innerHTML = '<div class="lp-sup-msg-empty">Send a message below.</div>';
       return;
     }
-    msgs.innerHTML = _supportMessages.map(m => {
+    const prevCount = _supportPrevMsgCount;
+    if (prevCount === 0) msgs.innerHTML = ''; // fresh open — clear stale content
+    _supportMessages.forEach((m, idx) => {
+      if (idx < prevCount) return; // skip already-rendered messages
       const isMine = me && m.sender_id === me.id;
       const roleTag = m.sender_role === 'admin' ? '🛡 Admin' : m.sender_role === 'staff' ? '👤 Staff' : '';
       const safeMsg = m.message.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
-      return `
-        <div class="lp-sup-msg ${isMine ? 'mine' : 'theirs'}">
-          <div class="lp-sup-msg-meta">
-            ${roleTag ? `<span class="lp-sup-role-tag">${roleTag}</span>` : ''}
-            <span class="lp-sup-msg-author">${m.sender_name}</span>
-            <span class="lp-sup-msg-ts">${_tsRelative(m.created_at)}</span>
-          </div>
-          <div class="lp-sup-bubble">${safeMsg}</div>
-        </div>`;
-    }).join('');
+      const isNew   = idx >= prevCount && prevCount > 0 ? 'lp-sup-msg-new' : '';
+      const el = document.createElement('div');
+      el.className = `lp-sup-msg ${isMine ? 'mine' : 'theirs'} ${isNew}`.trim();
+      el.setAttribute('data-role', m.sender_role || '');
+      el.innerHTML = `
+        <div class="lp-sup-msg-meta">
+          ${roleTag ? `<span class="lp-sup-role-tag">${roleTag}</span>` : ''}
+          <span class="lp-sup-msg-author">${m.sender_name}</span>
+          <span class="lp-sup-msg-ts">${_tsRelative(m.created_at)}</span>
+        </div>
+        <div class="lp-sup-bubble">${safeMsg}</div>`;
+      msgs.appendChild(el);
+    });
+    _supportPrevMsgCount = _supportMessages.length;
     msgs.scrollTop = msgs.scrollHeight;
+    if (_supportActiveConv) {
+      _lpMarkSeen(_supportActiveConv.id);
+      _lpUpdateHeaderBadge();
+      injectSupportNavBadge();
+    }
   }
 
   function _openConversation(conv) {
     _supportActiveConv = conv;
+    _supportPrevMsgCount = 0;
+    _lpMarkSeen(conv.id);
     clearInterval(_supportMsgPollTimer);
     const panel = document.getElementById('lp-support-panel');
     if (!panel) return;
@@ -3625,10 +3675,12 @@
 
     const actBox = panel.querySelector('.lp-sup-thread-actions');
     if (isPriv) {
-      actBox.innerHTML = conv.status === 'closed'
+      const statusBtn = conv.status === 'closed'
         ? '<button class="lp-sup-act-btn reopen" data-act="open">↺ Reopen</button>'
         : '<button class="lp-sup-act-btn close-btn" data-act="closed">✓ Close</button>';
-      actBox.querySelector('[data-act]').addEventListener('click', async function () {
+      actBox.innerHTML = statusBtn + '<button class="lp-sup-act-btn delete-btn" data-act="delete">🗑 Delete</button>';
+      actBox.querySelector('[data-act="delete"]').addEventListener('click', () => _deleteConversation(conv));
+      actBox.querySelector('[data-act]:not([data-act="delete"])').addEventListener('click', async function () {
         const newStatus = this.dataset.act;
         const r = await fetch(`/api/support/conversations/${conv.id}`, {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
@@ -3719,6 +3771,20 @@
     });
   }
 
+  async function _deleteConversation(conv) {
+    if (!confirm(`Delete this conversation permanently? This cannot be undone.`)) return;
+    await fetch(`/api/support/conversations/${conv.id}`, { method: 'DELETE' });
+    _supportActiveConv = null;
+    _supportPrevMsgCount = 0;
+    clearInterval(_supportMsgPollTimer);
+    const panel = document.getElementById('lp-support-panel');
+    if (panel) {
+      panel.querySelector('.lp-sup-thread-view').style.display = 'none';
+      panel.querySelector('.lp-sup-list-view').style.display   = 'flex';
+    }
+    await _fetchConversations();
+  }
+
   function _openAdminChatWith(user) {
     const existing = _supportConvs.find(c => c.user_id === user.id && c.status !== 'closed');
     if (existing) {
@@ -3763,12 +3829,16 @@
     const me     = _getLpUser();
     const isPriv = me && (me.role === 'admin' || me.role === 'staff');
 
+    _lpLoadSeen();
+
     const panel = document.createElement('div');
     panel.id = 'lp-support-panel';
     panel.innerHTML = `
       <div class="lp-sup-header">
+        <button class="lp-sup-hdr-back" title="Back">&#8592;</button>
         <span class="lp-sup-header-title">${isPriv ? '📬 Support Inbox' : '💬 Customer Support'}</span>
         ${isPriv ? `<span class="lp-sup-role-badge">${me.role === 'admin' ? 'Admin' : 'Staff'}</span>` : ''}
+        <span class="lp-sup-hdr-badge" id="lp-sup-hdr-badge" style="display:none">0</span>
       </div>
       <div class="lp-sup-body">
         <div class="lp-sup-list-view">
@@ -3794,9 +3864,18 @@
     document.body.appendChild(panel);
     requestAnimationFrame(() => panel.classList.add('open'));
 
+    panel.querySelector('.lp-sup-hdr-back').addEventListener('click', () => {
+      clearInterval(_supportPollTimer);
+      clearInterval(_supportMsgPollTimer);
+      _supportActiveConv = null;
+      panel.remove();
+      const goTo = lpGetGoTo();
+      if (goTo) goTo('find');
+    });
     panel.querySelector('.lp-sup-thread-back').addEventListener('click', () => {
       clearInterval(_supportMsgPollTimer);
       _supportActiveConv = null;
+      _supportPrevMsgCount = 0;
       panel.querySelector('.lp-sup-thread-view').style.display = 'none';
       panel.querySelector('.lp-sup-list-view').style.display   = 'flex';
       _fetchConversations();
@@ -3810,6 +3889,46 @@
 
     _fetchConversations();
     _supportPollTimer = setInterval(_fetchConversations, 10000);
+  }
+
+  // ── Support nav badge: show unread count on the "Customer Service" nav entry ─
+  // Scans for the native Customer Service / Help button when NOT on support page
+  // and injects a red badge showing how many conversations have new messages.
+  function injectSupportNavBadge() {
+    _lpLoadSeen();
+    const count = _lpUnreadCount();
+
+    // Remove badge entirely if on support page or no unread
+    if (_isSupportView()) {
+      document.querySelectorAll('.lp-sup-nav-badge').forEach(b => b.remove());
+      return;
+    }
+
+    const targets = Array.from(document.querySelectorAll('button,li,span,div,a'))
+      .filter(el => {
+        if (el.childElementCount !== 0) return false;
+        const t = el.textContent.trim();
+        return /^(Customer Service|Customer support|Help & Support|Help|Support)$/i.test(t);
+      });
+
+    targets.forEach(el => {
+      let badge = el.querySelector('.lp-sup-nav-badge');
+      if (!badge) {
+        // try parent in case el has no relative positioning
+        badge = el.parentElement && el.parentElement.querySelector('.lp-sup-nav-badge');
+      }
+      if (count > 0) {
+        if (!badge) {
+          badge = document.createElement('span');
+          badge.className = 'lp-sup-nav-badge';
+          el.parentElement.style.position = 'relative';
+          el.parentElement.appendChild(badge);
+        }
+        badge.textContent = count;
+      } else if (badge) {
+        badge.remove();
+      }
+    });
   }
 
   let _guardDiagLast = 0;
@@ -3836,6 +3955,7 @@
     injectAllPhotoOverlays();
     injectAdminPanel();
     injectSupportChat();
+    injectSupportNavBadge();
 
     // ── Throttled page-state diagnostic (once every 4 s) ──────────────────
     const _now = Date.now();

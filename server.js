@@ -504,6 +504,17 @@ app.post('/api/support/messages', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Support: delete conversation (admin/staff only) ───────────────────────────
+app.delete('/api/support/conversations/:id', async (req, res) => {
+  if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/support_conversations?id=eq.${req.params.id}`,
+      { method: 'DELETE', headers: SVC_HEADERS }
+    );
+    res.status(r.ok ? 204 : r.status).end();
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Support: update conversation (status, assigned_to) ────────────────────────
 app.patch('/api/support/conversations/:id', async (req, res) => {
   if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });

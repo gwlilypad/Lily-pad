@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-17-AR';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-17-AS';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -3559,7 +3559,12 @@
   }
 
   function _isSupportView() {
+    // Fastest check: our own real-conv-list is only injected inside the support
+    // page's React subtree — React removes it the moment it navigates away.
+    if (document.getElementById('lp-real-conv-list')) return true;
+    // Fiber check: reliable even during brief React re-renders of the support view
     if (lpGetCurrentPage() === 'support') return true;
+    // Text fallback: catches the very first guard cycle before we've injected anything
     return Array.from(document.querySelectorAll('h1,h2,h3,span,p')).some(
       el => el.childElementCount === 0 &&
         /^(Customer Service|Support|Help & Support)$/.test(el.textContent.trim())
@@ -4012,9 +4017,15 @@
     if (!drawer || !_drawerActiveConv) return;
     const me = _getLpUser();
     const container = drawer.querySelector('.lp-drawer-messages');
+    const newCount = msgs ? msgs.length : 0;
 
-    // Full re-render every time — avoids prevCount drift bugs where new messages
-    // (e.g. admin replies) get silently skipped due to stale incremental state.
+    // Skip re-render entirely when nothing has changed.
+    // This is critical: every innerHTML mutation fires the MutationObserver guard
+    // which calls _isSupportView() — we must avoid churning the DOM on idle polls.
+    if (newCount === _drawerPrevMsgCount && newCount > 0) return;
+
+    // Full re-render when count has changed (new message arrived or first load).
+    // Full re-render is simpler than incremental and immune to prevCount drift.
     container.innerHTML = '';
     if (!msgs || msgs.length === 0) {
       container.innerHTML = '<div class="lp-drawer-empty">No messages yet — say hi!</div>';
@@ -4248,13 +4259,10 @@
     const onSupport = _isSupportView();
 
     if (!onSupport) {
-      // Debounce: React re-renders can cause brief false-negatives from _isSupportView.
-      // Only tear down after 4 consecutive guard cycles that all agree we've left.
-      _supportViewMissCount++;
-      if (_supportViewMissCount < 4) return;
-      _supportViewMissCount = 0;
-
-      // Confirmed leaving support page — tear down everything
+      // Leaving support page — tear down everything.
+      // _isSupportView() is now highly reliable (checks our own injected element
+      // #lp-real-conv-list which React removes when navigating away), so no
+      // debounce is needed and we can tear down immediately.
       clearInterval(_supportPollTimer);
       _supportPollTimer = null;
       clearInterval(_drawerMsgPoll);
@@ -4269,9 +4277,6 @@
       if (oldPanel) oldPanel.remove();
       return;
     }
-
-    // We're on the support page — reset miss counter
-    _supportViewMissCount = 0;
 
     // On the support page — ensure drawer is injected, native page is patched
     _lpLoadSeen();
@@ -4324,7 +4329,8 @@
     });
   }
 
-  let _guardDiagLast = 0;
+  let _guardDiagLast  = 0;
+  let _lpPageSaveTime = 0;      // throttle for sessionStorage page-save
   let _guardRafPending = false; // RAF debounce flag
 
   function _runGuardFunctions() {
@@ -4360,6 +4366,21 @@
         .filter(t => t.length > 2 && t.length < 40)
         .slice(0, 12);
       console.log('[Lily Pad] guard page-state:', JSON.stringify(leafTexts));
+    }
+
+    // ── Continuous page-save for refresh restoration (every 2 s) ──────────
+    // beforeunload fires too late (React may have torn down its fiber by then),
+    // so we continuously snapshot the current page here while the guard is live.
+    if (_now - _lpPageSaveTime > 2000) {
+      _lpPageSaveTime = _now;
+      try {
+        const _pg = lpGetCurrentPage();
+        if (_pg && _pg !== 'landing' && _pg !== 'find' && _pg !== 'home') {
+          sessionStorage.setItem('lp_last_page', _pg);
+        } else if (_pg === 'find' || _pg === 'home' || _pg === 'landing') {
+          sessionStorage.removeItem('lp_last_page');
+        }
+      } catch {}
     }
   }
 
@@ -4656,20 +4677,6 @@
     wireSignOut();
     wireAuthForms();
     startGuard();
-
-    // ── Save current page before browser refresh so afterAuth can restore it ──
-    window.addEventListener('beforeunload', () => {
-      try {
-        const page = lpGetCurrentPage();
-        // Only save non-trivial pages — the map ('find') is the natural landing;
-        // skip 'landing' and null so we don't accidentally restore auth screens.
-        if (page && page !== 'landing' && page !== 'find') {
-          sessionStorage.setItem('lp_last_page', page);
-        } else {
-          sessionStorage.removeItem('lp_last_page');
-        }
-      } catch {}
-    });
 
     if (SUPABASE_OK) {
       const session = getSession();

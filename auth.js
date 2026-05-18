@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-18-D8';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-18-D9';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -1656,6 +1656,14 @@
     }
 
     if (!menuCard) return; // menu panel not open yet — observer will retry
+
+    // Guard: never inject into the support chat or admin panel
+    if (
+      menuCard.closest('#lp-support-panel') ||
+      menuCard.closest('#lp-admin-panel') ||
+      menuCard.querySelector('#lp-support-panel') ||
+      menuCard.querySelector('#lp-admin-panel')
+    ) return;
 
     const row = document.createElement('div');
     row.id = 'lp-pulldown-so';

@@ -24,6 +24,7 @@ export default function SignupPage() {
   const [locked, setLocked] = useState(false);
   const [editIdx, setEditIdx] = useState<number | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [checkEmail, setCheckEmail] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const q = SU_QUESTIONS[cur];
@@ -96,6 +97,33 @@ export default function SignupPage() {
 
   const displayCur = editIdx !== null ? editIdx : cur;
   const displayQ = SU_QUESTIONS[displayCur];
+
+  if (checkEmail) {
+    return (
+      <div className="page active" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 28, padding: "40px 28px", textAlign: "center" }}>
+        <div style={{ width: 68, height: 68, borderRadius: "50%", background: "rgba(141,214,63,0.12)", border: "2px solid rgba(141,214,63,0.35)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#8DD63F" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
+        </div>
+        <div>
+          <p style={{ fontSize: 22, fontWeight: 700, color: "#0E1F40", margin: 0, letterSpacing: "-0.02em" }}>Check your inbox</p>
+          <p style={{ fontSize: 14, color: "rgba(14,31,64,0.55)", margin: "10px 0 0", lineHeight: 1.55 }}>
+            We sent a verification link to<br/>
+            <strong style={{ color: "#0E1F40" }}>{ans[2]}</strong>
+          </p>
+          <p style={{ fontSize: 12.5, color: "rgba(14,31,64,0.4)", margin: "10px 0 0", lineHeight: 1.5 }}>
+            Click the link in the email to confirm your account, then come back to set up your pad.
+          </p>
+        </div>
+        <button
+          onClick={() => goTo("signin")}
+          style={{ background: "#8DD63F", color: "#0E1F40", border: "none", borderRadius: 100, padding: "13px 32px", fontSize: 14, fontWeight: 800, fontFamily: "'DM Sans', sans-serif", cursor: "pointer" }}
+        >
+          OK, got it
+        </button>
+        <p style={{ fontSize: 11.5, color: "rgba(14,31,64,0.35)", margin: 0 }}>Didn't get it? Check your spam folder.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="page active">
@@ -176,7 +204,8 @@ export default function SignupPage() {
                 <p className="cta-nudge">Let's set up your lily pad.</p>
                 <button className="cta-btn" onClick={async () => {
                   setLocked(true);
-                  await signUp(ans[2] || "", ans[4] || "", `${ans[0] || ""} ${ans[1] || ""}`.trim(), "host");
+                  const result = await signUp(ans[2] || "", ans[4] || "", `${ans[0] || ""} ${ans[1] || ""}`.trim(), "host");
+                  if (result.confirmEmail) { setCheckEmail(true); return; }
                   goTo("addpad");
                 }}>Continue</button>
               </div>

@@ -24,6 +24,7 @@ export default function DriverSignupPage() {
   const [inputVal, setInputVal] = useState("");
   const [locked, setLocked] = useState(false);
   const [done, setDone] = useState(false);
+  const [checkEmail, setCheckEmail] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const q = DR_QUESTIONS[cur];
@@ -55,6 +56,33 @@ export default function DriverSignupPage() {
       setCur(next);
       setInputVal(newAns[next] || "");
     }
+  }
+
+  if (checkEmail) {
+    return (
+      <div className="page active" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 28, padding: "40px 28px", textAlign: "center" }}>
+        <div style={{ width: 68, height: 68, borderRadius: "50%", background: "rgba(141,214,63,0.12)", border: "2px solid rgba(141,214,63,0.35)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#8DD63F" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
+        </div>
+        <div>
+          <p style={{ fontSize: 22, fontWeight: 700, color: "#0E1F40", margin: 0, letterSpacing: "-0.02em" }}>Check your inbox</p>
+          <p style={{ fontSize: 14, color: "rgba(14,31,64,0.55)", margin: "10px 0 0", lineHeight: 1.55 }}>
+            We sent a verification link to<br/>
+            <strong style={{ color: "#0E1F40" }}>{ans[2]}</strong>
+          </p>
+          <p style={{ fontSize: 12.5, color: "rgba(14,31,64,0.4)", margin: "10px 0 0", lineHeight: 1.5 }}>
+            Click the link in the email to confirm your account and start finding spots.
+          </p>
+        </div>
+        <button
+          onClick={() => goTo("signin")}
+          style={{ background: "#8DD63F", color: "#0E1F40", border: "none", borderRadius: 100, padding: "13px 32px", fontSize: 14, fontWeight: 800, fontFamily: "'DM Sans', sans-serif", cursor: "pointer" }}
+        >
+          OK, got it
+        </button>
+        <p style={{ fontSize: 11.5, color: "rgba(14,31,64,0.35)", margin: 0 }}>Didn't get it? Check your spam folder.</p>
+      </div>
+    );
   }
 
   return (
@@ -113,7 +141,8 @@ export default function DriverSignupPage() {
                 <p className="cta-nudge">Ready to park?</p>
                 <button className="cta-btn" style={{ background: "#8DD63F", color: "#0E1F40", boxShadow: "0 2px 12px rgba(141,214,63,0.3)" }} onClick={async () => {
                   setLocked(true);
-                  await signUp(ans[2] || "", ans[5] || "", `${ans[0] || ""} ${ans[1] || ""}`.trim(), "driver");
+                  const result = await signUp(ans[2] || "", ans[5] || "", `${ans[0] || ""} ${ans[1] || ""}`.trim(), "driver");
+                  if (result.confirmEmail) { setCheckEmail(true); return; }
                   goTo("find");
                 }}>Find a spot</button>
               </div>

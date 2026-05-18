@@ -23,6 +23,7 @@ import BookingsPage from "@/pages/BookingsPage";
 import AdminPage from "@/pages/AdminPage";
 import SignInPage from "@/pages/SignInPage";
 import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
+import EmailVerifyPage from "@/pages/EmailVerifyPage";
 
 const PAGE_ROUTES: Record<PageId, string> = {
   home: "/",
@@ -88,6 +89,7 @@ function AppInner() {
           <Route path="/" element={<HomePage />} />
           <Route path="/signin" element={<SignInPage />} />
           <Route path="/forgot" element={<ForgotPasswordPage />} />
+          <Route path="/verify" element={<EmailVerifyPage />} />
           <Route path="/confirm" element={<ConfirmPage />} />
           <Route path="/driversignup" element={<DriverSignupPage />} />
           <Route path="/padtype" element={<PadTypePage />} />

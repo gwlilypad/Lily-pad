@@ -20,7 +20,7 @@ interface AuthCtx {
   loading: boolean;
   role: string | null;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
-  signUp: (email: string, password: string, fullName: string, role?: string) => Promise<{ error: string | null }>;
+  signUp: (email: string, password: string, fullName: string, role?: string) => Promise<{ error: string | null; confirmEmail?: boolean }>;
   signOut: () => Promise<void>;
   forgotPassword: (email: string) => Promise<{ error: string | null }>;
   refreshProfile: () => Promise<void>;
@@ -97,7 +97,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, fullName: string, userRole = "driver") => {
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo: `${window.location.origin}/verify` },
+    });
     if (error) return { error: error.message };
     if (data.user) {
       await fetch("/api/profile", {
@@ -106,6 +110,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ id: data.user.id, email, full_name: fullName, account_type: userRole }),
       });
     }
+    // No session → Supabase sent a confirmation email; caller should show "check your inbox"
+    if (!data.session) return { error: null, confirmEmail: true };
     return { error: null };
   };
 
@@ -115,7 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const forgotPassword = async (email: string) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/confirm`,
+      redirectTo: `${window.location.origin}/verify`,
     });
     return { error: error ? error.message : null };
   };

@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-18-D3';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-18-D4';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -980,7 +980,7 @@
   }
 
   function switchForm(id) {
-    ['form-login', 'form-signup', 'form-forgot'].forEach(fid => {
+    ['form-login', 'form-signup', 'form-forgot', 'form-confirm-email'].forEach(fid => {
       const el = document.getElementById(fid);
       if (el) el.classList.toggle('active', fid === id);
     });
@@ -1009,7 +1009,11 @@
       hideGate();
       afterAuth(data);
     } catch (err) {
-      if (errEl) errEl.textContent = err.message;
+      let msg = err.message;
+      if (/email.*not.*confirm|not confirm.*email|email_not_confirmed/i.test(msg)) {
+        msg = 'Please confirm your email first — check your inbox for the activation link.';
+      }
+      if (errEl) errEl.textContent = msg;
       if (btn) { btn.disabled = false; btn.textContent = 'Sign in'; }
     }
   }
@@ -1064,8 +1068,9 @@
       // Form switchers
       if (id === 'goto-forgot')    switchForm('form-forgot');
       if (id === 'goto-signup')    { hideGate(); return; } // back to home to use native signup
-      if (id === 'goto-login')     switchForm('form-login');
-      if (id === 'back-to-login')  switchForm('form-login');
+      if (id === 'goto-login')           switchForm('form-login');
+      if (id === 'back-to-login')        switchForm('form-login');
+      if (id === 'back-to-login-confirm') switchForm('form-login');
 
       // Role picker
       if (btn.closest('#role-picker')) {
@@ -4894,7 +4899,14 @@
         .then(r => r.json())
         .then(data => {
           console.log('[Lily Pad] poller signup response:', JSON.stringify(data).slice(0, 200));
-          if (data.session && data.session.access_token) {
+          if (data.confirm_email) {
+            // Supabase sent a confirmation email — show the check-inbox panel
+            const addrEl = document.getElementById('confirm-email-addr');
+            if (addrEl) addrEl.textContent = finalEmail;
+            showGate();
+            switchForm('form-confirm-email');
+            console.log('[Lily Pad] poller: email confirmation required for', finalEmail);
+          } else if (data.session && data.session.access_token) {
             saveSession(data.session);
             saveProfileToServer(data.session);
             // Write real name/email into native state for pull-down display

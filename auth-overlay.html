@@ -76,6 +76,18 @@
         <p class="auth-switch"><button id="back-to-login" class="auth-link-inline">Back to sign in</button></p>
       </div>
 
+      <!-- Email Confirmation Panel — shown after customer signup when Supabase requires it -->
+      <div id="form-confirm-email" class="auth-form">
+        <div style="text-align:center;font-size:48px;line-height:1;margin-bottom:16px">📬</div>
+        <h2 class="auth-title">Check your inbox.</h2>
+        <p class="auth-subtitle">We sent a confirmation link to<br><strong id="confirm-email-addr" style="color:#8DD63F;font-weight:700"></strong></p>
+        <p class="auth-subtitle" style="margin-top:12px;font-size:13px;opacity:0.6">Click the link in that email to activate your account, then sign in here.</p>
+        <div style="margin:20px 0;padding:14px;background:rgba(141,214,63,0.08);border:1px solid rgba(141,214,63,0.2);border-radius:12px;font-size:12px;color:rgba(255,255,255,0.5);text-align:center;line-height:1.6">
+          Didn't receive it? Check your spam folder<br>or wait a minute and check again.
+        </div>
+        <p class="auth-switch" style="margin-top:8px"><button id="back-to-login-confirm" class="auth-link-inline">Back to sign in</button></p>
+      </div>
+
     </div>
   </div>
 </div>

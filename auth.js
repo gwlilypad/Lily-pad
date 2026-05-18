@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-18-D27';  // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-18-D28';  // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -2022,7 +2022,7 @@
     return null;
   }
 
-  // ── Call the app's goTo(page) via React context fiber traversal ───────────
+  // ── Call the app's goTo(page) via React fiber traversal ──────────────────
   function callGoTo(page) {
     const root = document.getElementById('root');
     if (!root) return false;
@@ -2030,16 +2030,13 @@
     if (!fk) return false;
     const queue = [root[fk]];
     let checked = 0;
-    while (queue.length && checked < 400) {
+    while (queue.length && checked < 5000) {   // raised from 400
       const fiber = queue.shift();
       if (!fiber) continue;
       checked++;
-      const mp = fiber.memoizedProps;
-      if (mp && mp.value && typeof mp.value.goTo === 'function') {
-        mp.value.goTo(page);
-        return true;
-      }
-      if (fiber.child) queue.push(fiber.child);
+      const fn = _fiberGoTo(fiber);
+      if (fn) { _lpGoToFn = fn; fn(page); return true; }
+      if (fiber.child)   queue.push(fiber.child);
       if (fiber.sibling) queue.push(fiber.sibling);
     }
     return false;
@@ -2263,6 +2260,30 @@
     'paddashboard', 'admin', 'billing', 'feedback',
   ]);
 
+  // ── Fiber goTo probe ─────────────────────────────────────────────────────
+  // Checks all known patterns by which the native bundle exposes goTo on a fiber.
+  function _fiberGoTo(f) {
+    if (!f) return null;
+    // Pattern 1: Context.Provider — value prop contains { goTo }
+    const v = f.memoizedProps && f.memoizedProps.value;
+    if (v && typeof v.goTo === 'function') return v.goTo;
+    // Pattern 2: direct prop — component receives goTo directly
+    if (f.memoizedProps && typeof f.memoizedProps.goTo === 'function')
+      return f.memoizedProps.goTo;
+    // Pattern 3: class component stateNode method
+    if (f.stateNode && typeof f.stateNode.goTo === 'function')
+      return f.stateNode.goTo.bind(f.stateNode);
+    // Pattern 4: useState/useReducer hook whose memoizedState object has goTo
+    let s = f.memoizedState;
+    while (s) {
+      const ms = s.memoizedState;
+      if (ms && typeof ms === 'object' && !Array.isArray(ms) &&
+          typeof ms.goTo === 'function') return ms.goTo;
+      s = s.next;
+    }
+    return null;
+  }
+
   function lpGetGoTo() {
     if (_lpGoToFn) return _lpGoToFn;
     const root = document.getElementById('root');
@@ -2271,14 +2292,15 @@
     if (!fk) return null;
     const q = [root[fk]];
     let n = 0;
-    while (q.length && n++ < 2000) {
+    while (q.length && n++ < 10000) {      // raised from 2000 — map page has many fibers
       const f = q.shift();
       if (!f) continue;
-      const v = f.memoizedProps && f.memoizedProps.value;
-      if (v && typeof v.goTo === 'function') { _lpGoToFn = v.goTo; return _lpGoToFn; }
+      const fn = _fiberGoTo(f);
+      if (fn) { _lpGoToFn = fn; console.log('[LP] goTo cached after', n, 'fibers'); return fn; }
       if (f.child)   q.push(f.child);
       if (f.sibling) q.push(f.sibling);
     }
+    console.log('[LP] goTo NOT found after', n, 'fibers');
     return null;
   }
 

@@ -1,4 +1,4 @@
-import{g as f7}from"./index-Cdaj_HAc.js";/**
+import{g as f7}from"./index-Bng67iXt.js";/**
  * @license
  * Copyright 2010-2026 Three.js Authors
  * SPDX-License-Identifier: MIT

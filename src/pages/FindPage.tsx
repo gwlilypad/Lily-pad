@@ -3254,12 +3254,18 @@ export default function FindPage() {
 
           {/* Avatar + name block */}
           <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "0 0 20px" }}>
-            <div style={{ width: 56, height: 56, borderRadius: "50%", background: "linear-gradient(145deg,rgba(141,214,63,0.45),rgba(34,197,94,0.28))", border: "1.5px solid rgba(141,214,63,0.38)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <span style={{ fontSize: 20, fontWeight: 700, color: "#8DD63F" }}>J</span>
+            <div style={{ width: 56, height: 56, borderRadius: "50%", background: state.profilePhotoUrl ? `url(${state.profilePhotoUrl}) center/cover` : "linear-gradient(145deg,rgba(141,214,63,0.45),rgba(34,197,94,0.28))", border: "1.5px solid rgba(141,214,63,0.38)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }}>
+              {!state.profilePhotoUrl && (
+                <span style={{ fontSize: 20, fontWeight: 700, color: "#8DD63F" }}>
+                  {((profile?.first_name?.[0] || state.drAns[0]?.[0] || "") + (profile?.last_name?.[0] || state.drAns[1]?.[0] || "")).toUpperCase() || "·"}
+                </span>
+              )}
             </div>
             <div>
-              <div style={{ fontSize: 17, fontWeight: 700, color: "#fff", letterSpacing: -0.3 }}>Jamie Driver</div>
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>parker@email.com</div>
+              <div style={{ fontSize: 17, fontWeight: 700, color: "#fff", letterSpacing: -0.3 }}>
+                {`${profile?.first_name || state.drAns[0] || state.suAns[0] || ""} ${profile?.last_name || state.drAns[1] || state.suAns[1] || ""}`.trim() || "My Account"}
+              </div>
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>{profile?.email || state.drAns[2] || state.suAns[2] || ""}</div>
             </div>
           </div>
 
@@ -3350,6 +3356,22 @@ export default function FindPage() {
                   </div>
                 </div>
               ))}
+
+              {/* Sign out */}
+              <button
+                onClick={() => { authSignOut().then(() => goTo("home")); }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 14,
+                  width: "100%", marginTop: 4, padding: "14px 16px", borderRadius: 14,
+                  background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.18)",
+                  cursor: "pointer", fontFamily: '"DM Sans", sans-serif',
+                }}
+              >
+                <div style={{ width: 40, height: 40, borderRadius: 12, background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.15)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "rgba(239,68,68,0.75)" }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: "rgba(239,68,68,0.85)", letterSpacing: -0.2 }}>Sign out</div>
+              </button>
             </div>
           ) : acctView === "account" ? (
             /* ── My Account view (photo + minimal personal info) ── */

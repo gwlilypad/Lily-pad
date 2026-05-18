@@ -407,11 +407,6 @@ app.post('/api/staff/invite', async (req, res) => {
   if (!email) return res.status(400).json({ error: 'email required' });
   const emailLower = email.toLowerCase().trim();
 
-  if (ADMIN_EMAILS.length === 0)
-    return res.status(403).json({ error: 'No staff emails configured. Contact your system administrator.' });
-  if (!ADMIN_EMAILS.includes(emailLower))
-    return res.status(403).json({ error: 'This email is not on the approved staff list.' });
-
   try {
     const now = new Date().toISOString();
     // Build redirect URL — prefer explicit SITE_URL env var (set on Railway), fall back to Host header
@@ -544,20 +539,32 @@ app.post('/api/staff/signin', async (req, res) => {
     const data = await r.json();
     if (!r.ok) return res.status(r.status).json({ error: data.error_description || data.message || 'Invalid credentials' });
 
-    // Verify the user is in admin_users
+    // Check admin_users table
     const adminRes = await fetch(
       `${SUPABASE_URL}/rest/v1/admin_users?email=eq.${encodeURIComponent(emailLower)}&select=role`,
       { headers: SVC_HEADERS }
     );
-    const adminRows = await adminRes.json();
-    if (!adminRes.ok || !Array.isArray(adminRows) || !adminRows.length)
-      return res.status(403).json({ error: 'Not authorized as staff. Contact your administrator.' });
+    const adminRows = await adminRes.json().catch(() => []);
 
-    const role = adminRows[0].role || 'staff';
-    // Update last login timestamp
-    fetch(`${SUPABASE_URL}/rest/v1/admin_users?email=eq.${encodeURIComponent(emailLower)}`,
-      { method: 'PATCH', headers: SVC_HEADERS, body: JSON.stringify({ last_login_at: new Date().toISOString() }) }
-    ).catch(() => {});
+    let role = 'staff';
+    if (adminRes.ok && Array.isArray(adminRows) && adminRows.length) {
+      // Existing staff/admin record — use stored role
+      role = adminRows[0].role || 'staff';
+      fetch(`${SUPABASE_URL}/rest/v1/admin_users?email=eq.${encodeURIComponent(emailLower)}`,
+        { method: 'PATCH', headers: SVC_HEADERS, body: JSON.stringify({ last_login_at: new Date().toISOString() }) }
+      ).catch(() => {});
+    } else if (ADMIN_EMAILS.includes(emailLower)) {
+      // Bootstrap: email is in ADMIN_EMAILS env var — auto-create admin record on first login
+      role = 'admin';
+      await fetch(`${SUPABASE_URL}/rest/v1/admin_users`, {
+        method : 'POST',
+        headers: { ...SVC_HEADERS, 'Prefer': 'resolution=ignore-duplicates' },
+        body   : JSON.stringify({ email: emailLower, role: 'admin', auth_user_id: data.user?.id || null, last_login_at: new Date().toISOString() }),
+      }).catch(() => {});
+      console.log(`[Admin] Bootstrapped admin: ${emailLower}`);
+    } else {
+      return res.status(403).json({ error: 'Not authorized as staff. Contact your administrator.' });
+    }
 
     res.json({ session: data, role });
   } catch (e) { res.status(500).json({ error: e.message }); }

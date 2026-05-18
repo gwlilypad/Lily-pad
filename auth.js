@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-18-D23';  // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-18-D24';  // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -5111,7 +5111,6 @@
     hideUnwantedElements();
     injectPullDownSignOut();
     _wirePullDownMenuItems();
-    _collapsePullDownGap();
     updateProfileDisplay();
     updatePhotoFullscreen();
     scheduleDeepBack();

@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-18-C1';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-18-D1';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -1987,7 +1987,7 @@
     if (!fk) return null;
     const q = [root[fk]];
     let n = 0;
-    while (q.length && n++ < 600) {
+    while (q.length && n++ < 2000) {
       const f = q.shift();
       if (!f) continue;
       const v = f.memoizedProps && f.memoizedProps.value;
@@ -4934,12 +4934,11 @@
       setTimeout(tryWrite, 400);
     }
 
-    // ── Save current page on beforeunload (primary mechanism) ────────────────
-    // beforeunload fires before the browser begins tearing down the page, so the
-    // React fiber tree is fully intact and lpGetCurrentPage() works correctly.
-    // This is far more reliable than a 2-second guard poll which may miss the
-    // right moment if no DOM mutations happen to trigger it.
-    window.addEventListener('beforeunload', () => {
+    // ── Continuous 1-second page-save (primary mechanism) ────────────────────
+    // Saves lp_last_page every second while the user is on a restorable page.
+    // This is bulletproof — no dependency on beforeunload timing, iframe quirks,
+    // or the MutationObserver guard firing at the right moment.
+    const _pageSaveInterval = setInterval(() => {
       try {
         const pg = lpGetCurrentPage();
         if (pg && LP_RESTORE_PAGES.has(pg)) {
@@ -4947,33 +4946,47 @@
         } else if (pg && !LP_RESTORE_PAGES.has(pg)) {
           sessionStorage.removeItem('lp_last_page');
         }
-        // If pg is null (shouldn't happen in beforeunload), leave whatever was stored
+      } catch {}
+    }, 1000);
+
+    // ── beforeunload backup save ──────────────────────────────────────────────
+    // Belt-and-suspenders: also try to save in beforeunload in case the 1-second
+    // interval hasn't fired yet (e.g. user refreshes within the first second).
+    window.addEventListener('beforeunload', () => {
+      try {
+        const pg = lpGetCurrentPage();
+        console.log('[Lily Pad] beforeunload: page =', pg);
+        if (pg && LP_RESTORE_PAGES.has(pg)) {
+          sessionStorage.setItem('lp_last_page', pg);
+        } else if (pg && !LP_RESTORE_PAGES.has(pg)) {
+          sessionStorage.removeItem('lp_last_page');
+        }
       } catch {}
     });
 
     // ── Restore page after browser refresh ──────────────────────────────────
-    // Read the saved page BEFORE navigateToMap (navigateToMap may change history).
+    // Read the saved page BEFORE navigateToMap.
     const _savedPage = (() => {
       try { return sessionStorage.getItem('lp_last_page'); } catch { return null; }
     })();
     if (_savedPage) sessionStorage.removeItem('lp_last_page'); // consume immediately
+    console.log('[Lily Pad] Refresh restore: savedPage =', _savedPage);
 
     navigateToMap(role, () => {
       if (_savedPage) {
-        // Retry-loop restore: poll lpGetGoTo() every 200 ms until React has
-        // committed the map fiber and the goTo function is available.
-        // No dependency on lpGetCurrentPage() detecting 'find' — simpler and
-        // immune to the guard-throttle race that caused the old approach to fail.
-        _lpGoToFn = null; // bust any stale pre-refresh cached reference
-        console.log('[Lily Pad] Restoring page after refresh:', _savedPage);
+        // Retry-loop: poll lpGetGoTo() every 200 ms until React has committed the
+        // map page fiber and goTo is reachable. Limit: 25 tries = 5 seconds.
+        _lpGoToFn = null; // bust stale pre-refresh cache
+        console.log('[Lily Pad] Starting page restore to:', _savedPage);
         let _restoreTries = 0;
         const _tryRestore = () => {
           const goTo = lpGetGoTo();
-          if (goTo) { goTo(_savedPage); return; }
+          console.log('[Lily Pad] Restore try', _restoreTries + 1, '— goTo found:', !!goTo);
+          if (goTo) { console.log('[Lily Pad] Restored to', _savedPage); goTo(_savedPage); return; }
           if (++_restoreTries < 25) setTimeout(_tryRestore, 200);
-          else console.warn('[Lily Pad] Page restore gave up after', _restoreTries, 'tries');
+          else console.warn('[Lily Pad] Restore gave up after', _restoreTries, 'tries');
         };
-        setTimeout(_tryRestore, 200); // brief pause for React to commit map render
+        setTimeout(_tryRestore, 300);
       }
     });
   }

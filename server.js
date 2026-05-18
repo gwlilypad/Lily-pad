@@ -442,6 +442,19 @@ app.post('/api/support/conversations', async (req, res) => {
   if (!user_id && !user_email) return res.status(400).json({ error: 'user_id or user_email required' });
   try {
     const now = new Date().toISOString();
+    // Upsert user profile so the FK on support_conversations.user_id is satisfied.
+    // Users authenticated via Supabase may not have a profiles row if the trigger
+    // didn't fire for their account (e.g. created before the table existed).
+    if (user_id) {
+      await fetch(`${SUPABASE_URL}/rest/v1/profiles`, {
+        method: 'POST',
+        headers: { ...SVC_HEADERS, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify({
+          id: user_id, email: user_email || '', full_name: user_name || '',
+          account_type: 'driver', updated_at: now,
+        }),
+      });
+    }
     const conv = {
       user_id: user_id || null, user_name: user_name || user_email || 'Customer',
       user_email: user_email || '', subject: subject || 'Support Request',

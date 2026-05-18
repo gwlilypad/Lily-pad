@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-18-B1';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-18-C1';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -4934,24 +4934,46 @@
       setTimeout(tryWrite, 400);
     }
 
+    // ── Save current page on beforeunload (primary mechanism) ────────────────
+    // beforeunload fires before the browser begins tearing down the page, so the
+    // React fiber tree is fully intact and lpGetCurrentPage() works correctly.
+    // This is far more reliable than a 2-second guard poll which may miss the
+    // right moment if no DOM mutations happen to trigger it.
+    window.addEventListener('beforeunload', () => {
+      try {
+        const pg = lpGetCurrentPage();
+        if (pg && LP_RESTORE_PAGES.has(pg)) {
+          sessionStorage.setItem('lp_last_page', pg);
+        } else if (pg && !LP_RESTORE_PAGES.has(pg)) {
+          sessionStorage.removeItem('lp_last_page');
+        }
+        // If pg is null (shouldn't happen in beforeunload), leave whatever was stored
+      } catch {}
+    });
+
     // ── Restore page after browser refresh ──────────────────────────────────
-    // On refresh the React SPA always boots to the landing/home page.
-    // We snapshot the current page every 2 s in the guard (LP_RESTORE_PAGES only).
-    // After navigateToMap lands on the map, we hand the target to _lpPendingRestore
-    // and let the MutationObserver guard fire goTo() the instant React commits —
-    // far more reliable than a fixed-delay retry loop.
+    // Read the saved page BEFORE navigateToMap (navigateToMap may change history).
     const _savedPage = (() => {
       try { return sessionStorage.getItem('lp_last_page'); } catch { return null; }
     })();
+    if (_savedPage) sessionStorage.removeItem('lp_last_page'); // consume immediately
 
     navigateToMap(role, () => {
       if (_savedPage) {
-        // Invalidate any stale cached goTo reference from before the reload,
-        // then queue the restore for the guard to pick up.
-        _lpGoToFn = null;
-        _lpPendingRestore = _savedPage;
-        sessionStorage.removeItem('lp_last_page');
-        console.log('[Lily Pad] Queued page restore after refresh:', _savedPage);
+        // Retry-loop restore: poll lpGetGoTo() every 200 ms until React has
+        // committed the map fiber and the goTo function is available.
+        // No dependency on lpGetCurrentPage() detecting 'find' — simpler and
+        // immune to the guard-throttle race that caused the old approach to fail.
+        _lpGoToFn = null; // bust any stale pre-refresh cached reference
+        console.log('[Lily Pad] Restoring page after refresh:', _savedPage);
+        let _restoreTries = 0;
+        const _tryRestore = () => {
+          const goTo = lpGetGoTo();
+          if (goTo) { goTo(_savedPage); return; }
+          if (++_restoreTries < 25) setTimeout(_tryRestore, 200);
+          else console.warn('[Lily Pad] Page restore gave up after', _restoreTries, 'tries');
+        };
+        setTimeout(_tryRestore, 200); // brief pause for React to commit map render
       }
     });
   }

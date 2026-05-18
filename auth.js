@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-18-D24';  // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-18-D25';  // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -1882,22 +1882,13 @@
       if (!row || row === pd || row.dataset.lpPdWired) return;
 
       row.dataset.lpPdWired = '1';
-      row.addEventListener('click', e => {
-        e.stopPropagation();
-        e.preventDefault();
-        // Record navigation context in history state so back buttons can detect it
+      row.addEventListener('click', () => {
+        // Stamp history BEFORE the native React handler fires so the back-button
+        // system knows we came from the pull-down.  We intentionally do NOT
+        // call preventDefault / stopPropagation — the native click handles the
+        // actual page navigation; we only need to tag the history entry.
         history.pushState({ lpPullDown: true }, '', location.pathname + '#' + item.hash);
-        // Toggle the pull-down shut via its bottom-nav tab
-        _openAccountPullDown();
-        // Navigate to the target page after the pull-down animation (~350 ms)
-        setTimeout(() => {
-          if (!callGoTo(item.page)) {
-            _lpGoToFn = null;
-            const g = lpGetGoTo();
-            if (g) g(item.page);
-          }
-        }, 350);
-        console.log('[Lily Pad] Pull-down nav:', item.hash, '→', item.page);
+        console.log('[Lily Pad] Pull-down nav tagged:', item.hash, '→', item.page);
       }, true /* capture phase — fires before native handlers */);
 
       console.log('[Lily Pad] Pull-down item wired:', item.hash);

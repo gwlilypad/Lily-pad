@@ -21,6 +21,7 @@ interface AuthCtx {
   role: string | null;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string, fullName: string, role?: string) => Promise<{ error: string | null; confirmEmail?: boolean }>;
+  verifyOtp: (email: string, token: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   forgotPassword: (email: string) => Promise<{ error: string | null }>;
   refreshProfile: () => Promise<void>;
@@ -30,6 +31,7 @@ const AuthContext = createContext<AuthCtx>({
   user: null, session: null, profile: null, loading: true, role: null,
   signIn: async () => ({ error: null }),
   signUp: async () => ({ error: null }),
+  verifyOtp: async () => ({ error: null }),
   signOut: async () => {},
   forgotPassword: async () => ({ error: null }),
   refreshProfile: async () => {},
@@ -115,6 +117,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null };
   };
 
+  const verifyOtp = async (email: string, token: string) => {
+    const { error } = await supabase.auth.verifyOtp({ email, token, type: "email" });
+    return { error: error ? error.message : null };
+  };
+
   const signOut = async () => {
     await supabase.auth.signOut();
   };
@@ -131,7 +138,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, profile, loading, role, signIn, signUp, signOut, forgotPassword, refreshProfile }}>
+    <AuthContext.Provider value={{ user, session, profile, loading, role, signIn, signUp, verifyOtp, signOut, forgotPassword, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );

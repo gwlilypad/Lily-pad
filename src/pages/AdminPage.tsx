@@ -1056,6 +1056,7 @@ export default function AdminPage() {
   const [error, setError]         = useState("");
   const [emailFocus, setEmailFocus] = useState(false);
   const [pwFocus, setPwFocus]     = useState(false);
+  const [loginLoading, setLoginLoading] = useState(false);
 
   const [view, setView] = useState<View>("dashboard");
   const [users, setUsers] = useState<MockUser[]>(() => loadUsers(MOCK_USERS));
@@ -1348,13 +1349,26 @@ export default function AdminPage() {
 
   const selectedUser = users.find(u => u.id === selectedUserId) || null;
 
-  function handleLogin() {
+  async function handleLogin() {
     if (!email.trim() || !password.trim()) {
       setError("Please enter your email and password.");
       return;
     }
     setError("");
-    setLoggedIn(true);
+    setLoginLoading(true);
+    try {
+      const r = await fetch("/api/staff/signin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
+      });
+      const data = await r.json();
+      if (!r.ok) { setError(data.error || "Invalid credentials. Contact your administrator."); return; }
+      const serverRole: AdminRole = data.role === "admin" ? "admin" : "staff";
+      setRole(serverRole);
+      setLoggedIn(true);
+    } catch { setError("Network error. Please try again."); }
+    finally { setLoginLoading(false); }
   }
 
   function handleSignOut() {
@@ -1592,8 +1606,8 @@ export default function AdminPage() {
             {error && (
               <p style={{ fontSize: 12, color: "#ef4444", textAlign: "center", margin: 0, fontFamily: '"DM Sans", sans-serif' }}>{error}</p>
             )}
-            <button onClick={handleLogin} style={{ background: GREEN, color: NAVY, border: "none", borderRadius: 100, padding: "15px", fontWeight: 800, fontSize: 15, fontFamily: '"DM Sans", sans-serif', cursor: "pointer", marginTop: 4, letterSpacing: "0.01em" }}>
-              Sign in as {role === "admin" ? "Admin" : "Staff"}
+            <button onClick={handleLogin} disabled={loginLoading} style={{ background: loginLoading ? "rgba(141,214,63,0.55)" : GREEN, color: NAVY, border: "none", borderRadius: 100, padding: "15px", fontWeight: 800, fontSize: 15, fontFamily: '"DM Sans", sans-serif', cursor: loginLoading ? "not-allowed" : "pointer", marginTop: 4, letterSpacing: "0.01em" }}>
+              {loginLoading ? "Signing in…" : `Sign in as ${role === "admin" ? "Admin" : "Staff"}`}
             </button>
             <button
               type="button"
@@ -1649,6 +1663,56 @@ export default function AdminPage() {
               <p style={{ fontSize: 11.5, color: "rgba(255,255,255,0.62)", margin: "2px 0 0" }}>{users.length} accounts · Master controls</p>
             </div>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.50)" strokeWidth="2.5"><path d="m9 18 6-6-6-6"/></svg>
+          </div>
+
+          {/* Email activation — invite team member (both admin and staff) */}
+          <div style={{ background: "#142A52", borderRadius: 18, padding: "16px 18px", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 14px rgba(0,0,0,0.30)", display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div>
+                <p style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.12em", textTransform: "uppercase", margin: 0 }}>Email activation</p>
+                <p style={{ fontSize: 14, fontWeight: 700, color: "#fff", margin: "2px 0 0" }}>Invite team member</p>
+              </div>
+              <div style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(141,214,63,0.14)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+              </div>
+            </div>
+            {inviteSuccess ? (
+              <div style={{ background: "rgba(141,214,63,0.10)", border: "1px solid rgba(141,214,63,0.30)", borderRadius: 12, padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth="2.5" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
+                <p style={{ fontSize: 13, fontWeight: 700, color: GREEN, margin: 0 }}>Activation email sent!</p>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <input
+                  type="email"
+                  placeholder="team@lilypad.com"
+                  value={inviteEmail}
+                  onChange={e => { setInviteEmail(e.target.value); setInviteError(""); }}
+                  onFocus={() => setInviteEmailFocus(true)}
+                  onBlur={() => setInviteEmailFocus(false)}
+                  style={{ width: "100%", padding: "10px 14px", borderRadius: 10, boxSizing: "border-box", background: "rgba(255,255,255,0.05)", color: "#fff", fontSize: 13, fontFamily: '"DM Sans",sans-serif', outline: "none", border: `1.5px solid ${inviteError ? "#ef4444" : inviteEmailFocus ? GREEN : "rgba(255,255,255,0.10)"}` }}
+                />
+                {inviteError && <p style={{ color: "#ef4444", fontSize: 11.5, fontWeight: 600, margin: 0 }}>{inviteError}</p>}
+                <button
+                  disabled={inviteLoading}
+                  onClick={async () => {
+                    const em = inviteEmail.trim().toLowerCase();
+                    if (!em || !em.includes("@")) { setInviteError("Enter a valid email address."); return; }
+                    setInviteLoading(true); setInviteError("");
+                    try {
+                      const r = await fetch("/api/staff/invite", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: em, role: inviteRole }) });
+                      const data = await r.json();
+                      if (!r.ok) { setInviteError(data.error || "Failed to send invite."); }
+                      else { setInviteSuccess(true); setInviteEmail(""); setTimeout(() => setInviteSuccess(false), 6000); }
+                    } catch { setInviteError("Network error. Try again."); }
+                    finally { setInviteLoading(false); }
+                  }}
+                  style={{ width: "100%", padding: "11px", borderRadius: 100, border: "none", background: inviteLoading ? "rgba(141,214,63,0.50)" : GREEN, color: NAVY, fontWeight: 800, fontSize: 13, fontFamily: '"DM Sans",sans-serif', cursor: inviteLoading ? "not-allowed" : "pointer" }}
+                >
+                  {inviteLoading ? "Sending…" : "Send activation email"}
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Revenue & Payouts — admin only */}

@@ -103,7 +103,7 @@ function AppInner() {
           <Route path="/account" element={<AuthGuard><AccountPage /></AuthGuard>} />
           <Route path="/driveraccount" element={<AuthGuard><DriverAccountPage /></AuthGuard>} />
           <Route path="/paddashboard" element={<AuthGuard><PadDashboardPage /></AuthGuard>} />
-          <Route path="/admin" element={<AuthGuard requireAdmin><AdminPage /></AuthGuard>} />
+          <Route path="/admin" element={<AdminPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>

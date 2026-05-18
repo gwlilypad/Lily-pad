@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-18-D22';  // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-18-D23';  // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -1906,48 +1906,51 @@
 
   // ── Pull-down gap collapse ────────────────────────────────────────────────
   // The native bundle renders a large "hero" section (user initials in big font)
-  // between the header and the menu rows. This creates the huge empty gap the
-  // user sees. We detect and hide any sibling element of menuCard that:
-  //   • has significant height (> 40 px)
-  //   • contains only short text (user name/initials — no '@', no menu labels)
-  //   • is not our own injected sign-out row
+  // between the header and the menu rows.  We only touch DIRECT siblings of
+  // menuCard within its immediate parent AND only when those siblings are
+  // visually between the bottom-half of the screen (inside the pull-down sheet)
+  // and above the menu rows — never touching map-page or other app layout.
   function _collapsePullDownGap() {
     const pd = _findPullDownContainer();
     if (!pd) return;
 
-    // Walk up one level at a time (max 4) looking for gap-creating siblings
-    let container = pd.parentElement;
-    for (let depth = 0; depth < 4 && container && container !== document.body; depth++) {
-      let collapsed = false;
-      Array.from(container.children).forEach(child => {
-        if (child === pd || child.dataset.lpGapHidden) return;
-        if (pd.contains(child)) return;               // inside the menu — keep
-        if (child.id === 'lp-pulldown-so') return;   // our sign-out button
+    const winH = window.innerHeight;
+    const pdRect = pd.getBoundingClientRect();
 
-        const txt = child.textContent.trim();
-        // Keep: header elements (contain '@' or long descriptive text)
-        if (txt.includes('@') || txt.length > 80) return;
-        // Keep: anything with menu-label words
-        if (/my account|my bookings|saved spots|customer service|sign.?out/i.test(txt)) return;
+    // Guard 1: pull-down must be visually on-screen (not closed / off-screen)
+    if (pdRect.top >= winH || pdRect.bottom <= 0) return;
+    // Guard 2: menu must sit in the bottom half of the screen (pull-down territory)
+    if (pdRect.top < winH * 0.25) return;
 
-        const h = child.getBoundingClientRect().height;
-        if (h > 40) {
-          child.dataset.lpGapHidden = '1';
-          child.style.setProperty('display',    'none', 'important');
-          child.style.setProperty('max-height', '0',    'important');
-          child.style.setProperty('overflow',   'hidden','important');
-          collapsed = true;
-          console.log('[LP] Pull-down gap collapsed: h=' + Math.round(h) + ' txt="' + txt.slice(0, 30) + '"');
-        }
-      });
-      // Also zero out any CSS padding/gap that the native flex container adds
-      if (collapsed) {
-        container.style.setProperty('gap',         '0',    'important');
-        container.style.setProperty('padding-top', '0',    'important');
-        container.style.setProperty('row-gap',     '0',    'important');
+    // Only look at DIRECT children of pd's immediate parent — never go higher
+    const parent = pd.parentElement;
+    if (!parent) return;
+
+    Array.from(parent.children).forEach(child => {
+      if (child === pd || child.dataset.lpGapHidden) return;
+      if (pd.contains(child)) return;              // inside menu — keep
+      if (child.id === 'lp-pulldown-so') return;  // our sign-out button
+
+      const childRect = child.getBoundingClientRect();
+
+      // Guard 3: element must be visually above the menu rows AND
+      //          within the bottom ¾ of the screen (still inside the sheet)
+      if (childRect.top  < winH * 0.15) return;          // too high — part of main layout
+      if (childRect.bottom > pdRect.top + 10) return;    // overlaps or below menu
+
+      const txt = child.textContent.trim();
+      if (txt.includes('@') || txt.length > 80) return;  // header with email — keep
+      if (/my account|my bookings|saved spots|customer service|sign.?out/i.test(txt)) return;
+
+      const h = childRect.height;
+      if (h > 40) {
+        child.dataset.lpGapHidden = '1';
+        child.style.setProperty('display',    'none',   'important');
+        child.style.setProperty('max-height', '0',      'important');
+        child.style.setProperty('overflow',   'hidden', 'important');
+        console.log('[LP] Pull-down gap collapsed: h=' + Math.round(h) + ' txt="' + txt.slice(0, 30) + '"');
       }
-      container = container.parentElement;
-    }
+    });
   }
 
   // ── Fake spot coordinates baked into the read-only bundle (ar[] array) ───

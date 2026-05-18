@@ -1000,6 +1000,14 @@ body.lp-photo-fs .canvas-wrap canvas {
 }
 .lp-ap-badge.susp { background: rgba(239,68,68,0.2); color: #f87171; border: 1px solid rgba(239,68,68,0.3); }
 .lp-ap-badge.verif { background: rgba(141,214,63,0.15); color: #8DD63F; border: 1px solid rgba(141,214,63,0.3); }
+.lp-ap-badge.pend { background: rgba(251,191,36,0.15); color: #fbbf24; border: 1px solid rgba(251,191,36,0.3); }
+.lp-ap-badge.open { background: rgba(141,214,63,0.15); color: #8DD63F; border: 1px solid rgba(141,214,63,0.3); }
+.lp-ap-new-msg-btn {
+  background: #22c55e; color: #fff; border: none; border-radius: 6px;
+  padding: 4px 12px; font-size: 12px; font-weight: 600; cursor: pointer;
+  white-space: nowrap; flex-shrink: 0;
+}
+.lp-ap-new-msg-btn:hover { background: #16a34a; }
 .lp-ap-email { font-size: 12px; color: rgba(255,255,255,0.45); margin-top: 1px; }
 .lp-ap-meta-r { text-align: right; flex-shrink: 0; }
 .lp-ap-spend { font-size: 15px; font-weight: 700; color: #8DD63F; }

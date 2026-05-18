@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-18-A1';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-18-B1';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -3385,19 +3385,72 @@
   function _renderAdminPanel() {
     const panel = document.getElementById('lp-admin-panel');
     if (!panel || !_adminUsers) return;
-    const isHosts = _adminTab === 'hosts';
+
     const renters = _adminUsers.filter(u => u.account_type !== 'padRenter' && u.account_type !== 'admin' && u.account_type !== 'staff');
     const hosts   = _adminUsers.filter(u => u.account_type === 'padRenter');
+
+    const _tabBar = () => `
+      <div class="lp-ap-tabs">
+        <button class="lp-ap-tab ${_adminTab==='renters'?'active':''}" data-tab="renters">🚗 Renters (${renters.length})</button>
+        <button class="lp-ap-tab ${_adminTab==='hosts'?'active':''}" data-tab="hosts">🏠 Hosts (${hosts.length})</button>
+        <button class="lp-ap-tab ${_adminTab==='chats'?'active':''}" data-tab="chats">💬 Chats (${_supportConvs.length})</button>
+      </div>`;
+
+    // ── Chats tab: only users who have had message interactions ──────────────
+    if (_adminTab === 'chats') {
+      if (_supportConvs.length === 0) _fetchConversations();
+      const convsSorted = [..._supportConvs].sort((a, b) =>
+        new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at)
+      );
+      panel.querySelector('.lp-ap-content').innerHTML = `
+        ${_tabBar()}
+        <div class="lp-ap-meta-row">
+          <span>CURRENT &amp; PAST ACTIVE CHATS</span>
+          <button class="lp-ap-new-msg-btn">+ New Message</button>
+        </div>
+        <div class="lp-ap-list">
+          ${convsSorted.length === 0
+            ? '<div class="lp-ap-empty">No conversations yet — use + New Message to start one.</div>'
+            : convsSorted.map(c => {
+                const name    = c.user_name || c.user_email || 'Customer';
+                const preview = (c.last_message || 'No messages yet').slice(0, 55);
+                const stCls   = c.status === 'closed' ? 'susp' : c.status === 'pending' ? 'pend' : 'verif';
+                const stLbl   = (c.status || 'open').toUpperCase();
+                return `
+                <div class="lp-ap-row lp-ap-conv-row" data-cid="${c.id}">
+                  <div class="lp-ap-avatar">${_adminInitials(name)}</div>
+                  <div class="lp-ap-info">
+                    <div class="lp-ap-name">${name}</div>
+                    <div class="lp-ap-email">${preview}</div>
+                  </div>
+                  <div class="lp-ap-meta-r">
+                    <span class="lp-ap-badge ${stCls}">${stLbl}</span>
+                    <div class="lp-ap-bcount">${_tsRelative(c.updated_at)}</div>
+                  </div>
+                </div>`;
+              }).join('')
+          }
+        </div>`;
+      panel.querySelectorAll('.lp-ap-tab').forEach(btn =>
+        btn.addEventListener('click', () => { _adminTab = btn.dataset.tab; _renderAdminPanel(); })
+      );
+      panel.querySelector('.lp-ap-new-msg-btn')?.addEventListener('click', () => _openNewChatModal());
+      panel.querySelectorAll('.lp-ap-conv-row').forEach(row => {
+        const c = _supportConvs.find(x => x.id === row.dataset.cid);
+        if (c) row.addEventListener('click', () => _openDrawerConv(c));
+      });
+      return;
+    }
+
+    // ── Renters / Hosts tabs ──────────────────────────────────────────────────
+    const isHosts = _adminTab === 'hosts';
     const pool    = isHosts ? hosts : renters;
     const q       = _adminSearch.toLowerCase();
     const visible = q ? pool.filter(u => (u.full_name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q)) : pool;
     const sorted  = [...visible].sort((a, b) => (b.spend_total || 0) - (a.spend_total || 0));
 
     panel.querySelector('.lp-ap-content').innerHTML = `
-      <div class="lp-ap-tabs">
-        <button class="lp-ap-tab ${!isHosts ? 'active' : ''}" data-tab="renters">🚗 Renters (${renters.length})</button>
-        <button class="lp-ap-tab ${isHosts ? 'active' : ''}" data-tab="hosts">🏠 Hosts (${hosts.length})</button>
-      </div>
+      ${_tabBar()}
       <div class="lp-ap-meta-row">
         <span>SORTED BY SPEND · HIGHEST FIRST</span><span>${sorted.length} shown</span>
       </div>
@@ -3408,18 +3461,18 @@
         ${sorted.length === 0
           ? `<div class="lp-ap-empty">No ${isHosts ? 'hosts' : 'renters'} registered yet.</div>`
           : sorted.map(u => {
-              const name = u.full_name || u.email || 'Unknown';
-              const susp = u.status === 'suspended';
+              const name  = u.full_name || u.email || 'Unknown';
+              const susp  = u.status === 'suspended';
               const verif = u.status === 'verified';
               const spend = u.spend_total ? '$' + Math.round(u.spend_total) : '$0';
-              const bc = u.booking_count || 0;
+              const bc    = u.booking_count || 0;
               return `
               <div class="lp-ap-row" data-uid="${u.id}">
                 <div class="lp-ap-avatar">${_adminInitials(name)}</div>
                 <div class="lp-ap-info">
                   <div class="lp-ap-name">
                     ${name} <span class="lp-ap-star">★</span>
-                    ${susp ? '<span class="lp-ap-badge susp">SUSPENDED</span>' : ''}
+                    ${susp  ? '<span class="lp-ap-badge susp">SUSPENDED</span>' : ''}
                     ${verif ? '<span class="lp-ap-badge verif">VERIFIED</span>' : ''}
                   </div>
                   <div class="lp-ap-email">${u.email || ''}</div>
@@ -3519,8 +3572,9 @@
       <div class="lp-ap-content"><div class="lp-ap-loading">Loading accounts…</div></div>`;
     document.body.appendChild(panel);
 
-    panel.querySelector('.lp-ap-refresh').addEventListener('click', () => _fetchAdminUsers(true));
+    panel.querySelector('.lp-ap-refresh').addEventListener('click', () => { _fetchAdminUsers(true); _fetchConversations(); });
     _fetchAdminUsers();
+    _fetchConversations(); // pre-load so Chats tab is ready immediately
   }
 
   // ── Support chat — 3-way messaging: customer ↔ staff ↔ admin ─────────────
@@ -4214,36 +4268,52 @@
 
     if (isPriv) {
       let _st = null, _allUsers = null;
-      modal.querySelector('#lp-ncm-search').addEventListener('input', async function () {
-        const q = this.value.trim().toLowerCase();
-        const res = modal.querySelector('#lp-ncm-results');
+      const res = modal.querySelector('#lp-ncm-results');
+
+      const _renderUserRows = (users, filter) => {
+        const q = (filter || '').toLowerCase();
+        const pool = q
+          ? users.filter(u => (u.full_name||'').toLowerCase().includes(q) || (u.email||'').toLowerCase().includes(q))
+          : users;
+        const matched = pool.slice(0, 30);
+        if (!matched.length) {
+          res.innerHTML = `<div class="lp-rconv-empty" style="padding:8px 0">${q ? 'No users found' : 'No users yet'}</div>`;
+          return;
+        }
+        res.innerHTML = matched.map(u => {
+          const hasConv = _supportConvs.some(c => c.user_id === u.id);
+          return `
+            <div class="lp-rconv-row" data-uid="${u.id}"
+              data-name="${(u.full_name||u.email||'').replace(/"/g,'&quot;')}"
+              data-email="${(u.email||'').replace(/"/g,'&quot;')}"
+              style="margin-bottom:6px">
+              <div class="lp-rconv-icon" style="font-size:14px">${(u.full_name||u.email||'?')[0].toUpperCase()}</div>
+              <div class="lp-rconv-body">
+                <div class="lp-rconv-name">${u.full_name||u.email||'Unknown'}${hasConv ? ' <span style="color:#22c55e;font-size:11px;font-weight:600">● existing chat</span>' : ''}</div>
+                <div class="lp-rconv-preview">${u.email||''}</div>
+              </div>
+            </div>`;
+        }).join('');
+        res.querySelectorAll('.lp-rconv-row').forEach(row => row.addEventListener('click', () => {
+          modal.remove();
+          _openAdminChatWith({ id: row.dataset.uid, full_name: row.dataset.name, email: row.dataset.email });
+        }));
+      };
+
+      // Load and show all users immediately — no need to type first
+      res.innerHTML = '<div class="lp-rconv-empty" style="padding:8px 0">Loading users…</div>';
+      fetch('/api/admin/users').then(r => r.json()).then(users => {
+        _allUsers = users.filter(u => u.account_type !== 'admin' && u.account_type !== 'staff');
+        _renderUserRows(_allUsers, '');
+      }).catch(() => {
+        res.innerHTML = '<div class="lp-rconv-empty" style="padding:8px 0">Failed to load — try again</div>';
+      });
+
+      // Filter list as user types
+      modal.querySelector('#lp-ncm-search').addEventListener('input', function () {
         clearTimeout(_st);
-        if (!q) { res.innerHTML = '<div class="lp-rconv-empty" style="padding:8px 0">Type to search customers</div>'; return; }
-        res.innerHTML = '<div class="lp-rconv-empty" style="padding:8px 0">Searching…</div>';
-        _st = setTimeout(async () => {
-          try {
-            if (!_allUsers) { const r = await fetch('/api/admin/users'); _allUsers = r.ok ? await r.json() : []; }
-            const matched = _allUsers.filter(u =>
-              (u.full_name||'').toLowerCase().includes(q) || (u.email||'').toLowerCase().includes(q)
-            ).slice(0, 10);
-            if (!matched.length) { res.innerHTML = '<div class="lp-rconv-empty" style="padding:8px 0">No customers found</div>'; return; }
-            res.innerHTML = matched.map(u => `
-              <div class="lp-rconv-row" data-uid="${u.id}"
-                data-name="${(u.full_name||u.email||'').replace(/"/g,'&quot;')}"
-                data-email="${(u.email||'').replace(/"/g,'&quot;')}"
-                style="margin-bottom:6px">
-                <div class="lp-rconv-icon" style="font-size:14px">${(u.full_name||u.email||'?')[0].toUpperCase()}</div>
-                <div class="lp-rconv-body">
-                  <div class="lp-rconv-name">${u.full_name||u.email||'Unknown'}</div>
-                  <div class="lp-rconv-preview">${u.email||''}</div>
-                </div>
-              </div>`).join('');
-            res.querySelectorAll('.lp-rconv-row').forEach(row => row.addEventListener('click', () => {
-              modal.remove();
-              _openAdminChatWith({ id: row.dataset.uid, full_name: row.dataset.name, email: row.dataset.email });
-            }));
-          } catch { res.innerHTML = '<div class="lp-rconv-empty" style="padding:8px 0">Search failed — try again</div>'; }
-        }, 350);
+        const q = this.value;
+        _st = setTimeout(() => { if (_allUsers) _renderUserRows(_allUsers, q); }, 200);
       });
     } else {
       modal.querySelector('#lp-ncm-send-btn').addEventListener('click', async () => {
@@ -4287,6 +4357,7 @@
       // Safe teardown rule: currentPage must be a known, non-null, non-support page.
       const currentPage = lpGetCurrentPage();
       if (currentPage === null || currentPage === 'support') return; // stay alive
+      if (_drawerActiveConv) return; // keep drawer alive while a conversation is open on any page
 
       clearInterval(_supportPollTimer);
       _supportPollTimer = null;

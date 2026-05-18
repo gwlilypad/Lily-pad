@@ -703,41 +703,21 @@ app.get('/staff-login', (req, res) => {
   res.sendFile(path.join(__dirname, 'staff-login.html'));
 });
 
-// ── Main page ──────────────────────────────────────────────────────────────────
-app.get('/', (req, res) => {
-  let html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
-  const authJS      = fs.readFileSync(path.join(__dirname, 'auth.js'),           'utf8');
-  const authCSS     = fs.readFileSync(path.join(__dirname, 'auth.css'),          'utf8');
-  const authOverlay = fs.readFileSync(path.join(__dirname, 'auth-overlay.html'), 'utf8');
+// ── Serve built React/Vite app ─────────────────────────────────────────────────
+const DIST = path.join(__dirname, 'dist');
+app.use(express.static(DIST));
 
-  const headInjection = `
-  <style id="lily-auth-css">${authCSS}</style>
-  <style id="lily-overrides">
-    .home-icon-btn { display: none !important; }
-  </style>
-  <script>
-    window.__SUPABASE_URL__      = "${SUPABASE_URL}";
-    window.__SUPABASE_ANON_KEY__ = "${SUPABASE_ANON}";
-  </script>`;
-
-  // Bake credentials directly into auth.js — no window variable dependency
-  const authJSFinal = authJS
-    .replace(/%%SUPABASE_URL%%/g,      SUPABASE_URL)
-    .replace(/%%SUPABASE_ANON_KEY%%/g, SUPABASE_ANON);
-
-  html = html.replace('</head>',             () => `${headInjection}</head>`);
-  html = html.replace('<div id="root"></div>', () => `${authOverlay}<div id="root"></div>`);
-  html = html.replace('</body>',             () => `<script>${authJSFinal}</script></body>`);
-
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Surrogate-Control', 'no-store');
-  res.send(html);
+// SPA fallback — all non-API routes serve the Vite-built index.html
+app.get('*', (req, res) => {
+  const indexHtml = path.join(DIST, 'index.html');
+  if (fs.existsSync(indexHtml)) {
+    res.sendFile(indexHtml);
+  } else {
+    res.status(503).send('<h1>Building…</h1><p>The app is being compiled. Restart the workflow once: <code>npm run build</code> completes.</p>');
+  }
 });
 
-app.use(express.static(__dirname));
-
 app.listen(PORT, '0.0.0.0', async () => {
-  console.log(`Lily Pad server running on port ${PORT}`);
+  console.log(`[LP] Lily Pad server v2 running on port ${PORT}`);
   await checkDB();
 });

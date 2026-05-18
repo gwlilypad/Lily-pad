@@ -1,0 +1,81 @@
+import { useNavigate } from "react-router-dom";
+import { useApp } from "@/context/AppContext";
+import { useAuth } from "@/context/AuthContext";
+import TabBar from "@/components/TabBar";
+
+export default function AccountPage() {
+  const { goTo, state } = useApp();
+  const { profile, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  const firstName = profile?.first_name || state.suAns?.[0] || "Alex";
+  const lastName  = profile?.last_name  || state.suAns?.[1] || "J.";
+  const email     = profile?.email      || state.suAns?.[2] || "alex@email.com";
+  const phone     = profile?.phone      || state.suAns?.[3] || "(555) 000-0000";
+  const address   = state.apAns?.[0] || "123 Main St";
+  const name      = `${firstName} ${lastName}`.trim();
+  const initials  = ((firstName[0] || "A") + (lastName[0] || "J")).toUpperCase();
+
+  function copyCode() {
+    navigator.clipboard.writeText("LILYPAD10").catch(() => {});
+    alert("Code copied!");
+  }
+
+  async function handleSignOut() {
+    await signOut();
+    navigate("/");
+  }
+
+  return (
+    <div className="page active" style={{ display: "flex", flexDirection: "column" }}>
+      <div style={{ background: "#0E1F40", padding: "44px 24px 20px", flexShrink: 0 }}>
+        <div className="profile-avatar"><span className="avatar-initials">{initials}</span></div>
+        <p className="profile-name">{name}</p>
+        <p className="profile-badge">Pad Renter</p>
+      </div>
+      <div className="s-divider" />
+      <div className="s-body" style={{ background: "#F4F7FA" }}>
+        <span className="section-header">Your info</span>
+        <div className="info-card">
+          <div className="info-row"><span className="info-lbl">Name</span><span className="info-val">{name}</span><span className="info-edit">Edit</span></div>
+          <div className="info-row"><span className="info-lbl">Email</span><span className="info-val">{email}</span><span className="info-edit">Edit</span></div>
+          <div className="info-row"><span className="info-lbl">Phone</span><span className="info-val">{phone}</span><span className="info-edit">Edit</span></div>
+          <div className="info-row"><span className="info-lbl">Address</span><span className="info-val">{address}</span><span className="info-edit">Edit</span></div>
+        </div>
+
+        <span className="section-header">Your pad</span>
+        <div className="thumb-nav-card">
+          <div className="thumb-nav-row" onClick={() => goTo("addpad")}><span className="thumb-nav-lbl">My lily pad</span><span className="thumb-nav-arrow">›</span></div>
+          <div className="thumb-nav-row" onClick={() => goTo("availability")}><span className="thumb-nav-lbl">Availability & pricing</span><span className="thumb-nav-arrow">›</span></div>
+          <div className="thumb-nav-row"><span className="thumb-nav-lbl">Bookings</span><span className="thumb-nav-arrow">›</span></div>
+          <div className="thumb-nav-row"><span className="thumb-nav-lbl">Earnings</span><span className="thumb-nav-arrow">›</span></div>
+        </div>
+
+        <span className="section-header">Referrals</span>
+        <div className="referral-card">
+          <div className="ref-header">
+            <div className="ref-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0E1F40" strokeWidth="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
+            </div>
+            <span className="ref-title">Refer a friend</span>
+          </div>
+          <p className="ref-sub">Earn $10 for every friend who lists their first pad using your code.</p>
+          <div className="ref-code-row">
+            <span className="ref-code">LILYPAD10</span>
+            <button className="ref-copy-btn" onClick={copyCode}>Copy</button>
+          </div>
+          <p className="ref-earn">0 referrals so far · $0 earned</p>
+        </div>
+
+        <span className="section-header">Settings</span>
+        <div className="thumb-nav-card">
+          <div className="thumb-nav-row"><span className="thumb-nav-lbl">Notifications</span><span className="thumb-nav-arrow">›</span></div>
+          <div className="thumb-nav-row"><span className="thumb-nav-lbl">Payment info</span><span className="thumb-nav-arrow">›</span></div>
+          <div className="thumb-nav-row"><span className="thumb-nav-lbl">Privacy & terms</span><span className="thumb-nav-arrow">›</span></div>
+          <div className="thumb-nav-row" onClick={handleSignOut}><span className="thumb-nav-lbl" style={{ color: "rgba(229,57,53,0.8)" }}>Sign out</span><span className="thumb-nav-arrow">›</span></div>
+        </div>
+      </div>
+      <TabBar active="account" goTo={goTo} mode="host" />
+    </div>
+  );
+}

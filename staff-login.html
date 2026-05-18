@@ -484,6 +484,16 @@
         if (!r.ok) throw new Error(data.error || 'Failed to send invite');
         const addrEl = document.getElementById('confirm-email-addr');
         if (addrEl) addrEl.textContent = email;
+        // Update panel heading to reflect resend vs first send
+        const titleEl = document.querySelector('#panel-check-email .panel-title');
+        const noteEl  = document.querySelector('#panel-check-email .confirm-box span');
+        if (data.resent) {
+          if (titleEl) titleEl.textContent = 'New invite sent.';
+          if (noteEl)  noteEl.textContent  = 'A fresh link was sent — any previous link is now invalid.';
+        } else {
+          if (titleEl) titleEl.textContent = 'Invite sent.';
+          if (noteEl)  noteEl.textContent  = "Didn't receive it? Check spam or wait a minute.";
+        }
         showPanel('panel-check-email');
       } catch (e) {
         errEl.textContent = e.message; btn.disabled = false; btn.textContent = 'Send Invite Link';

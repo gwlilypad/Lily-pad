@@ -310,8 +310,35 @@ app.post('/api/staff/invite', async (req, res) => {
     }
     if (!r.ok) {
       const msg = data.message || data.msg || data.error_description || JSON.stringify(data);
-      if (/already been invited|already registered|already been registered/i.test(msg))
-        return res.status(409).json({ error: 'An invite was already sent to this email. Check your inbox (including spam).' });
+      if (/already been invited|already registered|already been registered/i.test(msg)) {
+        // Delete the existing pending user so we can send a fresh invite
+        const listR = await fetch(
+          `${SUPABASE_URL}/auth/v1/admin/users?email=${encodeURIComponent(emailLower)}&per_page=10`,
+          { headers: SVC_HEADERS }
+        );
+        const listData = await listR.json().catch(() => ({}));
+        const existing = (listData.users || []).find(u => u.email?.toLowerCase() === emailLower);
+        if (existing?.id) {
+          await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${existing.id}`, {
+            method : 'DELETE',
+            headers: SVC_HEADERS,
+          }).catch(() => {});
+        }
+        // Re-send a fresh invite
+        const r2 = await fetch(`${SUPABASE_URL}/auth/v1/invite`, {
+          method : 'POST',
+          headers: { ...SVC_HEADERS, 'Content-Type': 'application/json' },
+          body   : JSON.stringify({ email, redirect_to: redirectTo, data: { account_type: 'staff' } }),
+        });
+        const data2 = await r2.json().catch(() => ({}));
+        if (!r2.ok) throw new Error(data2.message || data2.error_description || 'Failed to resend invite');
+        await fetch(`${SUPABASE_URL}/rest/v1/admin_users`, {
+          method : 'POST',
+          headers: { ...SVC_HEADERS, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+          body   : JSON.stringify({ email: emailLower, full_name: '', role: 'staff', auth_user_id: data2.id || null, created_at: now }),
+        }).catch(() => {});
+        return res.json({ invited: true, resent: true });
+      }
       throw new Error(msg);
     }
 
@@ -322,7 +349,7 @@ app.post('/api/staff/invite', async (req, res) => {
       body   : JSON.stringify({ email: emailLower, full_name: '', role: 'staff', auth_user_id: data.id || null, created_at: now }),
     }).catch(() => {});
 
-    res.json({ invited: true });
+    res.json({ invited: true, resent: false });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-18-D17';  // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-18-D18';  // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -2087,6 +2087,10 @@
     verify         : 'admin',
     unverify       : 'admin',
     suspend        : 'admin',
+    signup         : 'find',          // role-choice screen → back to map
+    driversignup   : 'find',          // driver sign-up form → back to map
+    bizsignup      : 'find',          // host/biz sign-up form → back to map
+    padtype        : 'find',          // pad-type picker → back to map
   };
   const LP_ALL_PAGES = new Set([
     'home','find','root','paddashboard','bookings','payment',

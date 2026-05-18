@@ -62,6 +62,10 @@
 
       <!-- Forgot Password Form -->
       <div id="form-forgot" class="auth-form">
+        <button id="back-to-login" class="auth-back">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Back
+        </button>
         <h2 class="auth-title">Reset password.</h2>
         <p class="auth-subtitle">We'll send a reset link to your email.</p>
         <form id="forgot-form">
@@ -73,11 +77,14 @@
           <div id="forgot-success" class="auth-success"></div>
           <button id="forgot-btn" type="submit" class="auth-btn-primary">Send reset link</button>
         </form>
-        <p class="auth-switch"><button id="back-to-login" class="auth-link-inline">Back to sign in</button></p>
       </div>
 
       <!-- Email Confirmation Panel — shown after customer signup when Supabase requires it -->
       <div id="form-confirm-email" class="auth-form">
+        <button id="back-to-login-confirm" class="auth-back">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Back
+        </button>
         <div style="text-align:center;font-size:48px;line-height:1;margin-bottom:16px">📬</div>
         <h2 class="auth-title">Check your inbox.</h2>
         <p class="auth-subtitle">We sent a confirmation link to<br><strong id="confirm-email-addr" style="color:#8DD63F;font-weight:700"></strong></p>
@@ -85,7 +92,6 @@
         <div style="margin:20px 0;padding:14px;background:rgba(141,214,63,0.08);border:1px solid rgba(141,214,63,0.2);border-radius:12px;font-size:12px;color:rgba(255,255,255,0.5);text-align:center;line-height:1.6">
           Didn't receive it? Check your spam folder<br>or wait a minute and check again.
         </div>
-        <p class="auth-switch" style="margin-top:8px"><button id="back-to-login-confirm" class="auth-link-inline">Back to sign in</button></p>
       </div>
 
     </div>

@@ -56,7 +56,29 @@
 
 /* ── Form visibility ─────────────────────────────────────────────────────── */
 .auth-form        { display: none; }
-.auth-form.active { display: block; }
+.auth-form.active { display: flex; flex-direction: column; }
+
+/* Top-left back button inside auth overlay panels */
+.auth-back {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: rgba(14,31,64,0.55);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  cursor: pointer;
+  padding: 2px 6px 2px 2px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  transition: color 0.15s, background 0.15s;
+  line-height: 1;
+}
+.auth-back:hover { color: #0E1F40; background: rgba(14,31,64,0.06); }
+.auth-back svg   { stroke: currentColor; flex-shrink: 0; }
 
 /* ── Typography ──────────────────────────────────────────────────────────── */
 .auth-title {

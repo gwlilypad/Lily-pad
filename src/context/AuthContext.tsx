@@ -49,6 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const data = await res.json();
         if (data) {
           const nameParts = (data.full_name || "").split(" ");
+          const userRole = data.account_type || data.role || "driver";
           setProfile({
             id: data.id,
             email: data.email || "",
@@ -56,10 +57,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             first_name: nameParts[0] || "",
             last_name: nameParts.slice(1).join(" ") || "",
             phone: data.phone || "",
-            role: data.role || "driver",
+            role: userRole,
             avatar_url: data.avatar_url || "",
           });
-          setRole(data.role || "driver");
+          setRole(userRole);
         }
       }
     } catch {
@@ -102,7 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await fetch("/api/profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: data.user.id, email, full_name: fullName, role: userRole }),
+        body: JSON.stringify({ id: data.user.id, email, full_name: fullName, account_type: userRole }),
       });
     }
     return { error: null };

@@ -56,7 +56,7 @@ const SPLIT = 61;
 
 export default function HomePage() {
   const { goTo, setState } = useApp();
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const navigate = useNavigate();
   const [modeToggle, setModeToggle] = useState<"renter" | "padRenter">("renter");
   const [modalOpen, setModalOpen] = useState(false);
@@ -126,7 +126,8 @@ export default function HomePage() {
 
   function handleFindAPad() {
     setState(s => ({ ...s, accountType: "renter" }));
-    if (user) {
+    // If auth is still loading, go to /find and let AuthGuard resolve it correctly
+    if (user || loading) {
       goTo("find");
     } else {
       navigate("/signin");

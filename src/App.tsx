@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { AppContext, type PageId, type AppState, DEFAULT_STATE, STORAGE_KEY, TRANSIENT_KEYS, loadInitialState } from "@/context/AppContext";
-import { AuthProvider } from "@/context/AuthContext";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { AuthGuard } from "@/components/AuthGuard";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import HomePage from "@/pages/HomePage";
@@ -48,8 +48,15 @@ const PAGE_ROUTES: Record<PageId, string> = {
 
 function AppInner() {
   const navigate = useNavigate();
+  const { role } = useAuth();
   const [fading, setFading] = useState(false);
   const [state, setState] = useState<AppState>(loadInitialState);
+
+  // Sync auth role → accountType whenever the user signs in or profile loads
+  useEffect(() => {
+    if (role === "host") setState(s => ({ ...s, accountType: "padRenter" }));
+    else if (role === "driver") setState(s => ({ ...s, accountType: "renter" }));
+  }, [role]);
 
   const saveTimer = useRef<number | null>(null);
   useEffect(() => {

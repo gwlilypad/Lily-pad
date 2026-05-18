@@ -36,8 +36,35 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   updated_at    TIMESTAMPTZ DEFAULT NOW()
 );
 
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS status     TEXT    DEFAULT 'active';
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS spend_total NUMERIC DEFAULT 0;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS phone      TEXT    DEFAULT '';
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS role       TEXT    DEFAULT 'driver';
+
+CREATE TABLE IF NOT EXISTS public.spots (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  host_user_id  UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+  address       TEXT NOT NULL,
+  pad_type      TEXT DEFAULT 'Driveway',
+  surface       TEXT DEFAULT 'Concrete',
+  num_pads      INTEGER DEFAULT 1,
+  price_per_hr  NUMERIC NOT NULL DEFAULT 4,
+  description   TEXT DEFAULT '',
+  lat           DOUBLE PRECISION DEFAULT 29.7604,
+  lng           DOUBLE PRECISION DEFAULT -95.3698,
+  featured      BOOLEAN DEFAULT FALSE,
+  status        TEXT DEFAULT 'active',
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.spots ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='spots' AND policyname='spots_public_read')
+    THEN CREATE POLICY spots_public_read ON public.spots FOR SELECT USING (TRUE); END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='spots' AND policyname='spots_host_write')
+    THEN CREATE POLICY spots_host_write ON public.spots FOR ALL USING (auth.uid() = host_user_id); END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS public.saved_spots (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -131,22 +158,79 @@ CREATE TRIGGER on_auth_user_created
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 `;
 
+// ── Try running SQL via Supabase Management API ───────────────────────────────
+const SUPABASE_REF = (SUPABASE_URL.match(/https:\/\/([^.]+)\.supabase\.co/) || [])[1] || '';
+async function runSQL(sql) {
+  if (!SUPABASE_REF) return { ok: false, error: 'Cannot parse project ref' };
+  try {
+    const r = await fetch(`https://api.supabase.com/v1/projects/${SUPABASE_REF}/database/query`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SVC_KEY}` },
+      body: JSON.stringify({ query: sql }),
+    });
+    const data = await r.json();
+    return { ok: r.ok, data, error: r.ok ? null : JSON.stringify(data) };
+  } catch (e) { return { ok: false, error: e.message }; }
+}
+
 // ── Check DB schema on startup ────────────────────────────────────────────────
 async function checkDB() {
   if (!SVC_KEY) { console.warn('[DB] SUPABASE_SERVICE_ROLE_KEY missing'); return; }
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?limit=1`, { headers: SVC_HEADERS });
-    if (res.ok || res.status === 406) {
-      console.log('[DB] profiles table ✓');
+    // ── 1. profiles table check (required) ──
+    const profRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?limit=1`, { headers: SVC_HEADERS });
+    if (!profRes.ok && profRes.status !== 406) {
+      const body = await profRes.text();
+      if (profRes.status === 404 || body.includes('does not exist') || body.includes('PGRST')) {
+        console.log('\n[DB] ⚠️  Tables not found. Paste this into Supabase → SQL Editor:\n');
+        console.log(SETUP_SQL);
+        console.log('\n[DB] Then restart the server. (Visit /setup to see the SQL again.)\n');
+      } else {
+        console.warn('[DB] Unexpected response:', profRes.status, body.slice(0, 200));
+      }
       return;
     }
-    const body = await res.text();
-    if (res.status === 404 || body.includes('does not exist') || body.includes('PGRST')) {
-      console.log('\n[DB] ⚠️  Tables not found. Paste this into Supabase → SQL Editor:\n');
-      console.log(SETUP_SQL);
-      console.log('\n[DB] Then restart the server. (Visit /setup to see the SQL again.)\n');
+    console.log('[DB] profiles table ✓');
+
+    // ── 2. spots table check — auto-create if missing ──
+    const spotsRes = await fetch(`${SUPABASE_URL}/rest/v1/spots?limit=1`, { headers: SVC_HEADERS });
+    if (spotsRes.ok || spotsRes.status === 406) {
+      console.log('[DB] spots table ✓');
+      return;
+    }
+    console.log('[DB] spots table missing — attempting auto-create…');
+    const SPOTS_SQL = `
+CREATE TABLE IF NOT EXISTS public.spots (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  host_user_id  UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+  address       TEXT NOT NULL,
+  pad_type      TEXT DEFAULT 'Driveway',
+  surface       TEXT DEFAULT 'Concrete',
+  num_pads      INTEGER DEFAULT 1,
+  price_per_hr  NUMERIC NOT NULL DEFAULT 4,
+  description   TEXT DEFAULT '',
+  lat           DOUBLE PRECISION DEFAULT 29.7604,
+  lng           DOUBLE PRECISION DEFAULT -95.3698,
+  featured      BOOLEAN DEFAULT FALSE,
+  status        TEXT DEFAULT 'active',
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE public.spots ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='spots' AND policyname='spots_public_read')
+    THEN CREATE POLICY spots_public_read ON public.spots FOR SELECT USING (TRUE); END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='spots' AND policyname='spots_host_write')
+    THEN CREATE POLICY spots_host_write ON public.spots FOR ALL USING (auth.uid() = host_user_id); END IF;
+END $$;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS phone TEXT DEFAULT '';
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS role  TEXT DEFAULT 'driver';
+`;
+    const result = await runSQL(SPOTS_SQL);
+    if (result.ok) {
+      console.log('[DB] spots table created ✓');
     } else {
-      console.warn('[DB] Unexpected response:', res.status, body.slice(0, 200));
+      console.warn('[DB] Auto-create failed. Run this in Supabase → SQL Editor (visit /spots-sql):\n');
+      console.log(SPOTS_SQL);
     }
   } catch (e) {
     console.warn('[DB] DB check failed:', e.message);
@@ -159,6 +243,37 @@ app.use(express.json());
 app.get('/setup', (req, res) => {
   res.setHeader('Content-Type', 'text/plain');
   res.send(SETUP_SQL);
+});
+
+app.get('/spots-sql', (req, res) => {
+  res.setHeader('Content-Type', 'text/plain');
+  res.send(`-- Run this in Supabase → SQL Editor to create the spots table:
+
+CREATE TABLE IF NOT EXISTS public.spots (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  host_user_id  UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+  address       TEXT NOT NULL,
+  pad_type      TEXT DEFAULT 'Driveway',
+  surface       TEXT DEFAULT 'Concrete',
+  num_pads      INTEGER DEFAULT 1,
+  price_per_hr  NUMERIC NOT NULL DEFAULT 4,
+  description   TEXT DEFAULT '',
+  lat           DOUBLE PRECISION DEFAULT 29.7604,
+  lng           DOUBLE PRECISION DEFAULT -95.3698,
+  featured      BOOLEAN DEFAULT FALSE,
+  status        TEXT DEFAULT 'active',
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE public.spots ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='spots' AND policyname='spots_public_read')
+    THEN CREATE POLICY spots_public_read ON public.spots FOR SELECT USING (TRUE); END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='spots' AND policyname='spots_host_write')
+    THEN CREATE POLICY spots_host_write ON public.spots FOR ALL USING (auth.uid() = host_user_id); END IF;
+END $$;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS phone TEXT DEFAULT '';
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS role  TEXT DEFAULT 'driver';
+`);
 });
 
 // ── Health check — shows masked key status ────────────────────────────────────
@@ -499,12 +614,53 @@ app.patch('/api/profile/:id', async (req, res) => {
 app.get('/api/spots', async (req, res) => {
   try {
     const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/spots?select=*&order=created_at.desc`,
+      `${SUPABASE_URL}/rest/v1/spots?status=eq.active&select=*`,
       { headers: SVC_HEADERS }
     );
     const data = await r.json();
     if (!r.ok) return res.status(r.status).json({ error: data });
     res.json(Array.isArray(data) ? data : []);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Spots: create a new pad listing ───────────────────────────────────────────
+app.post('/api/spots', async (req, res) => {
+  const { host_user_id, address, pad_type, surface, num_pads, price_per_hr, description } = req.body || {};
+  if (!host_user_id || !address) return res.status(400).json({ error: 'host_user_id and address required' });
+
+  // Geocode the address using Nominatim
+  let lat = 29.7604, lng = -95.3698;
+  try {
+    const geo = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(address + ', Houston, TX')}`,
+      { headers: { 'User-Agent': 'LilyPadApp/1.0' } }
+    );
+    const geoData = await geo.json();
+    if (Array.isArray(geoData) && geoData.length > 0) {
+      lat = parseFloat(geoData[0].lat);
+      lng = parseFloat(geoData[0].lon);
+    }
+  } catch { /* use city center as fallback */ }
+
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/spots`, {
+      method : 'POST',
+      headers: { ...SVC_HEADERS, 'Prefer': 'return=representation' },
+      body   : JSON.stringify({
+        host_user_id,
+        address: address || '',
+        pad_type: pad_type || 'Driveway',
+        surface: surface || 'Concrete',
+        num_pads: parseInt(num_pads) || 1,
+        price_per_hr: parseFloat(price_per_hr) || 4,
+        description: description || '',
+        lat, lng,
+        status: 'active',
+      }),
+    });
+    const data = await r.json();
+    if (!r.ok) return res.status(r.status).json({ error: data });
+    res.json(Array.isArray(data) ? data[0] : data);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

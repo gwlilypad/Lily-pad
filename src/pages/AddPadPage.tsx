@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useApp } from "@/context/AppContext";
+import { useAuth } from "@/context/AuthContext";
 import SharedHeader from "@/components/SharedHeader";
 import NavBar from "@/components/NavBar";
 
@@ -28,6 +29,7 @@ const AP_QUESTIONS: Question[] = [
 
 export default function AddPadPage() {
   const { goTo, state, setState: setAppState } = useApp();
+  const { user } = useAuth();
   const [cur, setCur] = useState(0);
   const [ans, setAns] = useState<Record<number, string>>({});
   const [inputVal, setInputVal] = useState("");
@@ -217,7 +219,27 @@ export default function AddPadPage() {
               </div>
               <div className="cta-area">
                 <p className="cta-nudge">Next — photos and highlights.</p>
-                <button className="cta-btn" onClick={() => { setLocked(true); goTo("photointro"); }}>Continue</button>
+                <button className="cta-btn" onClick={async () => {
+                  setLocked(true);
+                  if (user) {
+                    try {
+                      await fetch("/api/spots", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          host_user_id: user.id,
+                          address:      ans[0] || "",
+                          pad_type:     ans[1] || "Driveway",
+                          surface:      ans[2] || "Concrete",
+                          num_pads:     parseInt(ans[3] || "1"),
+                          price_per_hr: parseFloat(ans[4] || "4"),
+                          description:  ans[5] || "",
+                        }),
+                      });
+                    } catch { /* non-blocking — user continues regardless */ }
+                  }
+                  goTo("photointro");
+                }}>Continue</button>
               </div>
             </>
           )}

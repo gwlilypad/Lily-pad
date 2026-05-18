@@ -2905,7 +2905,7 @@ export default function FindPage() {
 
         {/* ── Pad detail dashboard — shown when a spot is selected ── */}
         {selectedSpot !== null && (() => {
-          const spot = SPOTS.find(s => s.id === selectedSpot)!;
+          const spot = spots.find(s => s.id === selectedSpot)!;
           const HOST_NAMES = ["Marcus T.", "Sarah L.", "James R.", "Priya K.", "David M.", "Emma W.", "Tyler B.", "Ana M."];
           const hostName = HOST_NAMES[spot.id % HOST_NAMES.length];
           const hostInitials = hostName.split(" ").map(w => w[0]).join("");
@@ -3577,7 +3577,7 @@ export default function FindPage() {
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {savedSpots.map(id => {
-                    const spot = SPOTS.find(s => s.id === id);
+                    const spot = spots.find(s => s.id === id);
                     if (!spot) return null;
                     const priceNum = spot.price.replace(/[^0-9]/g, "");
                     const parts = spot.meta.split("·").map(s => s.trim());
@@ -3700,7 +3700,7 @@ export default function FindPage() {
 
       {/* ── PHOTO LIGHTBOX ── */}
       {lightboxIdx !== null && selectedSpot !== null && (() => {
-        const spot = SPOTS.find(s => s.id === selectedSpot);
+        const spot = spots.find(s => s.id === selectedSpot);
         if (!spot) return null;
         const ALL_GRADIENTS = [
           "linear-gradient(145deg,#1e3a5f 0%,#2d5986 100%)",

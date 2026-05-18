@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-18-D2';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-18-D3';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -3665,21 +3665,25 @@
 
   async function _fetchConversations() {
     const me = _getLpUser();
-    if (!me || !me.id) return;
+    if (!me || !me.id) { console.warn('[LP] _fetchConversations: no me or no me.id — aborting', me); return; }
     try {
       const isPriv = me.role === 'admin' || me.role === 'staff';
       const url = isPriv
         ? '/api/support/conversations'
         : `/api/support/conversations?user_id=${me.id}`;
+      console.log('[LP] fetchConvs: me.id=', me.id, '| role=', me.role, '| url=', url);
       const r = await fetch(url);
       if (r.ok) {
         _supportConvs = await r.json();
-        _renderSupportList();    // legacy panel list (no-op if panel not present)
-        _renderRealConvList();  // native-page real conversation list
+        console.log('[LP] fetchConvs: got', _supportConvs.length, 'conversations');
+        _renderSupportList();
+        _renderRealConvList();
         _lpUpdateHeaderBadge();
         injectSupportNavBadge();
+      } else {
+        console.warn('[LP] fetchConvs: HTTP error', r.status);
       }
-    } catch {}
+    } catch (e) { console.warn('[LP] fetchConvs error:', e.message); }
   }
 
   async function _fetchMessages(convId) {
@@ -3867,13 +3871,16 @@
       if (!msg) return;
       const btn = newDiv.querySelector('.lp-sup-new-send-btn');
       btn.disabled = true; btn.textContent = 'Sending…';
+      const payload = { user_id: me.id, user_name: me.name, user_email: me.email, subject, first_message: msg };
+      console.log('[LP] customer new conv payload:', JSON.stringify(payload));
       try {
         const r = await fetch('/api/support/conversations', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ user_id: me.id, user_name: me.name, user_email: me.email, subject, first_message: msg }),
+          body: JSON.stringify(payload),
         });
         if (r.ok) {
           const conv = await r.json();
+          console.log('[LP] customer conv created:', conv.id);
           newDiv.remove(); listView.style.display = 'flex';
           await _fetchConversations();
           if (conv && conv.id) _openConversation(conv);
@@ -3971,21 +3978,25 @@
   }
 
   function _openAdminChatWith(user) {
+    console.log('[LP] _openAdminChatWith: user.id=', user.id, '| email=', user.email);
     const existing = _supportConvs.find(c => c.user_id === user.id && c.status !== 'closed');
     if (existing) {
+      console.log('[LP] _openAdminChatWith: opening existing conv', existing.id);
       _openDrawerConv(existing);
     } else {
       const me = _getLpUser();
       if (!me) return;
+      const payload = { user_id: user.id, user_name: user.full_name || user.email, user_email: user.email, subject: 'Admin Message' };
+      console.log('[LP] _openAdminChatWith: creating conv payload=', JSON.stringify(payload));
       fetch('/api/support/conversations', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: user.id, user_name: user.full_name || user.email,
-          user_email: user.email, subject: 'Admin Message',
-        }),
-      }).then(r => r.json()).then(conv => {
+        body: JSON.stringify(payload),
+      }).then(async r => {
+        const conv = await r.json();
+        if (!r.ok) { console.warn('[LP] _openAdminChatWith: conv create failed', r.status, conv); return; }
+        console.log('[LP] _openAdminChatWith: conv created', conv.id);
         _fetchConversations().then(() => { if (conv && conv.id) _openDrawerConv(conv); });
-      }).catch(() => {});
+      }).catch(e => console.warn('[LP] _openAdminChatWith error:', e.message));
     }
   }
 

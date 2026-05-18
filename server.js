@@ -439,6 +439,7 @@ app.get('/api/support/conversations', async (req, res) => {
 app.post('/api/support/conversations', async (req, res) => {
   if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });
   const { user_id, user_name, user_email, subject, first_message } = req.body || {};
+  console.log('[CONV CREATE] user_id:', user_id, '| email:', user_email, '| subject:', subject, '| first_message:', first_message?.slice(0,40));
   if (!user_id && !user_email) return res.status(400).json({ error: 'user_id or user_email required' });
   try {
     const now = new Date().toISOString();

@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-18-D13';  // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-18-D14';  // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -5061,10 +5061,17 @@
     if (uid) _fetchAndCacheRole(uid);
     else if (role) { _lpCurrentRole = role; localStorage.setItem('lp_role_cache', role); }
 
-    // Admin/staff must not land in the customer app — send them to the staff portal
+    // Admin/staff must not enter the customer app.
+    // Clear their session and show the sign-in gate with a portal link so
+    // the root URL always stays as the customer landing/sign-in page.
     if (role === 'admin' || role === 'staff') {
-      console.log('[Lily Pad] afterAuth: admin/staff detected — redirecting to staff portal');
-      window.location.replace('/staff-login');
+      console.log('[Lily Pad] afterAuth: admin/staff detected — clearing session, showing gate');
+      clearSession();
+      showGate();
+      const errEl = document.getElementById('login-error');
+      if (errEl) errEl.innerHTML =
+        'Admin & Staff accounts must sign in through the ' +
+        '<a href="/staff-login" style="color:#8DD63F;font-weight:700;text-decoration:underline">Staff & Admin Portal</a>.';
       return;
     }
 

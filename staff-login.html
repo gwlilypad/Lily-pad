@@ -344,6 +344,10 @@
 
       <!-- ── Panel: Invite Sent ── -->
       <div id="panel-check-email" class="panel">
+        <button class="panel-back" onclick="showPanel('panel-activate')">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Back
+        </button>
         <div class="email-icon">📬</div>
         <div class="panel-title">Invite sent.</div>
         <div class="panel-sub">Check your inbox at<br><strong id="confirm-email-addr" style="color:#8DD63F;font-weight:700"></strong></div>
@@ -353,12 +357,14 @@
           and activate your staff account.<br><br>
           <span style="opacity:0.7">Didn't receive it? Check spam or wait a minute.</span>
         </div>
-
-        <button class="btn-primary" onclick="showPanel('panel-signin')">Back to sign in</button>
       </div>
 
       <!-- ── Panel: Set Password (shown after clicking invite link) ── -->
       <div id="panel-set-password" class="panel">
+        <button class="panel-back" onclick="showPanel('panel-signin')">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Back
+        </button>
         <div class="panel-title">Set your password.</div>
         <div class="panel-sub">Your invite was verified. Choose a password to complete your account setup.</div>
 
@@ -379,9 +385,6 @@
 
     </div>
 
-    <div class="footer-link">
-      Not staff? <a href="/">Return to app</a>
-    </div>
   </div>
 
   <script>

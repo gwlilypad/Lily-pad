@@ -294,18 +294,22 @@ app.post('/api/staff/invite', async (req, res) => {
     const redirectTo = `${proto}://${host}/staff-login`;
 
     // Supabase admin invite — creates the user and emails them an activation link
-    const r = await fetch(`${SUPABASE_URL}/auth/v1/admin/invite`, {
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/invite`, {
       method : 'POST',
-      headers: SVC_HEADERS,
+      headers: { ...SVC_HEADERS, 'Content-Type': 'application/json' },
       body   : JSON.stringify({
         email,
         redirect_to: redirectTo,
         data: { account_type: 'staff' },
       }),
     });
-    const data = await r.json();
+    const rawText = await r.text();
+    let data;
+    try { data = JSON.parse(rawText); } catch (_) {
+      throw new Error(`Supabase returned non-JSON (${r.status}): ${rawText.slice(0, 200)}`);
+    }
     if (!r.ok) {
-      const msg = data.message || data.msg || JSON.stringify(data);
+      const msg = data.message || data.msg || data.error_description || JSON.stringify(data);
       if (/already been invited|already registered/i.test(msg))
         return res.status(409).json({ error: 'An invite was already sent to this email. Check your inbox (including spam).' });
       throw new Error(msg);

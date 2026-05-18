@@ -193,6 +193,17 @@ app.post('/api/auth/signin', async (req, res) => {
     if (!r.ok) {
       return res.status(r.status).json({ error: data.error_description || data.message || 'Invalid email or password' });
     }
+    // Block admin/staff from using the customer sign-in portal
+    if (SVC_KEY) {
+      const emailLower = email.toLowerCase().trim();
+      const adminCheck = await fetch(
+        `${SUPABASE_URL}/rest/v1/admin_users?email=eq.${encodeURIComponent(emailLower)}&select=role`,
+        { headers: SVC_HEADERS }
+      ).then(r2 => r2.json()).catch(() => []);
+      if (Array.isArray(adminCheck) && adminCheck.length > 0) {
+        return res.status(403).json({ staff_redirect: true });
+      }
+    }
     res.json(data);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

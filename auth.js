@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-18-D11';  // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-18-D12';  // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -998,6 +998,14 @@
     try {
       const res  = await fetch('/api/auth/signin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password: pass }) });
       const data = await res.json();
+      // Admin/staff must use the Staff Portal — redirect them with a clear message
+      if (data.staff_redirect) {
+        if (errEl) errEl.innerHTML =
+          'Admin & Staff accounts must sign in through the ' +
+          '<a href="/staff-login" style="color:#8DD63F;font-weight:700;text-decoration:underline">Staff & Admin Portal</a>.';
+        if (btn) { btn.disabled = false; btn.textContent = 'Sign in'; }
+        return;
+      }
       if (!res.ok) throw new Error(data.error || 'Sign-in failed');
       saveSession(data);
       saveProfileToServer(data);
@@ -5029,6 +5037,13 @@
     const uid = (session && session.user && session.user.id) || (session && session.user_id);
     if (uid) _fetchAndCacheRole(uid);
     else if (role) { _lpCurrentRole = role; localStorage.setItem('lp_role_cache', role); }
+
+    // Admin/staff must not land in the customer app — send them to the staff portal
+    if (role === 'admin' || role === 'staff') {
+      console.log('[Lily Pad] afterAuth: admin/staff detected — redirecting to staff portal');
+      window.location.replace('/staff-login');
+      return;
+    }
 
     // Write real name into native app state for the Account pull-down
     const meta = (session && session.user_metadata) ||

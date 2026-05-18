@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-18-D19';  // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-18-D20';  // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -4501,26 +4501,58 @@
         el.addEventListener('click', e => { e.stopPropagation(); _openNewChatModal(); }, true);
       }
     });
-    // Hide native fake conversation rows
+    // Hide native fake conversation rows and native empty state
     Array.from(document.querySelectorAll('*')).forEach(el => {
       if (el.dataset.lpHidden || el.id === 'lp-real-conv-list' || el.id === 'lp-chat-drawer') return;
-      if (el.childElementCount <= 4 && /^Live chat with a rep$/i.test(el.textContent.trim())) {
-        el.dataset.lpHidden = '1'; el.style.display = 'none';
+      const t = el.textContent.trim();
+      if (el.childElementCount <= 4 && /^Live chat with a rep$/i.test(t)) {
+        el.dataset.lpHidden = '1'; el.style.setProperty('display','none','important');
+      }
+      // Also suppress the bundle's own "No conversations yet." placeholder
+      if (el.childElementCount <= 1 && /^No conversations yet\.?\s*$/i.test(t)) {
+        el.dataset.lpHidden = '1'; el.style.setProperty('display','none','important');
       }
     });
-    // Inject our real conversation list once
+    // Inject our real conversation list once — anchored inside the scrollable section
     if (!document.getElementById('lp-real-conv-list')) {
-      const hdrEl = Array.from(document.querySelectorAll('*')).find(
-        el => el.childElementCount === 0 && /YOUR CONVERSATIONS/i.test(el.textContent.trim())
-      );
-      const anchor = hdrEl ? (hdrEl.closest('[class]') || hdrEl.parentElement) : null;
       const injected = document.createElement('div');
       injected.id = 'lp-real-conv-list';
-      if (anchor && anchor.parentElement) {
-        anchor.parentElement.insertBefore(injected, anchor.nextSibling);
-      } else {
-        (document.querySelector('main,[role="main"]') || document.body).appendChild(injected);
+      let placed = false;
+
+      // Strategy 1: The bundle renders a "No conversations yet." box in the right DOM
+      // location. Find it (before we hid it above), and insert our list right after it
+      // so we end up in the same scrollable container.
+      const nativeEmpty = Array.from(document.querySelectorAll('[data-lp-hidden]')).find(el => {
+        const t2 = el.textContent.trim();
+        return /^No conversations yet\.?\s*$/i.test(t2) && el.id !== 'lp-real-conv-list';
+      });
+      if (nativeEmpty) {
+        nativeEmpty.insertAdjacentElement('afterend', injected);
+        placed = true;
       }
+
+      // Strategy 2: Find "YOUR CONVERSATIONS" header and walk up to its grandparent
+      // container (the section div), then append there — NOT as a sibling of the section.
+      if (!placed) {
+        const hdrEl = Array.from(document.querySelectorAll('*')).find(
+          el => el.childElementCount === 0 && /YOUR CONVERSATIONS/i.test(el.textContent.trim())
+        );
+        if (hdrEl) {
+          const hdrParent = hdrEl.parentElement;              // direct wrapper of the text
+          const section   = hdrParent && hdrParent.parentElement; // the conversations section
+          const target    = section || hdrParent || hdrEl;
+          target.appendChild(injected);
+          placed = true;
+        }
+      }
+
+      // Strategy 3: Last resort — stay inside #root
+      if (!placed) {
+        const root = document.getElementById('root');
+        const main = root && (root.querySelector('main') || root.querySelector('[role="main"]'));
+        (main || root || document.body).appendChild(injected);
+      }
+
       _renderRealConvList();
     }
   }

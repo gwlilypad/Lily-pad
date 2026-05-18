@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-18-D15';  // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-18-D16';  // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -115,6 +115,70 @@
   // Runs immediately on page load — before React hydrates — and removes every
   // numeric-id item from every lilypad.* localStorage key.
   // Also force-clears keys known to hold fake staff/customer demo data.
+  // ── Native Supabase session guard ─────────────────────────────────────────
+  // The React bundle has its own Supabase client that independently reads and
+  // restores sessions from 'sb-mcfxoimaqgpyntvasbsw-auth-token'. We must keep
+  // it in strict sync with lily_pad_session so a stale key can never auto-login
+  // a different user. This runs before the bundle reads anything.
+  const _NATIVE_SB_KEY = 'sb-mcfxoimaqgpyntvasbsw-auth-token';
+  (function _syncNativeSupabaseSession() {
+    try {
+      const _rg = Storage.prototype.getItem;
+      const _rs = Storage.prototype.setItem;
+      const _rr = Storage.prototype.removeItem;
+      const ourRaw = _rg.call(localStorage, 'lily_pad_session');
+      const ourSess = ourRaw ? JSON.parse(ourRaw) : null;
+
+      if (!ourSess || !ourSess.access_token) {
+        // No valid LP session — wipe native key so bundle cannot auto-login anyone
+        _rr.call(localStorage, _NATIVE_SB_KEY);
+        console.log('[LP] Native Supabase key wiped (no LP session)');
+      } else {
+        // LP session exists — check if native key is for the same user
+        const nativeRaw = _rg.call(localStorage, _NATIVE_SB_KEY);
+        if (nativeRaw) {
+          const nativeSess = JSON.parse(nativeRaw);
+          const ourUid    = (ourSess.user && ourSess.user.id) || ourSess.user_id || '';
+          const nativeUid = (nativeSess && nativeSess.user && nativeSess.user.id) || '';
+          if (ourUid && nativeUid && ourUid !== nativeUid) {
+            // DIFFERENT user in native key — overwrite with our session
+            _rs.call(localStorage, _NATIVE_SB_KEY, JSON.stringify({
+              access_token : ourSess.access_token,
+              refresh_token: ourSess.refresh_token || '',
+              token_type   : ourSess.token_type   || 'bearer',
+              expires_in   : ourSess.expires_in   || 3600,
+              expires_at   : ourSess.expires_at   || (Math.floor(Date.now() / 1000) + 3600),
+              user         : ourSess.user         || null,
+            }));
+            console.warn('[LP] Native Supabase session corrected — was wrong user:', nativeUid, '→', ourUid);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[LP] _syncNativeSupabaseSession error:', e.message);
+    }
+
+    // Block future writes to the native key that would set a DIFFERENT user than
+    // our current LP session. Same-user writes (token refresh) are allowed through.
+    const _origSet2 = Storage.prototype.setItem;
+    Storage.prototype.setItem = function(key, value) {
+      if (key === _NATIVE_SB_KEY) {
+        try {
+          const incoming = JSON.parse(value);
+          const lpRaw    = Storage.prototype.getItem.call(this, 'lily_pad_session');
+          const lpSess   = lpRaw ? JSON.parse(lpRaw) : null;
+          const lpUid    = lpSess && ((lpSess.user && lpSess.user.id) || lpSess.user_id);
+          const inUid    = incoming && incoming.user && incoming.user.id;
+          if (lpUid && inUid && lpUid !== inUid) {
+            console.warn('[LP] Blocked native Supabase write for wrong user:', inUid);
+            return; // drop it
+          }
+        } catch (_) {}
+      }
+      _origSet2.call(this, key, value);
+    };
+  })();
+
   (function _nukeFakeLocalStorage() {
     // Support-chat keys the native bundle uses to cache demo conversations.
     // We always wipe these to [] so the bundle never renders stale/demo chat data.
@@ -337,8 +401,28 @@
     try { return JSON.parse(localStorage.getItem('lily_pad_session') || 'null'); }
     catch { return null; }
   }
-  function saveSession(s) { localStorage.setItem('lily_pad_session', JSON.stringify(s)); }
-  function clearSession() { localStorage.removeItem('lily_pad_session'); }
+  function saveSession(s) {
+    localStorage.setItem('lily_pad_session', JSON.stringify(s));
+    // Keep native Supabase client in sync so the bundle uses the same session
+    try {
+      if (s && s.access_token) {
+        Storage.prototype.setItem.call(localStorage, _NATIVE_SB_KEY, JSON.stringify({
+          access_token : s.access_token,
+          refresh_token: s.refresh_token || '',
+          token_type   : s.token_type   || 'bearer',
+          expires_in   : s.expires_in   || 3600,
+          expires_at   : s.expires_at   || (Math.floor(Date.now() / 1000) + 3600),
+          user         : s.user         || null,
+        }));
+      }
+    } catch (_) {}
+  }
+  function clearSession() {
+    localStorage.removeItem('lily_pad_session');
+    localStorage.removeItem('lp_role_cache');
+    // Also clear the native Supabase client key so the bundle can't restore a session
+    try { Storage.prototype.removeItem.call(localStorage, _NATIVE_SB_KEY); } catch (_) {}
+  }
 
   async function refreshSession(token) {
     try {

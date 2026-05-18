@@ -289,9 +289,9 @@ app.post('/api/staff/invite', async (req, res) => {
   try {
     const now = new Date().toISOString();
     // Build redirect URL — prefer the stable Replit public domain, fall back to Host header
-    const publicDomain = process.env.REPLIT_DEV_DOMAIN || req.get('host') || '';
-    const proto        = (publicDomain.includes('localhost') || publicDomain.includes('127.0.0.1')) ? 'http' : 'https';
-    const redirectTo   = `${proto}://${publicDomain}/staff-login`;
+    const redirectTo = process.env.SITE_URL
+      ? `${process.env.SITE_URL.replace(/\/$/, '')}/staff-login`
+      : `https://${process.env.REPLIT_DEV_DOMAIN || req.get('host') || ''}/staff-login`;
 
     // Supabase admin invite — creates the user and emails them an activation link
     const r = await fetch(`${SUPABASE_URL}/auth/v1/invite`, {
@@ -310,7 +310,7 @@ app.post('/api/staff/invite', async (req, res) => {
     }
     if (!r.ok) {
       const msg = data.message || data.msg || data.error_description || JSON.stringify(data);
-      if (/already been invited|already registered/i.test(msg))
+      if (/already been invited|already registered|already been registered/i.test(msg))
         return res.status(409).json({ error: 'An invite was already sent to this email. Check your inbox (including spam).' });
       throw new Error(msg);
     }

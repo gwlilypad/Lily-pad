@@ -1077,6 +1077,14 @@ export default function AdminPage() {
   const [staffAuthPassword, setStaffAuthPassword] = useState("");
   const [staffAuthError, setStaffAuthError] = useState("");
 
+  // Staff invite / email activation.
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<"staff" | "admin">("staff");
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteError, setInviteError] = useState("");
+  const [inviteSuccess, setInviteSuccess] = useState(false);
+  const [inviteEmailFocus, setInviteEmailFocus] = useState(false);
+
   // Customer service — chat tickets + incoming email.
   const [tickets, setTickets] = useState<SupportTicket[]>(() => loadTickets());
   const [emails, setEmails] = useState<SupportEmail[]>(() => loadEmails());
@@ -1490,28 +1498,24 @@ export default function AdminPage() {
       {/* ── Header ── */}
       <div style={{
         background: NAVY,
-        padding: "48px 24px 24px",
+        padding: "48px 20px 20px",
         display: "flex",
         alignItems: "center",
-        justifyContent: "space-between",
+        gap: 12,
         flexShrink: 0,
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <PadSVG size={34} />
-          <div>
-            <p style={{ color: "rgba(255,255,255,0.45)", fontSize: 10, fontWeight: 600, letterSpacing: "0.18em", textTransform: "uppercase", margin: 0 }}>lily pad</p>
-            <p style={{ color: "#fff", fontSize: 18, fontWeight: 700, margin: 0, letterSpacing: "-0.01em" }}>Admin</p>
-          </div>
-        </div>
         <button
           onClick={() => goTo("home")}
-          style={{ background: "rgba(255,255,255,0.1)", border: "none", borderRadius: "50%", width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+          style={{ background: "rgba(255,255,255,0.08)", border: "none", borderRadius: "50%", width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-            <polyline points="9 22 9 12 15 12 15 22" />
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 18l-6-6 6-6"/>
           </svg>
         </button>
+        <div>
+          <p style={{ color: "rgba(255,255,255,0.45)", fontSize: 10, fontWeight: 600, letterSpacing: "0.18em", textTransform: "uppercase", margin: 0 }}>lily pad</p>
+          <p style={{ color: "#fff", fontSize: 18, fontWeight: 700, margin: 0, letterSpacing: "-0.01em" }}>Admin</p>
+        </div>
       </div>
 
       {/* ── Content ── */}
@@ -2285,6 +2289,98 @@ export default function AdminPage() {
                   <p style={{ fontSize: 22, fontWeight: 800, color: "#fff", margin: 0, letterSpacing: "-0.02em" }}>{adminCount}</p>
                   <p style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,0.50)", letterSpacing: "0.10em", textTransform: "uppercase", margin: "2px 0 0" }}>Admins</p>
                 </div>
+              </div>
+
+              {/* ── Invite / Email Activation ── */}
+              <div style={{ background: "#142A52", borderRadius: 18, padding: "16px 18px", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 10px rgba(0,0,0,0.22)", display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div>
+                    <p style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.12em", textTransform: "uppercase", margin: 0 }}>Email activation</p>
+                    <p style={{ fontSize: 14, fontWeight: 700, color: "#fff", margin: "2px 0 0" }}>Invite team member</p>
+                  </div>
+                  <div style={{ width: 36, height: 36, borderRadius: "50%", background: `rgba(141,214,63,0.14)`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                  </div>
+                </div>
+
+                {inviteSuccess ? (
+                  <div style={{ background: "rgba(141,214,63,0.10)", border: "1px solid rgba(141,214,63,0.30)", borderRadius: 12, padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth="2.5" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
+                    <div>
+                      <p style={{ fontSize: 13, fontWeight: 700, color: GREEN, margin: 0 }}>Activation email sent!</p>
+                      <p style={{ fontSize: 11.5, color: "rgba(255,255,255,0.55)", margin: "2px 0 0" }}>They'll receive a link to set their password and activate their account.</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <input
+                      type="email"
+                      placeholder="team@lilypad.com"
+                      value={inviteEmail}
+                      onChange={e => { setInviteEmail(e.target.value); setInviteError(""); }}
+                      onFocus={() => setInviteEmailFocus(true)}
+                      onBlur={() => setInviteEmailFocus(false)}
+                      style={{
+                        width: "100%", padding: "11px 14px", borderRadius: 10, boxSizing: "border-box",
+                        background: "rgba(255,255,255,0.05)", color: "#fff", fontSize: 14,
+                        fontFamily: '"DM Sans",sans-serif', outline: "none",
+                        border: `1.5px solid ${inviteError ? "#ef4444" : inviteEmailFocus ? GREEN : "rgba(255,255,255,0.10)"}`,
+                        transition: "border-color 0.15s",
+                      }}
+                    />
+                    <div style={{ display: "flex", gap: 6 }}>
+                      {(["staff", "admin"] as const).map(r => (
+                        <button
+                          key={r}
+                          onClick={() => setInviteRole(r)}
+                          style={{
+                            flex: 1, padding: "9px", borderRadius: 10, cursor: "pointer",
+                            fontFamily: '"DM Sans",sans-serif', fontSize: 12, fontWeight: 700,
+                            border: `1.5px solid ${inviteRole === r ? (r === "admin" ? GREEN : "rgba(255,255,255,0.30)") : "rgba(255,255,255,0.10)"}`,
+                            background: inviteRole === r ? (r === "admin" ? "rgba(141,214,63,0.15)" : "rgba(255,255,255,0.08)") : "transparent",
+                            color: inviteRole === r ? (r === "admin" ? GREEN : "#fff") : "rgba(255,255,255,0.50)",
+                            textTransform: "capitalize",
+                          }}
+                        >{r}</button>
+                      ))}
+                    </div>
+                    {inviteError && <p style={{ color: "#ef4444", fontSize: 11.5, fontWeight: 600, margin: 0 }}>{inviteError}</p>}
+                    <button
+                      disabled={inviteLoading}
+                      onClick={async () => {
+                        const em = inviteEmail.trim().toLowerCase();
+                        if (!em || !em.includes("@")) { setInviteError("Enter a valid email address."); return; }
+                        setInviteLoading(true);
+                        setInviteError("");
+                        try {
+                          const r = await fetch("/api/staff/invite", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ email: em, role: inviteRole }),
+                          });
+                          const data = await r.json();
+                          if (!r.ok) { setInviteError(data.error || "Failed to send invite."); }
+                          else {
+                            setInviteSuccess(true);
+                            setInviteEmail("");
+                            setTimeout(() => setInviteSuccess(false), 6000);
+                          }
+                        } catch { setInviteError("Network error. Try again."); }
+                        finally { setInviteLoading(false); }
+                      }}
+                      style={{
+                        width: "100%", padding: "12px", borderRadius: 100, border: "none",
+                        background: inviteLoading ? "rgba(141,214,63,0.50)" : GREEN,
+                        color: NAVY, fontWeight: 800, fontSize: 13,
+                        fontFamily: '"DM Sans",sans-serif',
+                        cursor: inviteLoading ? "not-allowed" : "pointer",
+                        letterSpacing: "0.01em",
+                      }}
+                    >
+                      {inviteLoading ? "Sending…" : "Send activation email"}
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>

@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-18-D21';  // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-18-D22';  // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -1902,6 +1902,52 @@
 
       console.log('[Lily Pad] Pull-down item wired:', item.hash);
     });
+  }
+
+  // ── Pull-down gap collapse ────────────────────────────────────────────────
+  // The native bundle renders a large "hero" section (user initials in big font)
+  // between the header and the menu rows. This creates the huge empty gap the
+  // user sees. We detect and hide any sibling element of menuCard that:
+  //   • has significant height (> 40 px)
+  //   • contains only short text (user name/initials — no '@', no menu labels)
+  //   • is not our own injected sign-out row
+  function _collapsePullDownGap() {
+    const pd = _findPullDownContainer();
+    if (!pd) return;
+
+    // Walk up one level at a time (max 4) looking for gap-creating siblings
+    let container = pd.parentElement;
+    for (let depth = 0; depth < 4 && container && container !== document.body; depth++) {
+      let collapsed = false;
+      Array.from(container.children).forEach(child => {
+        if (child === pd || child.dataset.lpGapHidden) return;
+        if (pd.contains(child)) return;               // inside the menu — keep
+        if (child.id === 'lp-pulldown-so') return;   // our sign-out button
+
+        const txt = child.textContent.trim();
+        // Keep: header elements (contain '@' or long descriptive text)
+        if (txt.includes('@') || txt.length > 80) return;
+        // Keep: anything with menu-label words
+        if (/my account|my bookings|saved spots|customer service|sign.?out/i.test(txt)) return;
+
+        const h = child.getBoundingClientRect().height;
+        if (h > 40) {
+          child.dataset.lpGapHidden = '1';
+          child.style.setProperty('display',    'none', 'important');
+          child.style.setProperty('max-height', '0',    'important');
+          child.style.setProperty('overflow',   'hidden','important');
+          collapsed = true;
+          console.log('[LP] Pull-down gap collapsed: h=' + Math.round(h) + ' txt="' + txt.slice(0, 30) + '"');
+        }
+      });
+      // Also zero out any CSS padding/gap that the native flex container adds
+      if (collapsed) {
+        container.style.setProperty('gap',         '0',    'important');
+        container.style.setProperty('padding-top', '0',    'important');
+        container.style.setProperty('row-gap',     '0',    'important');
+      }
+      container = container.parentElement;
+    }
   }
 
   // ── Fake spot coordinates baked into the read-only bundle (ar[] array) ───
@@ -5062,6 +5108,7 @@
     hideUnwantedElements();
     injectPullDownSignOut();
     _wirePullDownMenuItems();
+    _collapsePullDownGap();
     updateProfileDisplay();
     updatePhotoFullscreen();
     scheduleDeepBack();

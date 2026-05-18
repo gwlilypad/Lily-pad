@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-18-D25';  // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-18-D26';  // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -1882,13 +1882,29 @@
       if (!row || row === pd || row.dataset.lpPdWired) return;
 
       row.dataset.lpPdWired = '1';
-      row.addEventListener('click', () => {
-        // Stamp history BEFORE the native React handler fires so the back-button
-        // system knows we came from the pull-down.  We intentionally do NOT
-        // call preventDefault / stopPropagation — the native click handles the
-        // actual page navigation; we only need to tag the history entry.
+      row.addEventListener('click', e => {
+        // Block the native sub-view (the native pull-down opens items as
+        // in-sheet sub-panels; we want full-page navigation instead).
+        e.stopPropagation();
+        e.preventDefault();
+
+        // Stamp history so the back-button knows we came from the pull-down.
         history.pushState({ lpPullDown: true }, '', location.pathname + '#' + item.hash);
-        console.log('[Lily Pad] Pull-down nav tagged:', item.hash, '→', item.page);
+
+        // Navigate immediately — the React state change will collapse the
+        // pull-down naturally.  Do NOT call _openAccountPullDown() first;
+        // toggling the tab again while it is open was re-opening it in D24.
+        _lpGoToFn = null;                 // bust any stale cached reference
+        const g = lpGetGoTo();
+        if (g) {
+          g(item.page);
+          console.log('[LP] Pull-down nav:', item.hash, '→', item.page, '✓ goTo');
+        } else {
+          // Fallback — should rarely be needed
+          const ok = callGoTo(item.page);
+          console.log('[LP] Pull-down nav:', item.hash, '→', item.page,
+                      ok ? '✓ callGoTo' : '✗ goTo not found');
+        }
       }, true /* capture phase — fires before native handlers */);
 
       console.log('[Lily Pad] Pull-down item wired:', item.hash);

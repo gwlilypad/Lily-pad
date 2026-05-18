@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-18-D18';  // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-18-D19';  // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -8,6 +8,7 @@
 
   // ── Current user role cache (admin | staff | padRenter | renter | customer) ─
   let _lpCurrentRole = localStorage.getItem('lp_role_cache') || 'customer';
+  let _lpSessionCheckTimer = null;  // periodic account-existence re-validation
 
   async function _fetchAndCacheRole(userId) {
     try {
@@ -422,6 +423,8 @@
     localStorage.removeItem('lp_role_cache');
     // Also clear the native Supabase client key so the bundle can't restore a session
     try { Storage.prototype.removeItem.call(localStorage, _NATIVE_SB_KEY); } catch (_) {}
+    // Stop any ongoing account-existence re-validation
+    if (_lpSessionCheckTimer) { clearInterval(_lpSessionCheckTimer); _lpSessionCheckTimer = null; }
   }
 
   async function refreshSession(token) {
@@ -448,6 +451,27 @@
       const profile = await res.json();
       return (profile.user_metadata && profile.user_metadata.account_type) || 'renter';
     } catch { return 'renter'; }
+  }
+
+  // ── Account-existence validation ──────────────────────────────────────────
+  // Checks whether the Supabase user behind this access_token still exists.
+  // Returns true  → user is alive (or we can't confirm deletion due to network).
+  // Returns false → Supabase explicitly says the user is gone (4xx, non-5xx).
+  // Rule: never sign out on *doubt* (network errors / 5xx) — only on certainty.
+  async function validateUserExists(accessToken) {
+    try {
+      const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+        headers: { ...HEADERS, 'Authorization': `Bearer ${accessToken}` },
+      });
+      if (!res.ok) {
+        if (res.status >= 500) return true; // server-side error — assume still alive
+        return false; // 400/401/403/404 → account deleted or token invalid
+      }
+      const data = await res.json();
+      return !!(data && data.id); // must have a real user id
+    } catch {
+      return true; // network failure → don't sign out on doubt
+    }
   }
 
   // ── Read real user data from Supabase session (preferred) or native state ─
@@ -5219,6 +5243,25 @@
 
   async function afterAuth(session) {
     startGuard();
+
+    // ── Periodic account-existence check (catch mid-session account deletion) ─
+    // Runs every 5 minutes while the user is logged in. If Supabase explicitly
+    // says the account is gone (4xx), clear the session and return to sign-in.
+    // Network errors / 5xx are ignored — never sign out on doubt.
+    if (_lpSessionCheckTimer) clearInterval(_lpSessionCheckTimer);
+    _lpSessionCheckTimer = setInterval(async () => {
+      const s = getSession();
+      if (!s || !s.access_token) { clearInterval(_lpSessionCheckTimer); _lpSessionCheckTimer = null; return; }
+      const alive = await validateUserExists(s.access_token);
+      if (!alive) {
+        console.warn('[Lily Pad] session check: account deleted — signing out');
+        clearInterval(_lpSessionCheckTimer);
+        _lpSessionCheckTimer = null;
+        clearSession();
+        showGate();
+      }
+    }, 5 * 60 * 1000);
+
     const role = (session && session.access_token)
       ? await getUserRole(session.access_token)
       : 'renter';
@@ -5346,12 +5389,21 @@
       const session = getSession();
       if (session) {
         const nowSec = Date.now() / 1000;
-        if ((session.expires_at || 0) > nowSec + 60) { afterAuth(session); return; }
-        if (session.refresh_token) {
+        if ((session.expires_at || 0) > nowSec + 60) {
+          // Token still fresh — verify the account hasn't been deleted in Supabase
+          const alive = await validateUserExists(session.access_token);
+          if (alive) { afterAuth(session); return; }
+          console.warn('[Lily Pad] init: Supabase account no longer exists — clearing session');
+          clearSession();
+          // fall through to show sign-in screen
+        } else if (session.refresh_token) {
+          // Token expired — attempt refresh (Supabase rejects deleted-user refresh tokens)
           const r = await refreshSession(session.refresh_token).catch(() => null);
           if (r) { afterAuth(r); return; }
+          clearSession();
+        } else {
+          clearSession();
         }
-        clearSession();
       }
     }
 

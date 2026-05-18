@@ -318,56 +318,64 @@
         <button class="btn-ghost" onclick="showPanel('panel-activate')">Activate your account</button>
       </div>
 
-      <!-- ── Panel: Activate Account ── -->
+      <!-- ── Panel: Request Invite ── -->
       <div id="panel-activate" class="panel">
         <button class="panel-back" onclick="showPanel('panel-signin')">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           Back
         </button>
         <div class="panel-title">Activate account.</div>
-        <div class="panel-sub">Set up your staff access. Your email must be pre-approved.</div>
+        <div class="panel-sub">Enter your work email. If it's on the approved list we'll send you a secure invite link.</div>
 
         <div class="approved-note">
           <span class="note-icon">🔒</span>
-          <span>Only pre-approved emails can register. After activating, you'll receive a confirmation email — click the link, then return here to sign in.</span>
+          <span>Only pre-approved emails can receive an invite. Click the link in your email to set your password and activate your account.</span>
         </div>
 
         <div class="field">
-          <label>Full Name</label>
-          <input type="text" id="ac-name" placeholder="Jane Smith" autocomplete="name">
-        </div>
-        <div class="field">
-          <label>Email</label>
+          <label>Work Email</label>
           <input type="email" id="ac-email" placeholder="you@example.com" autocomplete="email">
-        </div>
-        <div class="field">
-          <label>Password</label>
-          <input type="password" id="ac-password" placeholder="Min. 8 characters" autocomplete="new-password">
-        </div>
-        <div class="field">
-          <label>Confirm Password</label>
-          <input type="password" id="ac-confirm" placeholder="Re-enter password" autocomplete="new-password">
         </div>
 
         <div id="ac-error"   class="msg-error"></div>
         <div id="ac-success" class="msg-success"></div>
 
-        <button class="btn-primary" id="ac-btn" onclick="handleActivate()">Activate &amp; Send Confirmation</button>
+        <button class="btn-primary" id="ac-btn" onclick="handleInvite()">Send Invite Link</button>
       </div>
 
-      <!-- ── Panel: Check Email ── -->
+      <!-- ── Panel: Invite Sent ── -->
       <div id="panel-check-email" class="panel">
         <div class="email-icon">📬</div>
-        <div class="panel-title">Check your inbox.</div>
-        <div class="panel-sub">We sent a confirmation link to<br><strong id="confirm-email-addr" style="color:#8DD63F;font-weight:700"></strong></div>
+        <div class="panel-title">Invite sent.</div>
+        <div class="panel-sub">Check your inbox at<br><strong id="confirm-email-addr" style="color:#8DD63F;font-weight:700"></strong></div>
 
         <div class="confirm-box">
-          Click the link in that email to confirm your address.<br>
-          Then return here and sign in with your credentials.<br><br>
-          <span style="opacity:0.7">Didn't get it? Check spam or wait a minute.</span>
+          Click the link in the email to set your password<br>
+          and activate your staff account.<br><br>
+          <span style="opacity:0.7">Didn't receive it? Check spam or wait a minute.</span>
         </div>
 
-        <button class="btn-primary" onclick="showPanel('panel-signin')">Go to sign in</button>
+        <button class="btn-primary" onclick="showPanel('panel-signin')">Back to sign in</button>
+      </div>
+
+      <!-- ── Panel: Set Password (shown after clicking invite link) ── -->
+      <div id="panel-set-password" class="panel">
+        <div class="panel-title">Set your password.</div>
+        <div class="panel-sub">Your invite was verified. Choose a password to complete your account setup.</div>
+
+        <div class="field">
+          <label>New Password</label>
+          <input type="password" id="sp-password" placeholder="Min. 8 characters" autocomplete="new-password">
+        </div>
+        <div class="field">
+          <label>Confirm Password</label>
+          <input type="password" id="sp-confirm" placeholder="Re-enter password" autocomplete="new-password">
+        </div>
+
+        <div id="sp-error"   class="msg-error"></div>
+        <div id="sp-success" class="msg-success"></div>
+
+        <button class="btn-primary" id="sp-btn" onclick="handleSetPassword()">Activate Account</button>
       </div>
 
     </div>
@@ -378,20 +386,46 @@
   </div>
 
   <script>
+    // ── Invite token state (from URL hash when clicking invite email link) ──
+    let _inviteAccessToken  = null;
+    let _inviteRefreshToken = null;
+
+    const ALL_PANELS = ['panel-signin','panel-activate','panel-check-email','panel-set-password'];
+
     function showPanel(id) {
-      ['panel-signin', 'panel-activate', 'panel-check-email'].forEach(p => {
+      ALL_PANELS.forEach(p => {
         document.getElementById(p).classList.toggle('active', p === id);
       });
       clearMsgs();
     }
 
     function clearMsgs() {
-      ['si-error','si-success','ac-error','ac-success'].forEach(id => {
+      ['si-error','si-success','ac-error','ac-success','sp-error','sp-success'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.textContent = '';
       });
     }
 
+    // ── On load: detect invite token in URL hash ────────────────────────────
+    (function checkInviteHash() {
+      const hash = window.location.hash;
+      if (!hash) return;
+      try {
+        const params = new URLSearchParams(hash.slice(1));
+        const type   = params.get('type');
+        const token  = params.get('access_token');
+        const refresh = params.get('refresh_token');
+        if (type === 'invite' && token) {
+          _inviteAccessToken  = token;
+          _inviteRefreshToken = refresh || null;
+          // Clean the hash from the URL without reload
+          window.history.replaceState({}, document.title, window.location.pathname);
+          showPanel('panel-set-password');
+        }
+      } catch (_) {}
+    })();
+
+    // ── Sign In ─────────────────────────────────────────────────────────────
     async function handleSignin() {
       const email    = (document.getElementById('si-email').value || '').trim();
       const password = document.getElementById('si-password').value || '';
@@ -402,93 +436,97 @@
       errEl.textContent  = '';
       succEl.textContent = '';
 
-      if (!email || !password) {
-        errEl.textContent = 'Please enter your email and password.';
-        return;
-      }
+      if (!email || !password) { errEl.textContent = 'Please enter your email and password.'; return; }
 
-      btn.disabled    = true;
-      btn.textContent = 'Signing in…';
+      btn.disabled = true; btn.textContent = 'Signing in…';
 
       try {
-        const r = await fetch('/api/staff/signin', {
-          method : 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body   : JSON.stringify({ email, password }),
-        });
+        const r    = await fetch('/api/staff/signin', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email, password }) });
         const data = await r.json();
         if (!r.ok) throw new Error(data.error || 'Sign-in failed');
-
         localStorage.setItem('lily_pad_session', JSON.stringify(data.session));
         localStorage.setItem('lp_role_cache', data.role || 'staff');
-
         succEl.textContent = 'Signed in! Redirecting…';
         setTimeout(() => { window.location.href = '/'; }, 900);
       } catch (e) {
         let msg = e.message;
-        if (/email.*not.*confirm|not confirm.*email|email_not_confirmed/i.test(msg)) {
-          msg = 'Email not yet confirmed. Check your inbox for the activation link, then try signing in again.';
-        }
-        errEl.textContent   = msg;
-        btn.disabled        = false;
-        btn.textContent     = 'Sign in';
+        if (/email.*not.*confirm|not confirm.*email|email_not_confirmed/i.test(msg))
+          msg = 'Email not yet confirmed. Check your inbox for the invite link first.';
+        errEl.textContent = msg; btn.disabled = false; btn.textContent = 'Sign in';
       }
     }
 
-    async function handleActivate() {
-      const name     = (document.getElementById('ac-name').value || '').trim();
-      const email    = (document.getElementById('ac-email').value || '').trim();
-      const password = document.getElementById('ac-password').value || '';
-      const confirm  = document.getElementById('ac-confirm').value || '';
-      const errEl    = document.getElementById('ac-error');
-      const succEl   = document.getElementById('ac-success');
-      const btn      = document.getElementById('ac-btn');
+    // ── Request invite link ──────────────────────────────────────────────────
+    async function handleInvite() {
+      const email  = (document.getElementById('ac-email').value || '').trim();
+      const errEl  = document.getElementById('ac-error');
+      const succEl = document.getElementById('ac-success');
+      const btn    = document.getElementById('ac-btn');
 
-      errEl.textContent  = '';
-      succEl.textContent = '';
+      errEl.textContent = ''; succEl.textContent = '';
 
-      if (!name || !email || !password || !confirm) {
-        errEl.textContent = 'All fields are required.';
-        return;
-      }
-      if (password.length < 8) {
-        errEl.textContent = 'Password must be at least 8 characters.';
-        return;
-      }
-      if (password !== confirm) {
-        errEl.textContent = 'Passwords do not match.';
-        return;
-      }
+      if (!email) { errEl.textContent = 'Please enter your work email.'; return; }
 
-      btn.disabled    = true;
-      btn.textContent = 'Sending confirmation…';
+      btn.disabled = true; btn.textContent = 'Sending…';
 
       try {
-        const r = await fetch('/api/staff/signup', {
-          method : 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body   : JSON.stringify({ email, password, full_name: name }),
-        });
+        const r    = await fetch('/api/staff/invite', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email }) });
         const data = await r.json();
-        if (!r.ok) throw new Error(data.error || 'Activation failed');
-
+        if (!r.ok) throw new Error(data.error || 'Failed to send invite');
         const addrEl = document.getElementById('confirm-email-addr');
         if (addrEl) addrEl.textContent = email;
         showPanel('panel-check-email');
       } catch (e) {
-        errEl.textContent   = e.message;
-        btn.disabled        = false;
-        btn.textContent     = 'Activate & Send Confirmation';
+        errEl.textContent = e.message; btn.disabled = false; btn.textContent = 'Send Invite Link';
       }
     }
 
-    // Allow Enter key on focused inputs
+    // ── Set password after clicking invite link ──────────────────────────────
+    async function handleSetPassword() {
+      const password = document.getElementById('sp-password').value || '';
+      const confirm  = document.getElementById('sp-confirm').value  || '';
+      const errEl    = document.getElementById('sp-error');
+      const succEl   = document.getElementById('sp-success');
+      const btn      = document.getElementById('sp-btn');
+
+      errEl.textContent = ''; succEl.textContent = '';
+
+      if (!password || !confirm)       { errEl.textContent = 'Both fields are required.'; return; }
+      if (password.length < 8)         { errEl.textContent = 'Password must be at least 8 characters.'; return; }
+      if (password !== confirm)        { errEl.textContent = 'Passwords do not match.'; return; }
+      if (!_inviteAccessToken)         { errEl.textContent = 'Invite token missing — please click the link in your email again.'; return; }
+
+      btn.disabled = true; btn.textContent = 'Activating…';
+
+      try {
+        const r    = await fetch('/api/staff/set-password', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ access_token: _inviteAccessToken, password }) });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || 'Failed to set password');
+
+        // Save session using the invite tokens (valid until expiry)
+        const session = {
+          access_token : _inviteAccessToken,
+          refresh_token: _inviteRefreshToken,
+          token_type   : 'bearer',
+        };
+        localStorage.setItem('lily_pad_session', JSON.stringify(session));
+        localStorage.setItem('lp_role_cache', 'staff');
+
+        succEl.textContent = 'Account activated! Taking you to the app…';
+        setTimeout(() => { window.location.href = '/'; }, 1200);
+      } catch (e) {
+        errEl.textContent = e.message; btn.disabled = false; btn.textContent = 'Activate Account';
+      }
+    }
+
+    // ── Enter key support ────────────────────────────────────────────────────
     document.addEventListener('keydown', e => {
       if (e.key !== 'Enter') return;
       const active = document.querySelector('.panel.active');
       if (!active) return;
-      if (active.id === 'panel-signin')   handleSignin();
-      if (active.id === 'panel-activate') handleActivate();
+      if (active.id === 'panel-signin')        handleSignin();
+      if (active.id === 'panel-activate')      handleInvite();
+      if (active.id === 'panel-set-password')  handleSetPassword();
     });
   </script>
 </body>

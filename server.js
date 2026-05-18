@@ -274,62 +274,96 @@ app.post('/api/auth/signup', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── Staff/admin signup — email must be in ADMIN_EMAILS env list ────────────────
-app.post('/api/staff/signup', async (req, res) => {
+// ── Staff/admin invite — send Supabase magic invite link to approved email ──────
+app.post('/api/staff/invite', async (req, res) => {
   if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });
-  const { email, password, full_name } = req.body || {};
-  if (!email || !password || !full_name) return res.status(400).json({ error: 'email, password and full_name required' });
+  const { email } = req.body || {};
+  if (!email) return res.status(400).json({ error: 'email required' });
   const emailLower = email.toLowerCase().trim();
 
   if (ADMIN_EMAILS.length === 0)
-    return res.status(403).json({ error: 'Staff registration is not yet configured. Set ADMIN_EMAILS in server secrets.' });
+    return res.status(403).json({ error: 'No staff emails configured. Contact your system administrator.' });
   if (!ADMIN_EMAILS.includes(emailLower))
-    return res.status(403).json({ error: 'This email is not approved for staff registration. Contact your administrator.' });
+    return res.status(403).json({ error: 'This email is not on the approved staff list.' });
 
   try {
     const now = new Date().toISOString();
+    // Build redirect URL so the invite link sends them back to /staff-login
+    const host       = req.get('host') || '';
+    const proto      = (host.includes('localhost') || host.includes('127.0.0.1')) ? 'http' : 'https';
+    const redirectTo = `${proto}://${host}/staff-login`;
 
-    // Use standard signup so Supabase sends a confirmation email.
-    // The email is already whitelisted above so we trust it, but we still
-    // require them to verify ownership of the address via the email link.
-    const authRes = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
+    // Supabase admin invite — creates the user and emails them an activation link
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/admin/invite`, {
       method : 'POST',
-      headers: { 'apikey': SUPABASE_ANON, 'Content-Type': 'application/json' },
+      headers: SVC_HEADERS,
       body   : JSON.stringify({
-        email, password,
-        data: { full_name, account_type: 'staff' },
+        email,
+        redirect_to: redirectTo,
+        data: { account_type: 'staff' },
       }),
     });
-    const data = await authRes.json();
-    if (!authRes.ok) {
-      const msg = data.error_description || data.message || data.msg || JSON.stringify(data);
-      if (/already registered|already exists/i.test(msg))
-        return res.status(409).json({ error: 'An account with this email already exists. Check your inbox for the confirmation link, then sign in.' });
+    const data = await r.json();
+    if (!r.ok) {
+      const msg = data.message || data.msg || JSON.stringify(data);
+      if (/already been invited|already registered/i.test(msg))
+        return res.status(409).json({ error: 'An invite was already sent to this email. Check your inbox (including spam).' });
       throw new Error(msg);
     }
 
-    // If Supabase returned a session immediately (email confirmation OFF in dashboard)
-    // this shouldn't happen for staff but handle it gracefully.
-    const userId = (data.user || {}).id || null;
-
-    // Pre-register in admin_users immediately — signin check looks here after they confirm
+    // Pre-register in admin_users so signin check works once they activate
     await fetch(`${SUPABASE_URL}/rest/v1/admin_users`, {
       method : 'POST',
       headers: { ...SVC_HEADERS, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
-      body   : JSON.stringify({ email: emailLower, full_name, role: 'staff', auth_user_id: userId, created_at: now }),
+      body   : JSON.stringify({ email: emailLower, full_name: '', role: 'staff', auth_user_id: data.id || null, created_at: now }),
     }).catch(() => {});
 
-    // Pre-create profile row so it exists when they first sign in
-    if (userId) {
+    res.json({ invited: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Staff/admin set-password — called after clicking invite link ───────────────
+// The invite link lands on /staff-login with access_token in the URL hash.
+// The client sends that token here; we set the password and return the user.
+app.post('/api/staff/set-password', async (req, res) => {
+  const { access_token, password } = req.body || {};
+  if (!access_token || !password) return res.status(400).json({ error: 'access_token and password required' });
+  if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  try {
+    // Set the new password using the invite session token
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      method : 'PUT',
+      headers: {
+        'apikey'       : SUPABASE_ANON,
+        'Authorization': `Bearer ${access_token}`,
+        'Content-Type' : 'application/json',
+      },
+      body: JSON.stringify({ password }),
+    });
+    const user = await r.json();
+    if (!r.ok) throw new Error(user.message || user.error_description || 'Failed to set password');
+
+    const now      = new Date().toISOString();
+    const email    = (user.email || '').toLowerCase();
+    const userId   = user.id || null;
+
+    // Ensure admin_users entry is up to date
+    if (email) {
+      await fetch(`${SUPABASE_URL}/rest/v1/admin_users?email=eq.${encodeURIComponent(email)}`,
+        { method: 'PATCH', headers: SVC_HEADERS, body: JSON.stringify({ auth_user_id: userId, last_login_at: now }) }
+      ).catch(() => {});
+    }
+
+    // Ensure profile row exists
+    if (userId && email) {
       await fetch(`${SUPABASE_URL}/rest/v1/profiles`, {
         method : 'POST',
         headers: { ...SVC_HEADERS, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
-        body   : JSON.stringify({ id: userId, email, full_name, account_type: 'staff', updated_at: now }),
+        body   : JSON.stringify({ id: userId, email, account_type: 'staff', updated_at: now }),
       }).catch(() => {});
     }
 
-    // Return confirm_email flag so the UI can show the "check inbox" screen
-    res.json({ created: true, confirm_email: true });
+    res.json({ ok: true, user });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

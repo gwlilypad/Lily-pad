@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-18-D5';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-18-D6';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -5102,6 +5102,19 @@
 
   // ── Init ──────────────────────────────────────────────────────────────────
   async function init() {
+    // If an invite link lands on the main app (not /staff-login), redirect there
+    // so the set-password flow can handle the token correctly.
+    (function _redirectInviteToken() {
+      try {
+        const hash = window.location.hash;
+        if (!hash) return;
+        const params = new URLSearchParams(hash.slice(1));
+        if (params.get('type') === 'invite' && params.get('access_token')) {
+          window.location.replace('/staff-login' + hash);
+        }
+      } catch (_) {}
+    })();
+
     startHidingGuard();
     wireSignOut();
     wireAuthForms();

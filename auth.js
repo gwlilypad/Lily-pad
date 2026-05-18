@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-18-D16';  // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-18-D17';  // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -3511,27 +3511,70 @@
   }
 
   function _renderAdminPanel() {
-    const panel = document.getElementById('lp-admin-panel');
-    if (!panel || !_adminUsers) return;
+    // Update live counts on the home menu items
+    if (_adminUsers) {
+      const renters = _adminUsers.filter(u => u.account_type !== 'padRenter' && u.account_type !== 'admin' && u.account_type !== 'staff');
+      const hosts   = _adminUsers.filter(u => u.account_type === 'padRenter');
+      const cr = document.getElementById('lp-ap-count-renters');
+      const ch = document.getElementById('lp-ap-count-hosts');
+      if (cr) cr.textContent = renters.length;
+      if (ch) ch.textContent = hosts.length;
+    }
+    const cc = document.getElementById('lp-ap-count-chats');
+    if (cc) cc.textContent = _supportConvs.length;
+    // If a standalone page is open, refresh its content too
+    const page = document.getElementById('lp-admin-page');
+    if (page) _renderAdminPageContent(page.dataset.page);
+  }
 
-    const renters = _adminUsers.filter(u => u.account_type !== 'padRenter' && u.account_type !== 'admin' && u.account_type !== 'staff');
-    const hosts   = _adminUsers.filter(u => u.account_type === 'padRenter');
+  // ── Admin standalone page ─────────────────────────────────────────────────
+  function _openAdminPage(page) {
+    document.getElementById('lp-admin-page')?.remove();
+    try { localStorage.setItem('lp_admin_page', page); } catch (_) {}
+    const el = document.createElement('div');
+    el.id = 'lp-admin-page';
+    el.dataset.page = page;
+    const titles = { renters: 'Renters', hosts: 'Hosts', chats: 'Messages' };
+    el.innerHTML = `
+      <div class="lp-ap-page-hdr">
+        <button class="lp-ap-page-back">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M13 4l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Back
+        </button>
+        <h2 class="lp-ap-page-title">${titles[page] || page}</h2>
+        <button class="lp-ap-refresh lp-ap-page-refresh" title="Refresh">↻</button>
+      </div>
+      <div class="lp-ap-page-body"></div>`;
+    document.body.appendChild(el);
+    el.querySelector('.lp-ap-page-back').addEventListener('click', _closeAdminPage);
+    el.querySelector('.lp-ap-page-refresh').addEventListener('click', () => {
+      _fetchAdminUsers(true); _fetchConversations();
+    });
+    requestAnimationFrame(() => el.classList.add('open'));
+    _renderAdminPageContent(page);
+  }
 
-    const _tabBar = () => `
-      <div class="lp-ap-tabs">
-        <button class="lp-ap-tab ${_adminTab==='renters'?'active':''}" data-tab="renters">🚗 Renters (${renters.length})</button>
-        <button class="lp-ap-tab ${_adminTab==='hosts'?'active':''}" data-tab="hosts">🏠 Hosts (${hosts.length})</button>
-        <button class="lp-ap-tab ${_adminTab==='chats'?'active':''}" data-tab="chats">💬 Chats (${_supportConvs.length})</button>
-      </div>`;
+  function _closeAdminPage() {
+    const el = document.getElementById('lp-admin-page');
+    if (!el) return;
+    el.classList.remove('open');
+    setTimeout(() => el.remove(), 220);
+    try { localStorage.removeItem('lp_admin_page'); } catch (_) {}
+  }
 
-    // ── Chats tab: only users who have had message interactions ──────────────
-    if (_adminTab === 'chats') {
+  function _renderAdminPageContent(page) {
+    const el = document.getElementById('lp-admin-page');
+    if (!el || el.dataset.page !== page) return;
+    const body = el.querySelector('.lp-ap-page-body');
+    if (!body) return;
+
+    // ── Chats page ────────────────────────────────────────────────────────────
+    if (page === 'chats') {
       if (_supportConvs.length === 0) _fetchConversations();
       const convsSorted = [..._supportConvs].sort((a, b) =>
         new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at)
       );
-      panel.querySelector('.lp-ap-content').innerHTML = `
-        ${_tabBar()}
+      body.innerHTML = `
         <div class="lp-ap-meta-row">
           <span>CURRENT &amp; PAST ACTIVE CHATS</span>
           <button class="lp-ap-new-msg-btn">+ New Message</button>
@@ -3544,11 +3587,12 @@
                 const preview = (c.last_message || 'No messages yet').slice(0, 55);
                 const stCls   = c.status === 'closed' ? 'susp' : c.status === 'pending' ? 'pend' : 'verif';
                 const stLbl   = (c.status || 'open').toUpperCase();
+                const unread  = _lpIsUnread(c);
                 return `
-                <div class="lp-ap-row lp-ap-conv-row" data-cid="${c.id}">
+                <div class="lp-ap-row lp-ap-conv-row${unread ? ' lp-ap-unread' : ''}" data-cid="${c.id}">
                   <div class="lp-ap-avatar">${_adminInitials(name)}</div>
                   <div class="lp-ap-info">
-                    <div class="lp-ap-name">${name}</div>
+                    <div class="lp-ap-name">${name}${unread ? ' <span class="lp-ap-dot"></span>' : ''}</div>
                     <div class="lp-ap-email">${preview}</div>
                   </div>
                   <div class="lp-ap-meta-r">
@@ -3559,26 +3603,25 @@
               }).join('')
           }
         </div>`;
-      panel.querySelectorAll('.lp-ap-tab').forEach(btn =>
-        btn.addEventListener('click', () => { _adminTab = btn.dataset.tab; _renderAdminPanel(); })
-      );
-      panel.querySelector('.lp-ap-new-msg-btn')?.addEventListener('click', () => _openNewChatModal());
-      panel.querySelectorAll('.lp-ap-conv-row').forEach(row => {
+      el.querySelector('.lp-ap-new-msg-btn')?.addEventListener('click', () => _openNewChatModal());
+      el.querySelectorAll('.lp-ap-conv-row').forEach(row => {
         const c = _supportConvs.find(x => x.id === row.dataset.cid);
         if (c) row.addEventListener('click', () => _openDrawerConv(c));
       });
       return;
     }
 
-    // ── Renters / Hosts tabs ──────────────────────────────────────────────────
-    const isHosts = _adminTab === 'hosts';
-    const pool    = isHosts ? hosts : renters;
+    // ── Renters / Hosts page ───────────────────────────────────────────────────
+    if (!_adminUsers) { body.innerHTML = '<div class="lp-ap-loading">Loading…</div>'; _fetchAdminUsers(); return; }
+    const isHosts = page === 'hosts';
+    const pool    = isHosts
+      ? _adminUsers.filter(u => u.account_type === 'padRenter')
+      : _adminUsers.filter(u => u.account_type !== 'padRenter' && u.account_type !== 'admin' && u.account_type !== 'staff');
     const q       = _adminSearch.toLowerCase();
     const visible = q ? pool.filter(u => (u.full_name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q)) : pool;
     const sorted  = [...visible].sort((a, b) => (b.spend_total || 0) - (a.spend_total || 0));
 
-    panel.querySelector('.lp-ap-content').innerHTML = `
-      ${_tabBar()}
+    body.innerHTML = `
       <div class="lp-ap-meta-row">
         <span>SORTED BY SPEND · HIGHEST FIRST</span><span>${sorted.length} shown</span>
       </div>
@@ -3613,13 +3656,9 @@
             }).join('')
         }
       </div>`;
-
-    panel.querySelectorAll('.lp-ap-tab').forEach(btn =>
-      btn.addEventListener('click', () => { _adminTab = btn.dataset.tab; _renderAdminPanel(); })
-    );
-    const srch = panel.querySelector('.lp-ap-search');
-    if (srch) srch.addEventListener('input', () => { _adminSearch = srch.value; _renderAdminPanel(); });
-    panel.querySelectorAll('.lp-ap-row').forEach(row =>
+    const srch = body.querySelector('.lp-ap-search');
+    if (srch) srch.addEventListener('input', () => { _adminSearch = srch.value; _renderAdminPageContent(page); });
+    body.querySelectorAll('.lp-ap-row').forEach(row =>
       row.addEventListener('click', () => {
         const u = _adminUsers.find(x => x.id === row.dataset.uid);
         if (u) _showAdminActions(u);
@@ -3775,18 +3814,57 @@
     panel.id = 'lp-admin-panel';
     panel.innerHTML = `
       <div class="lp-ap-header">
-        <div class="lp-ap-breadcrumb">ADMIN · USERS</div>
+        <div class="lp-ap-breadcrumb">LILY PAD · ADMIN</div>
         <div class="lp-ap-title-row">
-          <h2 class="lp-ap-title">All Accounts</h2>
+          <h2 class="lp-ap-title">Portal</h2>
           <button class="lp-ap-refresh" title="Refresh">↻</button>
         </div>
       </div>
-      <div class="lp-ap-content"><div class="lp-ap-loading">Loading accounts…</div></div>`;
+      <div class="lp-ap-content">
+        <div class="lp-ap-menu-list">
+          <button class="lp-ap-menu-item" data-page="renters">
+            <span class="lp-ap-menu-icon">🚗</span>
+            <div class="lp-ap-menu-label">
+              <div class="lp-ap-menu-title">Renters</div>
+              <div class="lp-ap-menu-sub">All driver accounts</div>
+            </div>
+            <span class="lp-ap-menu-count" id="lp-ap-count-renters">—</span>
+            <span class="lp-ap-menu-arrow">›</span>
+          </button>
+          <button class="lp-ap-menu-item" data-page="hosts">
+            <span class="lp-ap-menu-icon">🏠</span>
+            <div class="lp-ap-menu-label">
+              <div class="lp-ap-menu-title">Hosts</div>
+              <div class="lp-ap-menu-sub">All pad owner accounts</div>
+            </div>
+            <span class="lp-ap-menu-count" id="lp-ap-count-hosts">—</span>
+            <span class="lp-ap-menu-arrow">›</span>
+          </button>
+          <button class="lp-ap-menu-item" data-page="chats">
+            <span class="lp-ap-menu-icon">💬</span>
+            <div class="lp-ap-menu-label">
+              <div class="lp-ap-menu-title">Messages</div>
+              <div class="lp-ap-menu-sub">Support conversations</div>
+            </div>
+            <span class="lp-ap-menu-count" id="lp-ap-count-chats">—</span>
+            <span class="lp-ap-menu-arrow">›</span>
+          </button>
+        </div>
+      </div>`;
     document.body.appendChild(panel);
 
     panel.querySelector('.lp-ap-refresh').addEventListener('click', () => { _fetchAdminUsers(true); _fetchConversations(); });
+    panel.querySelectorAll('.lp-ap-menu-item').forEach(btn =>
+      btn.addEventListener('click', () => _openAdminPage(btn.dataset.page))
+    );
     _fetchAdminUsers();
-    _fetchConversations(); // pre-load so Chats tab is ready immediately
+    _fetchConversations();
+
+    // Restore the page the admin was on before refresh
+    try {
+      const saved = localStorage.getItem('lp_admin_page');
+      if (saved) _openAdminPage(saved);
+    } catch (_) {}
   }
 
   // ── Support chat — 3-way messaging: customer ↔ staff ↔ admin ─────────────
@@ -3891,6 +3969,7 @@
         _renderSupportList();
         _renderRealConvList();
         _lpUpdateHeaderBadge();
+        _renderAdminPanel();
         injectSupportNavBadge();
       } else {
         console.warn('[LP] fetchConvs: HTTP error', r.status);

@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-18-D26';  // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-18-D27';  // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -1894,16 +1894,19 @@
         // Navigate immediately — the React state change will collapse the
         // pull-down naturally.  Do NOT call _openAccountPullDown() first;
         // toggling the tab again while it is open was re-opening it in D24.
-        _lpGoToFn = null;                 // bust any stale cached reference
-        const g = lpGetGoTo();
+        // Use the reference cached while the pull-down was closed.
+        // DO NOT bust _lpGoToFn here — lpGetGoTo() cannot traverse the fiber
+        // tree while the pull-down sheet is open (it's rendered outside the
+        // normal context reach), so we rely on the reference eagerly cached
+        // by _runGuardFunctions() during every tick when the sheet is closed.
+        const g = _lpGoToFn || lpGetGoTo();
         if (g) {
           g(item.page);
           console.log('[LP] Pull-down nav:', item.hash, '→', item.page, '✓ goTo');
         } else {
-          // Fallback — should rarely be needed
           const ok = callGoTo(item.page);
           console.log('[LP] Pull-down nav:', item.hash, '→', item.page,
-                      ok ? '✓ callGoTo' : '✗ goTo not found');
+                      ok ? '✓ callGoTo' : '✗ goTo not found — cache was empty');
         }
       }, true /* capture phase — fires before native handlers */);
 
@@ -5114,6 +5117,11 @@
         }
       }
     }
+
+    // Eagerly cache the goTo reference while the pull-down is closed so it
+    // is available when the user taps a pull-down item (fiber traversal fails
+    // while the sheet is open because the context sits outside its subtree).
+    if (!_findPullDownContainer() && !_lpGoToFn) lpGetGoTo();
 
     hideUnwantedElements();
     injectPullDownSignOut();

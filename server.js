@@ -288,38 +288,48 @@ app.post('/api/staff/signup', async (req, res) => {
 
   try {
     const now = new Date().toISOString();
-    // Create Supabase auth user via admin API — auto-confirmed (trusted list, no email needed)
-    const authRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
+
+    // Use standard signup so Supabase sends a confirmation email.
+    // The email is already whitelisted above so we trust it, but we still
+    // require them to verify ownership of the address via the email link.
+    const authRes = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
       method : 'POST',
-      headers: SVC_HEADERS,
+      headers: { 'apikey': SUPABASE_ANON, 'Content-Type': 'application/json' },
       body   : JSON.stringify({
-        email, password, email_confirm: true,
-        user_metadata: { full_name, account_type: 'staff' },
+        email, password,
+        data: { full_name, account_type: 'staff' },
       }),
     });
-    const user = await authRes.json();
+    const data = await authRes.json();
     if (!authRes.ok) {
-      const msg = user.message || user.msg || JSON.stringify(user);
+      const msg = data.error_description || data.message || data.msg || JSON.stringify(data);
       if (/already registered|already exists/i.test(msg))
-        return res.status(409).json({ error: 'An account with this email already exists.' });
+        return res.status(409).json({ error: 'An account with this email already exists. Check your inbox for the confirmation link, then sign in.' });
       throw new Error(msg);
     }
 
-    // Create profile with staff role
-    await fetch(`${SUPABASE_URL}/rest/v1/profiles`, {
-      method : 'POST',
-      headers: { ...SVC_HEADERS, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
-      body   : JSON.stringify({ id: user.id, email, full_name, account_type: 'staff', updated_at: now }),
-    }).catch(() => {});
+    // If Supabase returned a session immediately (email confirmation OFF in dashboard)
+    // this shouldn't happen for staff but handle it gracefully.
+    const userId = (data.user || {}).id || null;
 
-    // Save to admin_users table
+    // Pre-register in admin_users immediately — signin check looks here after they confirm
     await fetch(`${SUPABASE_URL}/rest/v1/admin_users`, {
       method : 'POST',
       headers: { ...SVC_HEADERS, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
-      body   : JSON.stringify({ email: emailLower, full_name, role: 'staff', auth_user_id: user.id, created_at: now }),
+      body   : JSON.stringify({ email: emailLower, full_name, role: 'staff', auth_user_id: userId, created_at: now }),
     }).catch(() => {});
 
-    res.json({ created: true });
+    // Pre-create profile row so it exists when they first sign in
+    if (userId) {
+      await fetch(`${SUPABASE_URL}/rest/v1/profiles`, {
+        method : 'POST',
+        headers: { ...SVC_HEADERS, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+        body   : JSON.stringify({ id: userId, email, full_name, account_type: 'staff', updated_at: now }),
+      }).catch(() => {});
+    }
+
+    // Return confirm_email flag so the UI can show the "check inbox" screen
+    res.json({ created: true, confirm_email: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

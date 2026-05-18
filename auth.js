@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-18-D6';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-18-D7';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -3611,7 +3611,7 @@
       'text-align:center',
       'box-sizing:border-box',
     ].join(';'));
-    btn.addEventListener('click', () => { window.location.href = '/staff-login'; });
+    btn.addEventListener('click', () => { window.location.href = '/staff-login?activate=1'; });
     card.appendChild(btn);
 
     // ← Back button fixed top-left (same style as other back buttons)

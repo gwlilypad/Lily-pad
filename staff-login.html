@@ -315,7 +315,6 @@
         <div id="si-success" class="msg-success"></div>
 
         <button class="btn-primary" id="si-btn" onclick="handleSignin()">Sign in</button>
-        <button class="btn-ghost" onclick="showPanel('panel-activate')">Activate your account</button>
       </div>
 
       <!-- ── Panel: Request Invite ── -->
@@ -406,21 +405,31 @@
       });
     }
 
-    // ── On load: detect invite token in URL hash ────────────────────────────
-    (function checkInviteHash() {
+    // ── On load: detect invite token in hash OR ?activate=1 param ───────────
+    (function checkOnLoad() {
+      // 1. Invite token in hash → show set-password panel
       const hash = window.location.hash;
-      if (!hash) return;
+      if (hash) {
+        try {
+          const params  = new URLSearchParams(hash.slice(1));
+          const type    = params.get('type');
+          const token   = params.get('access_token');
+          const refresh = params.get('refresh_token');
+          if (type === 'invite' && token) {
+            _inviteAccessToken  = token;
+            _inviteRefreshToken = refresh || null;
+            window.history.replaceState({}, document.title, window.location.pathname);
+            showPanel('panel-set-password');
+            return;
+          }
+        } catch (_) {}
+      }
+      // 2. ?activate=1 → skip sign-in, land directly on invite panel
       try {
-        const params = new URLSearchParams(hash.slice(1));
-        const type   = params.get('type');
-        const token  = params.get('access_token');
-        const refresh = params.get('refresh_token');
-        if (type === 'invite' && token) {
-          _inviteAccessToken  = token;
-          _inviteRefreshToken = refresh || null;
-          // Clean the hash from the URL without reload
+        const qp = new URLSearchParams(window.location.search);
+        if (qp.get('activate') === '1') {
           window.history.replaceState({}, document.title, window.location.pathname);
-          showPanel('panel-set-password');
+          showPanel('panel-activate');
         }
       } catch (_) {}
     })();

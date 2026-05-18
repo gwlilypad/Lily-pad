@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-18-D1';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-18-D2';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -3902,8 +3902,8 @@
         <button class="lp-sup-back-btn">← Back</button>
         <span>Start Chat with Customer</span>
       </div>
-      <input class="lp-sup-new-search" placeholder="Search customer by name or email…" autocomplete="off">
-      <div class="lp-sup-search-results"><div class="lp-sup-search-hint">Type a name or email to search</div></div>`;
+      <input class="lp-sup-new-search" placeholder="Filter by name or email…" autocomplete="off">
+      <div class="lp-sup-search-results"><div class="lp-sup-search-hint">Loading users…</div></div>`;
     listView.parentElement.insertBefore(newDiv, listView);
     listView.style.display = 'none';
 
@@ -3912,52 +3912,51 @@
       listView.style.display = 'flex';
     });
 
-    let _searchTimer = null;
     let _allUsers = null;
-    newDiv.querySelector('.lp-sup-new-search').addEventListener('input', async function () {
-      const q = this.value.trim().toLowerCase();
-      const results = newDiv.querySelector('.lp-sup-search-results');
-      clearTimeout(_searchTimer);
-      if (!q) {
-        results.innerHTML = '<div class="lp-sup-search-hint">Type a name or email to search</div>';
+    let _searchTimer = null;
+    const results = newDiv.querySelector('.lp-sup-search-results');
+
+    const _renderRows = (users, filter) => {
+      const q = (filter || '').toLowerCase();
+      const pool = q
+        ? users.filter(u => (u.full_name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q))
+        : users;
+      const matched = pool.slice(0, 40);
+      if (!matched.length) {
+        results.innerHTML = `<div class="lp-sup-search-hint">${q ? 'No customers found' : 'No customers yet'}</div>`;
         return;
       }
-      results.innerHTML = '<div class="lp-sup-search-hint">Searching…</div>';
-      _searchTimer = setTimeout(async () => {
-        try {
-          if (!_allUsers) {
-            const r = await fetch('/api/admin/users');
-            _allUsers = r.ok ? await r.json() : [];
-          }
-          const matched = _allUsers.filter(u =>
-            (u.full_name || '').toLowerCase().includes(q) ||
-            (u.email || '').toLowerCase().includes(q)
-          ).slice(0, 12);
-          if (matched.length === 0) {
-            results.innerHTML = '<div class="lp-sup-search-hint">No customers found</div>';
-            return;
-          }
-          results.innerHTML = matched.map(u => {
-            const name = (u.full_name || u.email || 'Unknown').replace(/"/g, '&quot;');
-            const email = (u.email || '').replace(/"/g, '&quot;');
-            return `<div class="lp-sup-search-row" data-uid="${u.id}" data-name="${name}" data-email="${email}">
-              <div class="lp-sup-search-name">${u.full_name || u.email || 'Unknown'}</div>
-              <div class="lp-sup-search-email">${u.email || ''}</div>
-            </div>`;
-          }).join('');
-          results.querySelectorAll('.lp-sup-search-row').forEach(row => {
-            row.addEventListener('click', () => {
-              const user = { id: row.dataset.uid, full_name: row.dataset.name, email: row.dataset.email };
-              newDiv.remove();
-              listView.style.display = 'flex';
-              _openAdminChatWith(user);
-            });
-          });
-        } catch (e) {
-          console.warn('[LP] customer search error:', e.message);
-          results.innerHTML = '<div class="lp-sup-search-hint">Search failed — try again</div>';
-        }
-      }, 350);
+      results.innerHTML = matched.map(u => {
+        const name  = (u.full_name || u.email || 'Unknown').replace(/"/g, '&quot;');
+        const email = (u.email || '').replace(/"/g, '&quot;');
+        const hasConv = _supportConvs.some(c => c.user_id === u.id);
+        return `<div class="lp-sup-search-row" data-uid="${u.id}" data-name="${name}" data-email="${email}">
+          <div class="lp-sup-search-name">${u.full_name || u.email || 'Unknown'}${hasConv ? ' <span style="color:#8DD63F;font-size:11px;font-weight:600">● chat</span>' : ''}</div>
+          <div class="lp-sup-search-email">${u.email || ''}</div>
+        </div>`;
+      }).join('');
+      results.querySelectorAll('.lp-sup-search-row').forEach(row => {
+        row.addEventListener('click', () => {
+          newDiv.remove();
+          listView.style.display = 'flex';
+          _openAdminChatWith({ id: row.dataset.uid, full_name: row.dataset.name, email: row.dataset.email });
+        });
+      });
+    };
+
+    // Load all users immediately — no typing required
+    fetch('/api/admin/users').then(r => r.json()).then(users => {
+      _allUsers = users.filter(u => u.account_type !== 'admin' && u.account_type !== 'staff');
+      _renderRows(_allUsers, '');
+    }).catch(() => {
+      results.innerHTML = '<div class="lp-sup-search-hint">Failed to load — try again</div>';
+    });
+
+    // Live-filter as admin types
+    newDiv.querySelector('.lp-sup-new-search').addEventListener('input', function () {
+      clearTimeout(_searchTimer);
+      const q = this.value;
+      _searchTimer = setTimeout(() => { if (_allUsers) _renderRows(_allUsers, q); }, 200);
     });
   }
 

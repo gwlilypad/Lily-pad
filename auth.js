@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-18-D14';  // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-18-D15';  // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -5061,17 +5061,21 @@
     if (uid) _fetchAndCacheRole(uid);
     else if (role) { _lpCurrentRole = role; localStorage.setItem('lp_role_cache', role); }
 
-    // Admin/staff must not enter the customer app.
-    // Clear their session and show the sign-in gate with a portal link so
-    // the root URL always stays as the customer landing/sign-in page.
+    // Admin/staff: hide the customer gate and surface only the admin panel.
+    // Skip map navigation entirely — the guard loop handles admin panel injection.
     if (role === 'admin' || role === 'staff') {
-      console.log('[Lily Pad] afterAuth: admin/staff detected — clearing session, showing gate');
-      clearSession();
-      showGate();
-      const errEl = document.getElementById('login-error');
-      if (errEl) errEl.innerHTML =
-        'Admin & Staff accounts must sign in through the ' +
-        '<a href="/staff-login" style="color:#8DD63F;font-weight:700;text-decoration:underline">Staff & Admin Portal</a>.';
+      console.log('[Lily Pad] afterAuth: admin/staff — loading admin panel');
+      hideGate();
+      const meta2 = (session && session.user_metadata) ||
+                    (session && session.user && session.user.user_metadata) || {};
+      const email2 = (session && session.email) ||
+                     (session && session.user && session.user.email) || '';
+      const fullN2 = (meta2.full_name || meta2.name || '').trim();
+      const [fn2 = '', ...lnParts2] = fullN2.split(' ');
+      if (fn2 || email2) writeUserToNativeState(fn2, lnParts2.join(' '), email2);
+      startGuard();
+      injectPullDownSignOut();
+      updateProfileDisplay();
       return;
     }
 

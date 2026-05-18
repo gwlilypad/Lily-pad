@@ -513,9 +513,13 @@
 
       errEl.textContent = ''; succEl.textContent = '';
 
-      if (!password || !confirm)       { errEl.textContent = 'Both fields are required.'; return; }
-      if (password.length < 8)         { errEl.textContent = 'Password must be at least 8 characters.'; return; }
-      if (password !== confirm)        { errEl.textContent = 'Passwords do not match.'; return; }
+      if (!password || !confirm)          { errEl.textContent = 'Both fields are required.'; return; }
+      if (password.length < 8)           { errEl.textContent = 'Password must be at least 8 characters.'; return; }
+      if (!/[A-Z]/.test(password))       { errEl.textContent = 'Password must include at least one uppercase letter.'; return; }
+      if (!/[a-z]/.test(password))       { errEl.textContent = 'Password must include at least one lowercase letter.'; return; }
+      if (!/[0-9]/.test(password))       { errEl.textContent = 'Password must include at least one number.'; return; }
+      if (!/[^A-Za-z0-9]/.test(password)){ errEl.textContent = 'Password must include at least one special character (!@#$%^&* etc).'; return; }
+      if (password !== confirm)           { errEl.textContent = 'Passwords do not match.'; return; }
       if (!_inviteAccessToken)         { errEl.textContent = 'Invite token missing — please click the link in your email again.'; return; }
 
       btn.disabled = true; btn.textContent = 'Activating…';

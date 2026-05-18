@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-18-D12';  // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-18-D13';  // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -116,6 +116,29 @@
   // numeric-id item from every lilypad.* localStorage key.
   // Also force-clears keys known to hold fake staff/customer demo data.
   (function _nukeFakeLocalStorage() {
+    // Support-chat keys the native bundle uses to cache demo conversations.
+    // We always wipe these to [] so the bundle never renders stale/demo chat data.
+    const SUPPORT_KEYS = new Set([
+      'lilypad.support.tickets',
+      'lilypad.support.tickets.v1',
+      'lilypad.support.emails',
+      'lilypad.support.emails.v1',
+      'lilypad.support.userId.v1',
+    ]);
+    // Wipe on load
+    for (const key of SUPPORT_KEYS) {
+      Storage.prototype.setItem.call(localStorage, key, '[]');
+    }
+    // Intercept all future writes — keep them permanently empty
+    const _origSetForSupport = Storage.prototype.setItem;
+    Storage.prototype.setItem = function(key, value) {
+      if (SUPPORT_KEYS.has(key)) {
+        _origSetForSupport.call(this, key, '[]');
+        return;
+      }
+      _origSetForSupport.call(this, key, value);
+    };
+
     const FORCE_EMPTY_KEYS = [
       'lilypad.admin.users.v1',
       'lilypad.staff.v1',

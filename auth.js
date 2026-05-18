@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-18-D20';  // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-18-D21';  // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -1056,6 +1056,25 @@
     return null;
   }
 
+  // ── Open / close the Account pull-down by clicking the bottom nav tab ─────
+  // Clicking the "Account" tab in the bottom nav toggles the pull-down sheet.
+  // Targets the instance whose bounding rect is in the bottom 20 % of the screen.
+  function _openAccountPullDown() {
+    const vh = window.innerHeight;
+    const tab = Array.from(document.querySelectorAll('*')).find(el => {
+      if (el.childElementCount > 3) return false;
+      if (!/^Account$/.test(el.textContent.trim())) return false;
+      const r = el.getBoundingClientRect();
+      return r.top > vh * 0.78 && r.width > 0 && r.height > 0;
+    });
+    if (tab) {
+      const btn = tab.closest('button,[role="button"]') || tab;
+      btn.click();
+      return true;
+    }
+    return false;
+  }
+
   function updateProfileDisplay() {
     const data = getUserData();
     if (!data) return;
@@ -1835,6 +1854,56 @@
     console.log('[Lily Pad] Sign-out injected, container children:', menuCard.children.length);
   }
 
+  // ── Pull-down menu item wiring ────────────────────────────────────────────
+  // Each item in the Account pull-down now opens a dedicated full-screen page
+  // with its own URL hash instead of keeping the sheet open on top.
+  // Back button on those pages returns the user to the pull-down.
+  const LP_PD_ITEMS = [
+    { re: /^My Account$/i,       page: 'driveraccount', hash: 'account'  },
+    { re: /^My Bookings$/i,      page: 'bookings',      hash: 'bookings' },
+    { re: /^Saved Spots$/i,      page: 'find',          hash: 'saved'    },
+    { re: /^Customer Service$/i, page: 'support',       hash: 'support'  },
+  ];
+
+  function _wirePullDownMenuItems() {
+    const pd = _findPullDownContainer();
+    if (!pd) return;
+
+    LP_PD_ITEMS.forEach(item => {
+      // Find the text leaf for this menu label
+      const labelEl = Array.from(pd.querySelectorAll('*')).find(
+        el => el.childElementCount === 0 && item.re.test(el.textContent.trim())
+      );
+      if (!labelEl) return;
+
+      // Walk up to the outermost direct child of pd (the whole row)
+      let row = labelEl;
+      while (row.parentElement && row.parentElement !== pd) row = row.parentElement;
+      if (!row || row === pd || row.dataset.lpPdWired) return;
+
+      row.dataset.lpPdWired = '1';
+      row.addEventListener('click', e => {
+        e.stopPropagation();
+        e.preventDefault();
+        // Record navigation context in history state so back buttons can detect it
+        history.pushState({ lpPullDown: true }, '', location.pathname + '#' + item.hash);
+        // Toggle the pull-down shut via its bottom-nav tab
+        _openAccountPullDown();
+        // Navigate to the target page after the pull-down animation (~350 ms)
+        setTimeout(() => {
+          if (!callGoTo(item.page)) {
+            _lpGoToFn = null;
+            const g = lpGetGoTo();
+            if (g) g(item.page);
+          }
+        }, 350);
+        console.log('[Lily Pad] Pull-down nav:', item.hash, '→', item.page);
+      }, true /* capture phase — fires before native handlers */);
+
+      console.log('[Lily Pad] Pull-down item wired:', item.hash);
+    });
+  }
+
   // ── Fake spot coordinates baked into the read-only bundle (ar[] array) ───
   // Used to identify and remove hardcoded demo markers from the Leaflet map.
   const FAKE_LATLNGS = new Set([
@@ -2226,7 +2295,16 @@
     btn.addEventListener('click', () => {
       _lpGoToFn = null; // invalidate cache — context may have been recreated
       const fresh = lpGetGoTo();
-      if (fresh) fresh(target);
+      // If the user arrived here from the pull-down menu, going "back" means
+      // returning to the map and then re-opening the Account pull-down.
+      const fromPullDown = !!(history.state && history.state.lpPullDown);
+      history.replaceState(null, '', location.pathname); // clear the #hash
+      if (fromPullDown) {
+        if (fresh) fresh('find');
+        setTimeout(_openAccountPullDown, 550);
+      } else {
+        if (fresh) fresh(target);
+      }
       setTimeout(removeDeepBackBtn, 300);
     });
 
@@ -4983,6 +5061,7 @@
 
     hideUnwantedElements();
     injectPullDownSignOut();
+    _wirePullDownMenuItems();
     updateProfileDisplay();
     updatePhotoFullscreen();
     scheduleDeepBack();

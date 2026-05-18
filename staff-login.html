@@ -174,36 +174,26 @@
       line-height: 1.4;
     }
 
-    /* ── Divider + activate link ── */
-    .activate-row {
+    /* ── Back button (top-left of panel) ── */
+    .panel-back {
       display: flex;
       align-items: center;
-      gap: 12px;
-      margin-top: 22px;
-    }
-
-    .activate-row::before,
-    .activate-row::after {
-      content: '';
-      flex: 1;
-      height: 1px;
-      background: rgba(255,255,255,0.08);
-    }
-
-    .activate-link {
+      gap: 6px;
       background: none;
       border: none;
-      color: rgba(141,214,63,0.8);
+      color: rgba(255,255,255,0.5);
       font-size: 13px;
       font-weight: 600;
       cursor: pointer;
       font-family: inherit;
-      white-space: nowrap;
-      transition: color 0.15s;
       padding: 0;
+      margin-bottom: 20px;
+      transition: color 0.15s;
     }
 
-    .activate-link:hover { color: #8DD63F; }
+    .panel-back:hover { color: #fff; }
+
+    .panel-back svg { flex-shrink: 0; }
 
     /* ── Approved notice box ── */
     .approved-note {
@@ -325,14 +315,15 @@
         <div id="si-success" class="msg-success"></div>
 
         <button class="btn-primary" id="si-btn" onclick="handleSignin()">Sign in</button>
-
-        <div class="activate-row">
-          <button class="activate-link" onclick="showPanel('panel-activate')">Activate your account</button>
-        </div>
+        <button class="btn-ghost" onclick="showPanel('panel-activate')">Activate your account</button>
       </div>
 
       <!-- ── Panel: Activate Account ── -->
       <div id="panel-activate" class="panel">
+        <button class="panel-back" onclick="showPanel('panel-signin')">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Back
+        </button>
         <div class="panel-title">Activate account.</div>
         <div class="panel-sub">Set up your staff access. Your email must be pre-approved.</div>
 
@@ -362,7 +353,6 @@
         <div id="ac-success" class="msg-success"></div>
 
         <button class="btn-primary" id="ac-btn" onclick="handleActivate()">Activate &amp; Send Confirmation</button>
-        <button class="btn-ghost" onclick="showPanel('panel-signin')">Back to sign in</button>
       </div>
 
       <!-- ── Panel: Check Email ── -->

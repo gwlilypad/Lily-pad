@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "n73vE3D2k1S3kENhRbGfK"
+uri = "file://zipFile.zip"
+type = "unspecified"
+title = "lilypad-build.zip (compiled bundle only)"

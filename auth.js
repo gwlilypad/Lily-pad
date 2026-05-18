@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-18-D9';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-18-D10';  // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -3622,7 +3622,8 @@
     btn.addEventListener('click', () => { window.location.href = '/staff-login?activate=1'; });
     card.appendChild(btn);
 
-    // ← Back button fixed top-left (same style as other back buttons)
+    // ← Back button — injected at the TOP of the card so it sits inside
+    // the interface on both mobile and desktop (not fixed to viewport)
     const back = document.createElement('button');
     back.id = 'lp-choose-role-back';
     back.innerHTML =
@@ -3631,24 +3632,21 @@
       'stroke-linejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>' +
       '<span style="font-size:13px;font-weight:600;font-family:\'DM Sans\',sans-serif">Back</span>';
     back.setAttribute('style', [
-      'position:fixed',
-      _lpAppInset(),
-      'z-index:9999',
       'display:flex',
       'align-items:center',
       'gap:5px',
-      'background:rgba(14,31,64,0.82)',
-      'color:#fff',
+      'background:rgba(255,255,255,0.08)',
+      'color:rgba(255,255,255,0.85)',
       'border:none',
       'border-radius:20px',
       'padding:6px 14px 6px 10px',
       'cursor:pointer',
-      'box-shadow:0 2px 8px rgba(0,0,0,0.28)',
-      'backdrop-filter:blur(4px)',
-      '-webkit-backdrop-filter:blur(4px)',
+      'margin:12px 0 4px 12px',
+      'font-family:\'DM Sans\',sans-serif',
+      'align-self:flex-start',
     ].join(';'));
     back.addEventListener('click', () => { history.back(); });
-    document.body.appendChild(back);
+    card.insertBefore(back, card.firstChild);
 
     console.log('[Lily Pad] _injectChooseRoleActivateBtn: injected on Choose your role screen');
   }

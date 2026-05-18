@@ -1,5 +1,5 @@
 (function () {
-  const LP_BUILD = 'LP-2026-05-18-D4';   // bump each deploy to confirm cache bust
+  const LP_BUILD = 'LP-2026-05-18-D5';   // bump each deploy to confirm cache bust
   console.log('[Lily Pad] auth.js build:', LP_BUILD);
 
   const SUPABASE_URL     = '%%SUPABASE_URL%%'     || window.__SUPABASE_URL__;
@@ -3559,6 +3559,92 @@
     });
   }
 
+  // ── Inject "Activate your account" button on native "Choose your role" screen ──
+  // The compiled bundle shows a "Choose your role" modal with Staff / Admin buttons
+  // during onboarding. We intercept it and add a link to the staff portal.
+  function _injectChooseRoleActivateBtn() {
+    // Detect the screen by looking for a visible heading with "Choose your role"
+    const heading = Array.from(document.querySelectorAll('h1,h2,h3,p,span,div'))
+      .find(el =>
+        el.childElementCount === 0 &&
+        el.getBoundingClientRect().width > 0 &&
+        /^choose your role$/i.test(el.textContent.trim())
+      );
+
+    const onPage   = !!heading;
+    const existing = document.getElementById('lp-choose-role-activate');
+    const backBtn  = document.getElementById('lp-choose-role-back');
+
+    // Clean up if we've navigated away
+    if (!onPage) {
+      if (existing) existing.remove();
+      if (backBtn)  backBtn.remove();
+      return;
+    }
+    if (existing) return; // already injected
+
+    // Walk up from the heading to find the card that holds the Staff/Admin buttons
+    let card = heading.parentElement;
+    for (let i = 0; i < 6 && card; i++) {
+      if (card.querySelectorAll('button').length >= 2) break;
+      card = card.parentElement;
+    }
+    if (!card) return;
+
+    // "Activate your account" ghost button — appended after existing role buttons
+    const btn = document.createElement('button');
+    btn.id = 'lp-choose-role-activate';
+    btn.textContent = 'Activate your account';
+    btn.setAttribute('style', [
+      'display:block',
+      'width:calc(100% - 32px)',
+      'margin:10px 16px 20px',
+      'padding:15px',
+      'background:rgba(255,255,255,0.07)',
+      'color:rgba(255,255,255,0.8)',
+      'border:1px solid rgba(255,255,255,0.15)',
+      'border-radius:14px',
+      'font-size:15px',
+      'font-weight:600',
+      'font-family:inherit',
+      'cursor:pointer',
+      'text-align:center',
+      'box-sizing:border-box',
+    ].join(';'));
+    btn.addEventListener('click', () => { window.location.href = '/staff-login'; });
+    card.appendChild(btn);
+
+    // ← Back button fixed top-left (same style as other back buttons)
+    const back = document.createElement('button');
+    back.id = 'lp-choose-role-back';
+    back.innerHTML =
+      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" ' +
+      'stroke="currentColor" stroke-width="2.5" stroke-linecap="round" ' +
+      'stroke-linejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>' +
+      '<span style="font-size:13px;font-weight:600;font-family:\'DM Sans\',sans-serif">Back</span>';
+    back.setAttribute('style', [
+      'position:fixed',
+      _lpAppInset(),
+      'z-index:9999',
+      'display:flex',
+      'align-items:center',
+      'gap:5px',
+      'background:rgba(14,31,64,0.82)',
+      'color:#fff',
+      'border:none',
+      'border-radius:20px',
+      'padding:6px 14px 6px 10px',
+      'cursor:pointer',
+      'box-shadow:0 2px 8px rgba(0,0,0,0.28)',
+      'backdrop-filter:blur(4px)',
+      '-webkit-backdrop-filter:blur(4px)',
+    ].join(';'));
+    back.addEventListener('click', () => { history.back(); });
+    document.body.appendChild(back);
+
+    console.log('[Lily Pad] _injectChooseRoleActivateBtn: injected on Choose your role screen');
+  }
+
   function injectAdminPanel() {
     if (!_isAdminOrStaff()) return;
     if (!_isAdminView()) { document.getElementById('lp-admin-panel')?.remove(); return; }
@@ -4653,6 +4739,7 @@
     enlargePadCards();
     injectPadDrawEdit();
     injectAllPhotoOverlays();
+    _injectChooseRoleActivateBtn();
     injectAdminPanel();
     injectSupportChat();
     injectSupportNavBadge();

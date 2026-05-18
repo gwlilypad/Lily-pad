@@ -495,6 +495,19 @@ app.patch('/api/profile/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Spots: list all active pads ───────────────────────────────────────────────
+app.get('/api/spots', async (req, res) => {
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/spots?select=*&order=created_at.desc`,
+      { headers: SVC_HEADERS }
+    );
+    const data = await r.json();
+    if (!r.ok) return res.status(r.status).json({ error: data });
+    res.json(Array.isArray(data) ? data : []);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Saved spots: list ──────────────────────────────────────────────────────────
 app.get('/api/saved-spots/:userId', async (req, res) => {
   try {

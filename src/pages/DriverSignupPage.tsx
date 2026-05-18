@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useApp } from "@/context/AppContext";
+import { useAuth } from "@/context/AuthContext";
 import SharedHeader from "@/components/SharedHeader";
 import NavBar from "@/components/NavBar";
 import PasswordRequirements, { validatePassword } from "@/components/PasswordRequirements";
@@ -17,6 +18,7 @@ const DR_PW_IDX = 5;
 
 export default function DriverSignupPage() {
   const { goTo, setState: setAppState } = useApp();
+  const { signUp } = useAuth();
   const [cur, setCur] = useState(0);
   const [ans, setAns] = useState<Record<number, string>>({});
   const [inputVal, setInputVal] = useState("");
@@ -109,7 +111,11 @@ export default function DriverSignupPage() {
               </div>
               <div className="cta-area">
                 <p className="cta-nudge">Ready to park?</p>
-                <button className="cta-btn" style={{ background: "#8DD63F", color: "#0E1F40", boxShadow: "0 2px 12px rgba(141,214,63,0.3)" }} onClick={() => { setLocked(true); goTo("find"); }}>Find a spot</button>
+                <button className="cta-btn" style={{ background: "#8DD63F", color: "#0E1F40", boxShadow: "0 2px 12px rgba(141,214,63,0.3)" }} onClick={async () => {
+                  setLocked(true);
+                  await signUp(ans[2] || "", ans[5] || "", `${ans[0] || ""} ${ans[1] || ""}`.trim(), "driver");
+                  goTo("find");
+                }}>Find a spot</button>
               </div>
             </>
           )}

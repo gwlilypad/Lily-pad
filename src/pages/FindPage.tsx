@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useApp } from "@/context/AppContext";
+import { useAuth } from "@/context/AuthContext";
 import {
   loadTickets, mutateTickets, subscribeTickets,
   getOrCreateUserId, makeId, formatSupportTime, ticketLastPreview,
@@ -1141,6 +1142,28 @@ try {
 
 export default function FindPage() {
   const { goTo, state, setState: setAppState } = useApp();
+  const { profile, signOut: authSignOut } = useAuth();
+  const [spots, setSpots] = useState(SPOTS);
+
+  useEffect(() => {
+    fetch("/api/spots")
+      .then(r => r.ok ? r.json() : null)
+      .then((data: unknown) => {
+        if (Array.isArray(data) && data.length > 0) {
+          const mapped = (data as Record<string, unknown>[]).map(s => ({
+            id:       Number(s.id),
+            price:    s.price_per_hr ? `$${s.price_per_hr}/hr` : "$4/hr",
+            addr:     String(s.address || s.addr || "Houston, TX"),
+            meta:     `${s.pad_type || "Driveway"} · nearby`,
+            lat:      Number(s.lat),
+            lng:      Number(s.lng),
+            featured: Boolean(s.featured),
+          }));
+          setSpots(mapped);
+        }
+      })
+      .catch(() => { /* keep static SPOTS fallback */ });
+  }, []);
   const [filter, setFilter] = useState("All");
   const [suggestions, setSuggestions] = useState<NominatimResult[]>([]);
   const [sugOpen, setSugOpen] = useState(false);
@@ -1214,9 +1237,9 @@ export default function FindPage() {
   }, [supportView, activeTicketId, supportTickets]);
 
   function currentSupportIdentity() {
-    const first = state.drAns[0] || state.suAns[0] || "";
-    const last  = state.drAns[1] || state.suAns[1] || "";
-    const email = state.drAns[2] || state.suAns[2] || "";
+    const first = profile?.first_name || state.drAns[0] || state.suAns[0] || "";
+    const last  = profile?.last_name  || state.drAns[1] || state.suAns[1] || "";
+    const email = profile?.email      || state.drAns[2] || state.suAns[2] || "";
     const fullName = `${first} ${last}`.trim();
     return {
       userName: fullName || "Guest",
@@ -1395,7 +1418,7 @@ export default function FindPage() {
     acctOpenRef.current = shouldOpen;
   }
 
-  const filtered = SPOTS.filter(s => filter === "All" || s.meta.toLowerCase().includes(filter.toLowerCase()));
+  const filtered = spots.filter(s => filter === "All" || s.meta.toLowerCase().includes(filter.toLowerCase()));
 
   // nearbyOrigin: "Search here" map center > searched pin > GPS > city default
   const nearbyOrigin = useMemo<[number, number]>(() =>
@@ -1403,7 +1426,7 @@ export default function FindPage() {
   [mapSearchOrigin, searchPin, userPos]);
   const nearbySpots = useMemo(() => {
     if (!nearbyMode) return [];
-    const sorted = [...SPOTS].sort(
+    const sorted = [...spots].sort(
       (a, b) => haversineKm(a.lat, a.lng, nearbyOrigin[0], nearbyOrigin[1]) - haversineKm(b.lat, b.lng, nearbyOrigin[0], nearbyOrigin[1])
     );
     const withinRadius = sorted.filter(s => haversineKm(s.lat, s.lng, nearbyOrigin[0], nearbyOrigin[1]) * 1000 <= nearbyRadius);
@@ -1414,7 +1437,7 @@ export default function FindPage() {
 
   const viewportSpots = useMemo(() => {
     if (!mapBounds) return [];
-    return SPOTS.filter(s => {
+    return spots.filter(s => {
       if (filter !== "All" && !s.meta.toLowerCase().includes(filter.toLowerCase())) return false;
       return mapBounds.contains([s.lat, s.lng]);
     }).sort((a, b) => {
@@ -1426,7 +1449,7 @@ export default function FindPage() {
 
   const searchNearbySpots = useMemo(() => {
     if (!searchPin) return [];
-    return SPOTS
+    return spots
       .map(s => ({ ...s, _dist: haversineKm(s.lat, s.lng, searchPin.lat, searchPin.lng) }))
       .filter(s => s._dist <= 4.828)
       .sort((a, b) => a._dist - b._dist)
@@ -2084,7 +2107,7 @@ export default function FindPage() {
           pointerEvents: globeFading ? "none" : "auto",
         }}>
           <GlobeView
-            spots={SPOTS}
+            spots={spots}
             zoomTarget={globeZoomTarget}
             onZoomedIn={() => {
               // Mount map, start globe fade, then on next frames fade map in
@@ -2183,7 +2206,7 @@ export default function FindPage() {
               setAppState(s => ({ ...s, adminPreview: false, adminPreviewRole: null }));
               goTo("admin");
             } else {
-              goTo("home");
+              authSignOut().then(() => goTo("home"));
             }
           }}
           title={state.adminPreview ? "Back to admin" : "Back to home"}
@@ -3353,7 +3376,7 @@ export default function FindPage() {
                 >
                   {!state.profilePhotoUrl && (
                     <span style={{ fontSize: 30, fontWeight: 800, color: "#8DD63F", letterSpacing: -1 }}>
-                      {((state.drAns[0]?.[0] || "") + (state.drAns[1]?.[0] || "")).toUpperCase() || "·"}
+                      {((profile?.first_name?.[0] || state.drAns[0]?.[0] || "") + (profile?.last_name?.[0] || state.drAns[1]?.[0] || "")).toUpperCase() || "·"}
                     </span>
                   )}
                   <div style={{ position: "absolute", bottom: 0, right: 0, background: "#8DD63F", border: "2px solid #1a1a1f", width: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: "#0E1F40" }}>
@@ -3368,10 +3391,10 @@ export default function FindPage() {
               {/* Editable info */}
               <div style={{ background: "rgba(52,52,58,0.55)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 14, padding: "4px 14px" }}>
                 {([
-                  { label: "First name", value: state.drAns[0] || state.suAns[0] || "", onChange: (v: string) => setAcctField(0, v), placeholder: "First" },
-                  { label: "Last name",  value: state.drAns[1] || state.suAns[1] || "", onChange: (v: string) => setAcctField(1, v), placeholder: "Last" },
-                  { label: "Email",      value: state.drAns[2] || state.suAns[2] || "", onChange: (v: string) => setAcctField(2, v), placeholder: "you@email.com" },
-                  { label: "Phone",      value: state.drAns[3] || state.suAns[3] || "", onChange: (v: string) => setAcctField(3, v), placeholder: "(555) 123-4567" },
+                  { label: "First name", value: profile?.first_name || state.drAns[0] || state.suAns[0] || "", onChange: (v: string) => setAcctField(0, v), placeholder: "First" },
+                  { label: "Last name",  value: profile?.last_name  || state.drAns[1] || state.suAns[1] || "", onChange: (v: string) => setAcctField(1, v), placeholder: "Last" },
+                  { label: "Email",      value: profile?.email      || state.drAns[2] || state.suAns[2] || "", onChange: (v: string) => setAcctField(2, v), placeholder: "you@email.com" },
+                  { label: "Phone",      value: profile?.phone      || state.drAns[3] || state.suAns[3] || "", onChange: (v: string) => setAcctField(3, v), placeholder: "(555) 123-4567" },
                   ...(state.accountType === "renter" ? [{ label: "Vehicle", value: state.drAns[4] || "", onChange: (v: string) => setVehicle(v), placeholder: "Year Make Model" }] : []),
                 ]).map((f, i, arr) => (
                   <div key={f.label} style={{ display: "flex", flexDirection: "column", gap: 4, padding: "11px 0", borderBottom: i < arr.length - 1 ? "1px solid rgba(255,255,255,0.06)" : "none" }}>

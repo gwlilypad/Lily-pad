@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useApp } from "@/context/AppContext";
+import { useAuth } from "@/context/AuthContext";
 import SharedHeader from "@/components/SharedHeader";
 import NavBar from "@/components/NavBar";
 import PasswordRequirements, { validatePassword } from "@/components/PasswordRequirements";
@@ -16,6 +17,7 @@ const PW_IDX = 4;
 
 export default function SignupPage() {
   const { goTo, setState: setAppState } = useApp();
+  const { signUp } = useAuth();
   const [cur, setCur] = useState(0);
   const [ans, setAns] = useState<Record<number, string>>({});
   const [inputVal, setInputVal] = useState("");
@@ -172,7 +174,11 @@ export default function SignupPage() {
               </div>
               <div className="cta-area">
                 <p className="cta-nudge">Let's set up your lily pad.</p>
-                <button className="cta-btn" onClick={() => { setLocked(true); goTo("addpad"); }}>Continue</button>
+                <button className="cta-btn" onClick={async () => {
+                  setLocked(true);
+                  await signUp(ans[2] || "", ans[4] || "", `${ans[0] || ""} ${ans[1] || ""}`.trim(), "host");
+                  goTo("addpad");
+                }}>Continue</button>
               </div>
             </>
           )}

@@ -1,9 +1,23 @@
 import { useState, useRef, useEffect } from "react";
 import { useApp } from "@/context/AppContext";
-// Placeholder colours for the three photo-guide slides (real photos not yet uploaded)
-const frontalImg = "";
-const sideImg = "";
-const overheadImg = "";
+// SVG placeholder illustrations for the three photo-guide slides
+const makeParkingSVG = (label: string, color: string) => {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="390" height="472" viewBox="0 0 390 472">
+    <rect width="390" height="472" fill="#1a2744"/>
+    <rect x="60" y="280" width="270" height="140" rx="4" fill="#0d1a33"/>
+    <rect x="80" y="300" width="100" height="100" rx="2" fill="#243356"/>
+    <rect x="210" y="300" width="100" height="100" rx="2" fill="#243356"/>
+    <rect x="60" y="260" width="270" height="24" fill="#8DD63F" opacity="0.15"/>
+    <line x1="195" y1="260" x2="195" y2="420" stroke="#8DD63F" stroke-width="2" stroke-dasharray="6,4" opacity="0.4"/>
+    <rect x="60" y="420" width="270" height="8" rx="2" fill="#8DD63F" opacity="0.25"/>
+    <text x="195" y="230" font-family="DM Sans,sans-serif" font-size="13" font-weight="700" fill="${color}" text-anchor="middle" letter-spacing="3" opacity="0.9">${label.toUpperCase()}</text>
+    <text x="195" y="190" font-family="DM Sans,sans-serif" font-size="11" font-weight="500" fill="rgba(255,255,255,0.35)" text-anchor="middle">PARKING GUIDE PHOTO</text>
+  </svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+};
+const frontalImg  = makeParkingSVG("Frontal View",  "#8DD63F");
+const sideImg     = makeParkingSVG("Side View",     "#60A5FA");
+const overheadImg = makeParkingSVG("Overhead View", "#F59E0B");
 
 // ─── Data types ────────────────────────────────────────────────────────────────
 

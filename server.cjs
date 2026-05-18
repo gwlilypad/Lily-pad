@@ -414,10 +414,10 @@ app.post('/api/staff/invite', async (req, res) => {
 
   try {
     const now = new Date().toISOString();
-    // Build redirect URL — prefer the stable Replit public domain, fall back to Host header
+    // Build redirect URL — prefer explicit SITE_URL env var (set on Railway), fall back to Host header
     const redirectTo = process.env.SITE_URL
       ? `${process.env.SITE_URL.replace(/\/$/, '')}/staff-login`
-      : `https://${process.env.REPLIT_DEV_DOMAIN || req.get('host') || ''}/staff-login`;
+      : `https://${req.get('host') || ''}/staff-login`;
 
     // Supabase admin invite — creates the user and emails them an activation link
     const r = await fetch(`${SUPABASE_URL}/auth/v1/invite`, {

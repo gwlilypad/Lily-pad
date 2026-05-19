@@ -1562,6 +1562,12 @@ export default function AdminPage() {
               }}>
                 Admin
               </button>
+              <button onClick={() => { resetActivation(); setRole("staff"); setView("activate"); }} style={{
+                background: "none", border: "none", padding: "8px", cursor: "pointer",
+                color: GREEN, fontFamily: '"DM Sans",sans-serif', fontSize: 13, fontWeight: 700, textAlign: "center",
+              }}>
+                New here? Activate your account →
+              </button>
             </div>
           </div>
         </div>

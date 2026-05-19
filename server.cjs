@@ -476,21 +476,7 @@ app.post('/api/staff/forgot-password', async (req, res) => {
       }
     }
 
-    // Send Supabase password reset email
-    const redirectTo = process.env.SITE_URL
-      ? `${process.env.SITE_URL.replace(/\/$/, '')}/staff-login`
-      : `https://${req.get('host') || ''}/staff-login`;
-
-    const resetRes = await fetch(`${SUPABASE_URL}/auth/v1/recover`, {
-      method: 'POST',
-      headers: { 'apikey': SUPABASE_ANON, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: emailLower, redirect_to: redirectTo }),
-    });
-    if (!resetRes.ok) {
-      const d = await resetRes.json().catch(() => ({}));
-      return res.status(resetRes.status).json({ error: d.error_description || d.message || 'Failed to send reset email.' });
-    }
-    console.log(`[Staff ForgotPassword] Reset link sent to ${emailLower}`);
+    console.log(`[Staff ForgotPassword] Email verified for reset: ${emailLower}`);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

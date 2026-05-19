@@ -1182,7 +1182,14 @@ export default function AdminPage() {
   const [forgotOpen, setForgotOpen] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotError, setForgotError] = useState("");
-  const [forgotSent, setForgotSent] = useState(false);
+  const [forgotStep, setForgotStep] = useState<"email" | "otp" | "password" | "done">("email");
+  const [forgotOtp, setForgotOtp] = useState("");
+  const [forgotOtpError, setForgotOtpError] = useState("");
+  const [forgotNewPassword, setForgotNewPassword] = useState("");
+  const [forgotNewPasswordError, setForgotNewPasswordError] = useState("");
+  const [forgotNewPasswordFocus, setForgotNewPasswordFocus] = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
+  function closeForgot() { setForgotOpen(false); setForgotStep("email"); setForgotEmail(""); setForgotError(""); setForgotOtp(""); setForgotOtpError(""); setForgotNewPassword(""); setForgotNewPasswordError(""); setForgotLoading(false); }
 
   // Persist admin users + login flag.
   useEffect(() => {
@@ -1256,9 +1263,7 @@ export default function AdminPage() {
     setStaffAuthAction(null);
     setStaffAuthPassword("");
     setStaffAuthError("");
-    setForgotOpen(false);
-    setForgotEmail("");
-    setForgotError("");
+    closeForgot();
     setSelectedTicketId(null);
     setSelectedEmailId(null);
     setAgentReplyDraft("");
@@ -1277,13 +1282,12 @@ export default function AdminPage() {
     setResolveSubmitPassword("");
     setApprovePassword("");
     setApproveError("");
-    setForgotSent(false);
   }
 
   async function handleForgotSubmit() {
     const e = forgotEmail.trim().toLowerCase();
     if (!e) { setForgotError("Enter your email address."); return; }
-    setForgotError("");
+    setForgotError(""); setForgotLoading(true);
     try {
       const r = await fetch("/api/staff/forgot-password", {
         method: "POST",
@@ -1292,9 +1296,11 @@ export default function AdminPage() {
       });
       const d = await r.json();
       if (!r.ok) { setForgotError(d.error || "Something went wrong. Try again."); return; }
-      setForgotSent(true);
-      setToast(`Reset link sent to ${e}`);
+      const { error: otpErr } = await supabase.auth.signInWithOtp({ email: e, options: { shouldCreateUser: false } });
+      if (otpErr) { setForgotError(otpErr.message || "Failed to send code. Try again."); return; }
+      setForgotStep("otp");
     } catch { setForgotError("Network error. Try again."); }
+    finally { setForgotLoading(false); }
   }
 
   function updateUser(id: number, patch: Partial<MockUser>) {
@@ -1625,7 +1631,7 @@ export default function AdminPage() {
             </button>
             <button
               type="button"
-              onClick={() => { setForgotEmail(email); setForgotError(""); setForgotSent(false); setForgotOpen(true); }}
+              onClick={() => { setForgotEmail(email); setForgotError(""); setForgotStep("email"); setForgotOpen(true); }}
               style={{ background: "none", border: "none", textAlign: "center", fontSize: 12, color: "rgba(255,255,255,0.55)", margin: 0, cursor: "pointer", fontFamily: '"DM Sans", sans-serif', textDecoration: "underline", textUnderlineOffset: 3 }}
             >
               Forgot password?
@@ -3111,45 +3117,112 @@ export default function AdminPage() {
       })()}
 
       {forgotOpen && (
-        <div onClick={() => setForgotOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(14,31,64,0.65)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: "#142A52", borderRadius: 18, padding: 22, width: "100%", maxWidth: 380, fontFamily: '"DM Sans",sans-serif', boxShadow: "0 12px 40px rgba(0,0,0,0.55)", border: "1px solid rgba(255,255,255,0.08)" }}>
-            <div style={{ marginBottom: 14 }}>
+        <div onClick={closeForgot} style={{ position: "fixed", inset: 0, background: "rgba(14,31,64,0.65)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "#142A52", borderRadius: 18, padding: 22, width: "100%", maxWidth: 380, fontFamily: '"DM Sans",sans-serif', boxShadow: "0 12px 40px rgba(0,0,0,0.55)", border: "1px solid rgba(255,255,255,0.08)", display: "flex", flexDirection: "column", gap: 14 }}>
+            <div>
               <p style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.12em", textTransform: "uppercase", margin: 0 }}>Password reset</p>
-              <p style={{ fontSize: 17, fontWeight: 800, color: "#fff", margin: "4px 0 0", letterSpacing: "-0.02em" }}>Forgot your password?</p>
-              <p style={{ fontSize: 12.5, color: "rgba(255,255,255,0.62)", margin: "8px 0 0", lineHeight: 1.5 }}>
-                Enter your work email. If it matches an active staff or admin account, we will send a reset link.
+              <p style={{ fontSize: 17, fontWeight: 800, color: "#fff", margin: "4px 0 0", letterSpacing: "-0.02em" }}>
+                {forgotStep === "done" ? "Password updated" : forgotStep === "password" ? "Create new password" : forgotStep === "otp" ? "Enter your code" : "Forgot your password?"}
               </p>
             </div>
-            {forgotSent ? (
-              <div style={{ background: "rgba(141,214,63,0.12)", border: "1px solid rgba(141,214,63,0.32)", borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
-                <p style={{ color: GREEN, fontSize: 12.5, fontWeight: 700, margin: 0 }}>Reset link sent</p>
-                <p style={{ color: "rgba(255,255,255,0.72)", fontSize: 12, margin: "4px 0 0", lineHeight: 1.5 }}>
-                  Check {forgotEmail.trim().toLowerCase()} for a link to set a new password. The link expires in 30 minutes.
-                </p>
-              </div>
-            ) : (
-              <div style={{ marginBottom: 12 }}>
-                <p style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,0.55)", letterSpacing: "0.10em", textTransform: "uppercase", margin: "0 0 6px" }}>Work email</p>
+
+            {forgotStep === "done" ? (
+              <>
+                <div style={{ background: "rgba(141,214,63,0.12)", border: "1px solid rgba(141,214,63,0.32)", borderRadius: 12, padding: "12px 14px" }}>
+                  <p style={{ color: GREEN, fontSize: 12.5, fontWeight: 700, margin: 0 }}>Password updated</p>
+                  <p style={{ color: "rgba(255,255,255,0.72)", fontSize: 12, margin: "4px 0 0", lineHeight: 1.5 }}>Your password has been changed. You can now sign in with your new password.</p>
+                </div>
+                <button onClick={closeForgot} style={{ width: "100%", padding: "12px", borderRadius: 100, border: "none", background: GREEN, color: NAVY, fontWeight: 800, fontSize: 13, cursor: "pointer", fontFamily: '"DM Sans",sans-serif' }}>Sign in →</button>
+              </>
+            ) : forgotStep === "password" ? (
+              <>
+                <div style={{ background: "rgba(255,255,255,0.05)", borderRadius: 10, padding: "10px 14px" }}>
+                  <p style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.10em", textTransform: "uppercase", margin: 0 }}>Account email</p>
+                  <p style={{ fontSize: 14, fontWeight: 700, color: "#fff", margin: "3px 0 0" }}>{forgotEmail.trim().toLowerCase()}</p>
+                </div>
                 <input
-                  type="email"
-                  value={forgotEmail}
-                  onChange={e => { setForgotEmail(e.target.value); if (forgotError) setForgotError(""); }}
-                  onKeyDown={e => { if (e.key === "Enter") handleForgotSubmit(); }}
+                  type="password"
+                  placeholder="New password (min. 8 chars)"
+                  value={forgotNewPassword}
                   autoFocus
-                  placeholder="you@lilypad.com"
-                  style={{ width: "100%", padding: "11px 14px", borderRadius: 10, background: "rgba(255,255,255,0.05)", border: `1.5px solid ${forgotError ? "#ef4444" : "rgba(255,255,255,0.10)"}`, color: "#fff", fontSize: 14, fontFamily: '"DM Sans",sans-serif', outline: "none", boxSizing: "border-box" }}
+                  onChange={e => { setForgotNewPassword(e.target.value); setForgotNewPasswordError(""); }}
+                  onFocus={() => setForgotNewPasswordFocus(true)}
+                  onBlur={() => setForgotNewPasswordFocus(false)}
+                  style={{ width: "100%", padding: "12px 14px", borderRadius: 10, background: "rgba(255,255,255,0.05)", border: `1.5px solid ${forgotNewPasswordError ? "#ef4444" : forgotNewPasswordFocus ? GREEN : "rgba(255,255,255,0.10)"}`, color: "#fff", fontSize: 14, fontFamily: '"DM Sans",sans-serif', outline: "none", boxSizing: "border-box" }}
                 />
-                {forgotError && <p style={{ color: "#ef4444", fontSize: 11.5, fontWeight: 600, margin: "6px 0 0" }}>{forgotError}</p>}
-              </div>
+                {forgotNewPasswordError && <p style={{ color: "#ef4444", fontSize: 11.5, fontWeight: 600, margin: 0 }}>{forgotNewPasswordError}</p>}
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={closeForgot} style={{ flex: 1, padding: "12px", borderRadius: 100, border: "1px solid rgba(255,255,255,0.22)", background: "transparent", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: '"DM Sans",sans-serif' }}>Cancel</button>
+                  <button
+                    disabled={!forgotNewPassword.trim() || forgotLoading}
+                    onClick={async () => {
+                      if (forgotNewPassword.trim().length < 8) { setForgotNewPasswordError("Password must be at least 8 characters."); return; }
+                      setForgotLoading(true); setForgotNewPasswordError("");
+                      try {
+                        const { error: pwErr } = await supabase.auth.updateUser({ password: forgotNewPassword });
+                        if (pwErr) { setForgotNewPasswordError(pwErr.message || "Failed to update password."); return; }
+                        setForgotStep("done");
+                      } catch { setForgotNewPasswordError("Network error. Try again."); }
+                      finally { setForgotLoading(false); }
+                    }}
+                    style={{ flex: 1, padding: "12px", borderRadius: 100, border: "none", background: !forgotNewPassword.trim() || forgotLoading ? "rgba(141,214,63,0.40)" : GREEN, color: NAVY, fontWeight: 800, fontSize: 13, cursor: !forgotNewPassword.trim() || forgotLoading ? "default" : "pointer", fontFamily: '"DM Sans",sans-serif' }}
+                  >{forgotLoading ? "Updating…" : "Set password"}</button>
+                </div>
+              </>
+            ) : forgotStep === "otp" ? (
+              <>
+                <p style={{ fontSize: 13, color: "rgba(255,255,255,0.65)", margin: 0, lineHeight: 1.5 }}>Enter the code sent to <strong style={{ color: "#fff" }}>{forgotEmail.trim().toLowerCase()}</strong></p>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="Enter code"
+                  value={forgotOtp}
+                  autoFocus
+                  onChange={e => { setForgotOtp(e.target.value.replace(/\D/g, "")); setForgotOtpError(""); }}
+                  style={{ width: "100%", padding: "12px 14px", borderRadius: 10, background: "rgba(255,255,255,0.05)", border: `1.5px solid ${forgotOtpError ? "#ef4444" : "rgba(255,255,255,0.10)"}`, color: "#fff", fontSize: 22, fontWeight: 700, fontFamily: '"DM Sans",sans-serif', outline: "none", boxSizing: "border-box", textAlign: "center", letterSpacing: "0.20em" }}
+                />
+                {forgotOtpError && <p style={{ color: "#ef4444", fontSize: 11.5, fontWeight: 600, margin: 0 }}>{forgotOtpError}</p>}
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={() => setForgotStep("email")} style={{ flex: 1, padding: "12px", borderRadius: 100, border: "1px solid rgba(255,255,255,0.22)", background: "transparent", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: '"DM Sans",sans-serif' }}>← Back</button>
+                  <button
+                    disabled={!forgotOtp.trim() || forgotLoading}
+                    onClick={async () => {
+                      setForgotLoading(true); setForgotOtpError("");
+                      try {
+                        const { error: vErr } = await supabase.auth.verifyOtp({ email: forgotEmail.trim().toLowerCase(), token: forgotOtp, type: "email" });
+                        if (vErr) { setForgotOtpError(vErr.message || "Invalid or expired code."); return; }
+                        setForgotStep("password");
+                      } catch { setForgotOtpError("Network error. Try again."); }
+                      finally { setForgotLoading(false); }
+                    }}
+                    style={{ flex: 1, padding: "12px", borderRadius: 100, border: "none", background: !forgotOtp.trim() || forgotLoading ? "rgba(141,214,63,0.40)" : GREEN, color: NAVY, fontWeight: 800, fontSize: 13, cursor: !forgotOtp.trim() || forgotLoading ? "default" : "pointer", fontFamily: '"DM Sans",sans-serif' }}
+                  >{forgotLoading ? "Verifying…" : "Verify code"}</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p style={{ fontSize: 12.5, color: "rgba(255,255,255,0.62)", margin: 0, lineHeight: 1.5 }}>Enter your work email. We'll send a code to verify your identity.</p>
+                <div>
+                  <p style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,0.55)", letterSpacing: "0.10em", textTransform: "uppercase", margin: "0 0 6px" }}>Work email</p>
+                  <input
+                    type="email"
+                    value={forgotEmail}
+                    onChange={e => { setForgotEmail(e.target.value); if (forgotError) setForgotError(""); }}
+                    onKeyDown={e => { if (e.key === "Enter") handleForgotSubmit(); }}
+                    autoFocus
+                    placeholder="you@lilypad.com"
+                    style={{ width: "100%", padding: "11px 14px", borderRadius: 10, background: "rgba(255,255,255,0.05)", border: `1.5px solid ${forgotError ? "#ef4444" : "rgba(255,255,255,0.10)"}`, color: "#fff", fontSize: 14, fontFamily: '"DM Sans",sans-serif', outline: "none", boxSizing: "border-box" }}
+                  />
+                  {forgotError && <p style={{ color: "#ef4444", fontSize: 11.5, fontWeight: 600, margin: "6px 0 0" }}>{forgotError}</p>}
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={closeForgot} style={{ flex: 1, padding: "12px", borderRadius: 100, border: "1px solid rgba(255,255,255,0.22)", background: "transparent", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: '"DM Sans",sans-serif' }}>Cancel</button>
+                  <button onClick={handleForgotSubmit} disabled={forgotLoading} style={{ flex: 1, padding: "12px", borderRadius: 100, border: "none", background: forgotLoading ? "rgba(141,214,63,0.40)" : GREEN, color: NAVY, fontWeight: 800, fontSize: 13, cursor: forgotLoading ? "default" : "pointer", fontFamily: '"DM Sans",sans-serif' }}>
+                    {forgotLoading ? "Sending…" : "Send code"}
+                  </button>
+                </div>
+              </>
             )}
-            <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => setForgotOpen(false)} style={{ flex: 1, padding: "12px", borderRadius: 100, border: "1px solid rgba(255,255,255,0.22)", background: "transparent", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: '"DM Sans",sans-serif' }}>
-                {forgotSent ? "Close" : "Cancel"}
-              </button>
-              {!forgotSent && (
-                <button onClick={handleForgotSubmit} style={{ flex: 1, padding: "12px", borderRadius: 100, border: "none", background: GREEN, color: NAVY, fontWeight: 800, fontSize: 13, cursor: "pointer", fontFamily: '"DM Sans",sans-serif' }}>Send reset link</button>
-              )}
-            </div>
           </div>
         </div>
       )}

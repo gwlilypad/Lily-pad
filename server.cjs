@@ -453,6 +453,40 @@ app.post('/api/staff/record-activation', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Staff list — returns all admin_users rows mapped to StaffAccount shape ────
+app.get('/api/staff/list', async (req, res) => {
+  if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/admin_users?select=id,email,full_name,role,status,last_login_at&order=created_at.asc`, { headers: SVC_HEADERS });
+    const rows = await r.json();
+    if (!Array.isArray(rows)) return res.json([]);
+    const list = rows.map(row => ({
+      id: row.id,
+      name: row.full_name || row.email,
+      email: row.email,
+      role: row.role || 'staff',
+      status: row.status || 'active',
+      lastSignIn: row.last_login_at ? new Date(row.last_login_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Never',
+    }));
+    res.json(list);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Staff update-status — PATCH admin_users status by id ─────────────────────
+app.post('/api/staff/update-status', async (req, res) => {
+  if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });
+  const { id, status } = req.body || {};
+  if (!id || !status) return res.status(400).json({ error: 'id and status required' });
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/admin_users?id=eq.${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { ...SVC_HEADERS, 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ status }),
+    });
+    res.json({ updated: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Staff/admin activation — step 2: verify OTP, create account ──────────────
 app.post('/api/staff/verify-activation', async (req, res) => {
   if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });

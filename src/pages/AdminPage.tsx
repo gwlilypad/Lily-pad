@@ -33,13 +33,12 @@ const inputStyle: React.CSSProperties = {
   transition: "border-color 0.18s",
 };
 
-// ── Mock users (no backend yet) ─────────────────────────────────────────────
+// ── User / Staff types ───────────────────────────────────────────────────────
 type UserType = "driver" | "host" | "both";
 interface PadInfo {
   name: string;
   color: string;
   photoUrl: string;
-  // Box stored in 0..1 normalized coordinates relative to the photo
   box: { cx: number; cy: number; w: number; h: number; angle: number };
 }
 interface MockUser {
@@ -62,27 +61,13 @@ interface MockUser {
 }
 
 // ── localStorage keys ───────────────────────────────────────────────────────
-const ADMIN_USERS_KEY    = "lilypad.admin.users.v1";
-const ADMIN_LOGIN_KEY    = "lilypad.admin.loggedIn.v1";
-const ADMIN_ROLE_KEY     = "lilypad.admin.role.v1";
-const STAFF_ACCOUNTS_KEY = "lilypad.admin.staffAccounts.v1";
+const ADMIN_LOGIN_KEY = "lilypad.admin.loggedIn.v1";
 
 type AdminRole = "staff" | "admin";
 
-function loadUsers(fallback: MockUser[]): MockUser[] {
-  if (typeof window === "undefined") return fallback;
-  try {
-    const raw = window.localStorage.getItem(ADMIN_USERS_KEY);
-    if (!raw) return fallback;
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-  } catch {}
-  return fallback;
-}
-
-// ── Staff accounts (separate from customer-facing users) ────────────────────
+// ── Staff accounts (real data from Supabase admin_users) ─────────────────────
 type StaffAccount = {
-  id: number;
+  id: string;
   firstName: string;
   lastName: string;
   email: string;
@@ -90,129 +75,7 @@ type StaffAccount = {
   status: "active" | "suspended";
   lastSignIn: string;
 };
-const MOCK_STAFF: StaffAccount[] = [
-  { id: 1, firstName: "Alex",    lastName: "Reyes",    email: "alex@lilypad.com",    role: "admin", status: "active",    lastSignIn: "Today, 8:14 AM" },
-  { id: 2, firstName: "Jordan",  lastName: "Mills",    email: "jordan@lilypad.com",  role: "admin", status: "active",    lastSignIn: "Today, 7:02 AM" },
-  { id: 3, firstName: "Sam",     lastName: "Patel",    email: "sam@lilypad.com",     role: "staff", status: "active",    lastSignIn: "Yesterday, 6:48 PM" },
-  { id: 4, firstName: "Riley",   lastName: "Kim",      email: "riley@lilypad.com",   role: "staff", status: "active",    lastSignIn: "Yesterday, 2:10 PM" },
-  { id: 5, firstName: "Morgan",  lastName: "O'Brien",  email: "morgan@lilypad.com",  role: "staff", status: "suspended", lastSignIn: "Apr 18, 11:20 AM" },
-  { id: 6, firstName: "Taylor",  lastName: "Nguyen",   email: "taylor@lilypad.com",  role: "staff", status: "active",    lastSignIn: "Apr 26, 9:30 AM" },
-];
-function loadStaff(fallback: StaffAccount[]): StaffAccount[] {
-  if (typeof window === "undefined") return fallback;
-  try {
-    const raw = window.localStorage.getItem(STAFF_ACCOUNTS_KEY);
-    if (!raw) return fallback;
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-  } catch {}
-  return fallback;
-}
 
-const MOCK_USERS: MockUser[] = [
-  {
-    id: 1, type: "both",
-    firstName: "Alex", lastName: "Johnson",
-    email: "alex.j@email.com", phone: "(713) 555-0100",
-    vehicle: "2022 Honda Civic", address: "10509 Lancaster Ln, Houston TX",
-    pads: [
-      { name: "Pad 1", color: PAD_COLORS[0], photoUrl: "https://images.unsplash.com/photo-1590674899484-d5640e854abe?w=600&q=70", box: { cx: 0.42, cy: 0.55, w: 0.28, h: 0.34, angle: -0.18 } },
-      { name: "Pad 2", color: PAD_COLORS[1], photoUrl: "https://images.unsplash.com/photo-1590674899484-d5640e854abe?w=600&q=70", box: { cx: 0.72, cy: 0.55, w: 0.24, h: 0.34, angle: -0.18 } },
-    ],
-    bookingsThisMonth: 14, earningsThisMonth: 285.50, totalSpent: 42.00,
-    joined: "Jan 2026", verified: true, status: "active",
-  },
-  {
-    id: 2, type: "driver",
-    firstName: "Jordan", lastName: "Smith",
-    email: "jordan.s@email.com", phone: "(713) 555-0200",
-    vehicle: "2021 Tesla Model 3",
-    bookingsThisMonth: 8, totalSpent: 124.50,
-    joined: "Feb 2026", verified: true, status: "active",
-  },
-  {
-    id: 3, type: "host",
-    firstName: "Maria", lastName: "Gonzalez",
-    email: "maria.g@email.com", phone: "(713) 555-0301",
-    address: "3801 Old Spanish Trail, Houston TX",
-    pads: [
-      { name: "Pad 1", color: PAD_COLORS[0], photoUrl: "https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=600&q=70", box: { cx: 0.50, cy: 0.60, w: 0.40, h: 0.30, angle: 0 } },
-    ],
-    bookingsThisMonth: 22, earningsThisMonth: 412.80,
-    joined: "Nov 2025", verified: true, status: "active",
-  },
-  {
-    id: 4, type: "driver",
-    firstName: "Sam", lastName: "Taylor",
-    email: "sam.t@email.com", phone: "(713) 555-0444",
-    vehicle: "2019 Subaru Outback",
-    bookingsThisMonth: 3, totalSpent: 28.50,
-    joined: "Mar 2026", verified: false, status: "active",
-  },
-  {
-    id: 5, type: "host",
-    firstName: "Priya", lastName: "Patel",
-    email: "priya.p@email.com", phone: "(713) 555-0512",
-    address: "1701 Montrose Blvd, Houston TX",
-    pads: [
-      { name: "Pad 1", color: PAD_COLORS[0], photoUrl: "https://images.unsplash.com/photo-1448630360428-65456885c650?w=600&q=70", box: { cx: 0.35, cy: 0.55, w: 0.22, h: 0.32, angle: 0.08 } },
-      { name: "Pad 2", color: PAD_COLORS[1], photoUrl: "https://images.unsplash.com/photo-1448630360428-65456885c650?w=600&q=70", box: { cx: 0.62, cy: 0.55, w: 0.22, h: 0.32, angle: 0.08 } },
-      { name: "Pad 3", color: PAD_COLORS[2], photoUrl: "https://images.unsplash.com/photo-1448630360428-65456885c650?w=600&q=70", box: { cx: 0.85, cy: 0.55, w: 0.18, h: 0.32, angle: 0.08 } },
-    ],
-    bookingsThisMonth: 31, earningsThisMonth: 612.20,
-    joined: "Oct 2025", verified: true, status: "active",
-  },
-  {
-    id: 6, type: "both",
-    firstName: "Devon", lastName: "Brooks",
-    email: "devon.b@email.com", phone: "(713) 555-0688",
-    vehicle: "2023 Ford F-150", address: "4200 Beechnut St, Houston TX",
-    pads: [
-      { name: "Pad 1", color: PAD_COLORS[0], photoUrl: "https://images.unsplash.com/photo-1597328540614-cc5d54295dd1?w=600&q=70", box: { cx: 0.50, cy: 0.55, w: 0.38, h: 0.36, angle: 0 } },
-    ],
-    bookingsThisMonth: 11, earningsThisMonth: 198.40, totalSpent: 67.20,
-    joined: "Dec 2025", verified: true, status: "active",
-  },
-  {
-    id: 7, type: "driver",
-    firstName: "Riley", lastName: "Chen",
-    email: "riley.c@email.com", phone: "(713) 555-0712",
-    vehicle: "2020 Toyota Prius",
-    bookingsThisMonth: 6, totalSpent: 78.00,
-    joined: "Jan 2026", verified: true, status: "suspended",
-  },
-  {
-    id: 8, type: "host",
-    firstName: "Marcus", lastName: "Williams",
-    email: "marcus.w@email.com", phone: "(713) 555-0833",
-    address: "2200 Woodlands Pkwy, The Woodlands TX",
-    pads: [
-      { name: "Pad 1", color: PAD_COLORS[0], photoUrl: "https://images.unsplash.com/photo-1502672023488-70e25813eb80?w=600&q=70", box: { cx: 0.45, cy: 0.62, w: 0.34, h: 0.30, angle: -0.10 } },
-    ],
-    bookingsThisMonth: 18, earningsThisMonth: 324.00,
-    joined: "Sep 2025", verified: true, status: "active",
-  },
-  {
-    id: 9, type: "driver",
-    firstName: "Avery", lastName: "Nguyen",
-    email: "avery.n@email.com", phone: "(713) 555-0911",
-    vehicle: "2024 Hyundai Ioniq 5",
-    bookingsThisMonth: 12, totalSpent: 156.30,
-    joined: "Feb 2026", verified: true, status: "active",
-  },
-  {
-    id: 10, type: "host",
-    firstName: "Casey", lastName: "Rivera",
-    email: "casey.r@email.com", phone: "(713) 555-1024",
-    address: "5300 Westheimer Rd, Houston TX",
-    pads: [
-      { name: "Pad 1", color: PAD_COLORS[0], photoUrl: "https://images.unsplash.com/photo-1494522358652-f30e61a60313?w=600&q=70", box: { cx: 0.50, cy: 0.55, w: 0.32, h: 0.30, angle: 0.05 } },
-      { name: "Pad 2", color: PAD_COLORS[1], photoUrl: "https://images.unsplash.com/photo-1494522358652-f30e61a60313?w=600&q=70", box: { cx: 0.78, cy: 0.55, w: 0.22, h: 0.30, angle: 0.05 } },
-    ],
-    bookingsThisMonth: 25, earningsThisMonth: 487.00,
-    joined: "Aug 2025", verified: true, status: "active",
-  },
-];
 
 function StatCard({
   label, value, sub, breakdown, onClick,
@@ -1037,7 +900,7 @@ function ResolutionReadout({ r }: { r: SupportResolution }) {
 // ── Main page ───────────────────────────────────────────────────────────────
 type View = "dashboard" | "users" | "userDetail" | "service" | "staff";
 type AdminView = "renters" | "hosts";
-type StaffAuthAction = { kind: "suspend" | "reinstate"; staffId: number; staffName: string };
+type StaffAuthAction = { kind: "suspend" | "reinstate"; staffId: string; staffName: string };
 
 export default function AdminPage() {
   const { goTo, setState } = useApp();
@@ -1054,7 +917,7 @@ export default function AdminPage() {
   const [loginLoading, setLoginLoading] = useState(false);
 
   const [view, setView] = useState<View>("dashboard");
-  const [users, setUsers] = useState<MockUser[]>(() => loadUsers(MOCK_USERS));
+  const [users, setUsers] = useState<MockUser[]>([]);
   const [adminView, setAdminView] = useState<AdminView>("renters");
   const [search, setSearch] = useState("");
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
@@ -1068,7 +931,7 @@ export default function AdminPage() {
   const [authError, setAuthError] = useState("");
 
   // Staff accounts (admin manages these).
-  const [staffList, setStaffList] = useState<StaffAccount[]>(() => loadStaff(MOCK_STAFF));
+  const [staffList, setStaffList] = useState<StaffAccount[]>([]);
   const [staffAuthAction, setStaffAuthAction] = useState<StaffAuthAction | null>(null);
   const [staffAuthPassword, setStaffAuthPassword] = useState("");
   const [staffAuthError, setStaffAuthError] = useState("");
@@ -1080,11 +943,16 @@ export default function AdminPage() {
   const [inviteError, setInviteError] = useState("");
   const [inviteSuccess, setInviteSuccess] = useState(false);
   const [inviteEmailFocus, setInviteEmailFocus] = useState(false);
-  const [inviteStep, setInviteStep] = useState<"email" | "otp" | "success">("email");
-  const [inviteOtpDigits, setInviteOtpDigits] = useState(["","","","","",""]);
-  const inviteOtpRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const [inviteStep, setInviteStep] = useState<"email" | "otp" | "password" | "success">("email");
+  const [inviteOtpDigits, setInviteOtpDigits] = useState<string[]>([]);
+  const [invitePassword, setInvitePassword] = useState("");
+  const [invitePasswordFocus, setInvitePasswordFocus] = useState(false);
+  const [invitePasswordError, setInvitePasswordError] = useState("");
+  const [inviteUserId, setInviteUserId] = useState<string | null>(null);
   const [showActivate, setShowActivate] = useState(false);
-  function resetActivation() { setInviteStep("email"); setInviteEmail(""); setInviteOtpDigits(["","","","","",""]); setInviteError(""); setInviteEmailFocus(false); }
+  function resetActivation() { setInviteStep("email"); setInviteEmail(""); setInviteOtpDigits([]); setInviteError(""); setInviteEmailFocus(false); setInvitePassword(""); setInvitePasswordError(""); setInviteUserId(null); }
+  function refreshStaffList() { fetch("/api/staff/list").then(r => r.json()).then(d => { if (Array.isArray(d)) setStaffList(d); }).catch(() => {}); }
+  useEffect(() => { refreshStaffList(); }, []);
 
   // Customer service — chat tickets + incoming email.
   const [tickets, setTickets] = useState<SupportTicket[]>(() => loadTickets());
@@ -1433,8 +1301,9 @@ export default function AdminPage() {
     setUsers(prev => prev.map(u => u.id === id ? { ...u, ...patch } : u));
   }
 
-  function updateStaff(id: number, patch: Partial<StaffAccount>) {
+  function updateStaff(id: string, patch: Partial<StaffAccount>) {
     setStaffList(prev => prev.map(s => s.id === id ? { ...s, ...patch } : s));
+    if (patch.status) fetch("/api/staff/update-status", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, status: patch.status }) }).catch(() => {});
   }
 
   function updatePadBox(userId: number, padIdx: number, box: PadInfo["box"]) {
@@ -1552,7 +1421,7 @@ export default function AdminPage() {
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div>
                 <p style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.12em", textTransform: "uppercase", margin: 0 }}>Email activation</p>
-                <p style={{ fontSize: 14, fontWeight: 700, color: "#fff", margin: "2px 0 0" }}>{inviteStep === "success" ? "Account activated" : inviteStep === "otp" ? "Enter your code" : "Activate account"}</p>
+                <p style={{ fontSize: 14, fontWeight: 700, color: "#fff", margin: "2px 0 0" }}>{inviteStep === "success" ? "Account activated" : inviteStep === "password" ? "Create password" : inviteStep === "otp" ? "Enter your code" : "Activate account"}</p>
               </div>
               <div style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(141,214,63,0.14)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
@@ -1568,6 +1437,41 @@ export default function AdminPage() {
                   </div>
                 </div>
                 <button onClick={() => { resetActivation(); setShowActivate(false); setRole(inviteRole); }} style={{ width: "100%", padding: "11px", borderRadius: 100, border: "none", background: GREEN, color: NAVY, fontWeight: 800, fontSize: 13, fontFamily: '"DM Sans",sans-serif', cursor: "pointer" }}>Sign in now →</button>
+              </>
+            ) : inviteStep === "password" ? (
+              <>
+                <div style={{ background: "rgba(255,255,255,0.05)", borderRadius: 10, padding: "10px 14px" }}>
+                  <p style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.10em", textTransform: "uppercase", margin: 0 }}>Account email</p>
+                  <p style={{ fontSize: 14, fontWeight: 700, color: "#fff", margin: "3px 0 0" }}>{inviteEmail}</p>
+                </div>
+                <input
+                  type="password"
+                  placeholder="Create a password (min. 8 chars)"
+                  value={invitePassword}
+                  onChange={e => { setInvitePassword(e.target.value); setInvitePasswordError(""); }}
+                  onFocus={() => setInvitePasswordFocus(true)}
+                  onBlur={() => setInvitePasswordFocus(false)}
+                  style={{ width: "100%", padding: "14px 16px", borderRadius: 12, boxSizing: "border-box", background: "rgba(255,255,255,0.05)", color: "#fff", fontSize: 15, fontFamily: '"DM Sans",sans-serif', outline: "none", border: `1.5px solid ${invitePasswordError ? "#ef4444" : invitePasswordFocus ? GREEN : "rgba(255,255,255,0.15)"}`, transition: "border-color 0.15s" }}
+                />
+                {invitePasswordError && <p style={{ color: "#ef4444", fontSize: 11.5, fontWeight: 600, margin: 0 }}>{invitePasswordError}</p>}
+                <button
+                  disabled={!invitePassword.trim() || inviteLoading}
+                  onClick={async () => {
+                    if (invitePassword.trim().length < 8) { setInvitePasswordError("Password must be at least 8 characters."); return; }
+                    setInviteLoading(true); setInvitePasswordError("");
+                    try {
+                      const { error: pwErr } = await supabase.auth.updateUser({ password: invitePassword });
+                      if (pwErr) { setInvitePasswordError(pwErr.message || "Failed to set password."); return; }
+                      await fetch("/api/staff/record-activation", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: inviteEmail.trim().toLowerCase(), role: inviteRole, userId: inviteUserId }) }).catch(() => {});
+                      refreshStaffList();
+                      setInviteStep("success");
+                    } catch { setInvitePasswordError("Network error. Try again."); }
+                    finally { setInviteLoading(false); }
+                  }}
+                  style={{ width: "100%", padding: "11px", borderRadius: 100, border: "none", background: !invitePassword.trim() || inviteLoading ? "rgba(141,214,63,0.40)" : GREEN, color: NAVY, fontWeight: 800, fontSize: 13, fontFamily: '"DM Sans",sans-serif', cursor: !invitePassword.trim() || inviteLoading ? "default" : "pointer" }}
+                >
+                  {inviteLoading ? "Creating account…" : "Create account"}
+                </button>
               </>
             ) : inviteStep === "otp" ? (
               <>
@@ -1589,8 +1493,8 @@ export default function AdminPage() {
                     try {
                       const { data: vData, error: vErr } = await supabase.auth.verifyOtp({ email: inviteEmail.trim().toLowerCase(), token: otp, type: "email" });
                       if (vErr) { setInviteError(vErr.message || "Invalid or expired code."); return; }
-                      await fetch("/api/staff/record-activation", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: inviteEmail.trim().toLowerCase(), role: inviteRole, userId: vData?.user?.id }) }).catch(() => {});
-                      setInviteStep("success");
+                      setInviteUserId(vData?.user?.id ?? null);
+                      setInviteStep("password");
                     } catch { setInviteError("Network error. Try again."); }
                     finally { setInviteLoading(false); }
                   }}
@@ -1787,7 +1691,7 @@ export default function AdminPage() {
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div>
                 <p style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.12em", textTransform: "uppercase", margin: 0 }}>Email activation</p>
-                <p style={{ fontSize: 14, fontWeight: 700, color: "#fff", margin: "2px 0 0" }}>{inviteStep === "success" ? "Account activated" : inviteStep === "otp" ? "Enter your code" : "Activate account"}</p>
+                <p style={{ fontSize: 14, fontWeight: 700, color: "#fff", margin: "2px 0 0" }}>{inviteStep === "success" ? "Account activated" : inviteStep === "password" ? "Create password" : inviteStep === "otp" ? "Enter your code" : "Activate account"}</p>
               </div>
               <div style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(141,214,63,0.14)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
@@ -1803,6 +1707,41 @@ export default function AdminPage() {
                   </div>
                 </div>
                 <button onClick={resetActivation} style={{ width: "100%", padding: "11px", borderRadius: 100, border: "1.5px solid rgba(255,255,255,0.15)", background: "transparent", color: "rgba(255,255,255,0.70)", fontWeight: 700, fontSize: 13, fontFamily: '"DM Sans",sans-serif', cursor: "pointer" }}>Activate another</button>
+              </>
+            ) : inviteStep === "password" ? (
+              <>
+                <div style={{ background: "rgba(255,255,255,0.05)", borderRadius: 10, padding: "10px 14px" }}>
+                  <p style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.10em", textTransform: "uppercase", margin: 0 }}>Account email</p>
+                  <p style={{ fontSize: 14, fontWeight: 700, color: "#fff", margin: "3px 0 0" }}>{inviteEmail}</p>
+                </div>
+                <input
+                  type="password"
+                  placeholder="Create a password (min. 8 chars)"
+                  value={invitePassword}
+                  onChange={e => { setInvitePassword(e.target.value); setInvitePasswordError(""); }}
+                  onFocus={() => setInvitePasswordFocus(true)}
+                  onBlur={() => setInvitePasswordFocus(false)}
+                  style={{ width: "100%", padding: "14px 16px", borderRadius: 12, boxSizing: "border-box", background: "rgba(255,255,255,0.05)", color: "#fff", fontSize: 15, fontFamily: '"DM Sans",sans-serif', outline: "none", border: `1.5px solid ${invitePasswordError ? "#ef4444" : invitePasswordFocus ? GREEN : "rgba(255,255,255,0.15)"}`, transition: "border-color 0.15s" }}
+                />
+                {invitePasswordError && <p style={{ color: "#ef4444", fontSize: 11.5, fontWeight: 600, margin: 0 }}>{invitePasswordError}</p>}
+                <button
+                  disabled={!invitePassword.trim() || inviteLoading}
+                  onClick={async () => {
+                    if (invitePassword.trim().length < 8) { setInvitePasswordError("Password must be at least 8 characters."); return; }
+                    setInviteLoading(true); setInvitePasswordError("");
+                    try {
+                      const { error: pwErr } = await supabase.auth.updateUser({ password: invitePassword });
+                      if (pwErr) { setInvitePasswordError(pwErr.message || "Failed to set password."); return; }
+                      await fetch("/api/staff/record-activation", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: inviteEmail.trim().toLowerCase(), role: inviteRole, userId: inviteUserId }) }).catch(() => {});
+                      refreshStaffList();
+                      setInviteStep("success");
+                    } catch { setInvitePasswordError("Network error. Try again."); }
+                    finally { setInviteLoading(false); }
+                  }}
+                  style={{ width: "100%", padding: "11px", borderRadius: 100, border: "none", background: !invitePassword.trim() || inviteLoading ? "rgba(141,214,63,0.40)" : GREEN, color: NAVY, fontWeight: 800, fontSize: 13, fontFamily: '"DM Sans",sans-serif', cursor: !invitePassword.trim() || inviteLoading ? "default" : "pointer" }}
+                >
+                  {inviteLoading ? "Creating account…" : "Create account"}
+                </button>
               </>
             ) : inviteStep === "otp" ? (
               <>
@@ -1824,8 +1763,8 @@ export default function AdminPage() {
                     try {
                       const { data: vData, error: vErr } = await supabase.auth.verifyOtp({ email: inviteEmail.trim().toLowerCase(), token: otp, type: "email" });
                       if (vErr) { setInviteError(vErr.message || "Invalid or expired code."); return; }
-                      await fetch("/api/staff/record-activation", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: inviteEmail.trim().toLowerCase(), role: inviteRole, userId: vData?.user?.id }) }).catch(() => {});
-                      setInviteStep("success");
+                      setInviteUserId(vData?.user?.id ?? null);
+                      setInviteStep("password");
                     } catch { setInviteError("Network error. Try again."); }
                     finally { setInviteLoading(false); }
                   }}
@@ -2517,7 +2456,7 @@ export default function AdminPage() {
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <div>
                     <p style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.12em", textTransform: "uppercase", margin: 0 }}>Email activation</p>
-                    <p style={{ fontSize: 14, fontWeight: 700, color: "#fff", margin: "2px 0 0" }}>{inviteStep === "success" ? "Account activated" : inviteStep === "otp" ? "Enter your code" : "Activate account"}</p>
+                    <p style={{ fontSize: 14, fontWeight: 700, color: "#fff", margin: "2px 0 0" }}>{inviteStep === "success" ? "Account activated" : inviteStep === "password" ? "Create password" : inviteStep === "otp" ? "Enter your code" : "Activate account"}</p>
                   </div>
                   <div style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(141,214,63,0.14)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
@@ -2534,56 +2473,73 @@ export default function AdminPage() {
                     </div>
                     <button onClick={resetActivation} style={{ width: "100%", padding: "11px", borderRadius: 100, border: "1.5px solid rgba(255,255,255,0.15)", background: "transparent", color: "rgba(255,255,255,0.70)", fontWeight: 700, fontSize: 13, fontFamily: '"DM Sans",sans-serif', cursor: "pointer" }}>Activate another</button>
                   </>
-                ) : inviteStep === "otp" ? (
-                  <>
-                    <p style={{ fontSize: 13, color: "rgba(255,255,255,0.65)", margin: 0, lineHeight: 1.5 }}>Enter the 6-digit code sent to <strong style={{ color: "#fff" }}>{inviteEmail}</strong></p>
-                    <div style={{ display: "flex", gap: 7, justifyContent: "center" }}>
-                      {[0,1,2,3,4,5].map(i => (
-                        <input
-                          key={i}
-                          ref={el => { inviteOtpRefs.current[i] = el; }}
-                          type="text"
-                          inputMode="numeric"
-                          maxLength={1}
-                          value={inviteOtpDigits[i]}
-                          onChange={e => {
-                            const d = e.target.value.replace(/\D/g,"").slice(-1);
-                            const next = [...inviteOtpDigits]; next[i] = d; setInviteOtpDigits(next); setInviteError("");
-                            if (d && i < 5) inviteOtpRefs.current[i+1]?.focus();
-                          }}
-                          onKeyDown={e => { if (e.key === "Backspace" && !inviteOtpDigits[i] && i > 0) inviteOtpRefs.current[i-1]?.focus(); }}
-                          onPaste={i === 0 ? e => {
-                            e.preventDefault();
-                            const txt = e.clipboardData.getData("text").replace(/\D/g,"").slice(0,6);
-                            const next = [...inviteOtpDigits]; txt.split("").forEach((c,j) => { next[j]=c; });
-                            setInviteOtpDigits(next); setInviteError("");
-                            inviteOtpRefs.current[Math.min(txt.length,5)]?.focus();
-                          } : undefined}
-                          style={{ width: 42, height: 50, textAlign: "center", fontSize: 15, fontWeight: 700, color: "#fff", borderRadius: 10, outline: "none", border: `2px solid ${inviteOtpDigits[i] ? "rgba(141,214,63,0.70)" : "rgba(255,255,255,0.15)"}`, background: inviteOtpDigits[i] ? "rgba(141,214,63,0.08)" : "rgba(255,255,255,0.04)", fontFamily: '"DM Sans",sans-serif', transition: "border-color 0.15s" }}
-                        />
-                      ))}
-                    </div>
-                    {inviteError && <p style={{ color: "#ef4444", fontSize: 11.5, fontWeight: 600, margin: 0 }}>{inviteError}</p>}
-                    <button
-                      disabled={!inviteOtpDigits.join("").trim() || inviteLoading}
-                      onClick={async () => {
-                        const otp = inviteOtpDigits.join("");
-                        setInviteLoading(true); setInviteError("");
-                        try {
-                          const r = await fetch("/api/staff/verify-activation", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: inviteEmail.trim().toLowerCase(), token: otp, role: inviteRole }) });
-                          const data = await r.json();
-                          if (!r.ok) { setInviteError(data.error || "Invalid code. Try again."); }
-                          else { setInviteStep("success"); }
-                        } catch { setInviteError("Network error. Try again."); }
-                        finally { setInviteLoading(false); }
-                      }}
-                      style={{ width: "100%", padding: "11px", borderRadius: 100, border: "none", background: !inviteOtpDigits.join("").trim() || inviteLoading ? "rgba(141,214,63,0.40)" : GREEN, color: NAVY, fontWeight: 800, fontSize: 13, fontFamily: '"DM Sans",sans-serif', cursor: !inviteOtpDigits.join("").trim() || inviteLoading ? "default" : "pointer" }}
-                    >
-                      {inviteLoading ? "Verifying…" : "Activate account"}
-                    </button>
-                    <button onClick={resetActivation} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.45)", fontSize: 12, cursor: "pointer", fontFamily: '"DM Sans",sans-serif', padding: 0, textAlign: "left" }}>← Change email</button>
-                  </>
-                ) : (
+                ) : inviteStep === "password" ? (
+              <>
+                <div style={{ background: "rgba(255,255,255,0.05)", borderRadius: 10, padding: "10px 14px" }}>
+                  <p style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.10em", textTransform: "uppercase", margin: 0 }}>Account email</p>
+                  <p style={{ fontSize: 14, fontWeight: 700, color: "#fff", margin: "3px 0 0" }}>{inviteEmail}</p>
+                </div>
+                <input
+                  type="password"
+                  placeholder="Create a password (min. 8 chars)"
+                  value={invitePassword}
+                  onChange={e => { setInvitePassword(e.target.value); setInvitePasswordError(""); }}
+                  onFocus={() => setInvitePasswordFocus(true)}
+                  onBlur={() => setInvitePasswordFocus(false)}
+                  style={{ width: "100%", padding: "14px 16px", borderRadius: 12, boxSizing: "border-box", background: "rgba(255,255,255,0.05)", color: "#fff", fontSize: 15, fontFamily: '"DM Sans",sans-serif', outline: "none", border: `1.5px solid ${invitePasswordError ? "#ef4444" : invitePasswordFocus ? GREEN : "rgba(255,255,255,0.15)"}`, transition: "border-color 0.15s" }}
+                />
+                {invitePasswordError && <p style={{ color: "#ef4444", fontSize: 11.5, fontWeight: 600, margin: 0 }}>{invitePasswordError}</p>}
+                <button
+                  disabled={!invitePassword.trim() || inviteLoading}
+                  onClick={async () => {
+                    if (invitePassword.trim().length < 8) { setInvitePasswordError("Password must be at least 8 characters."); return; }
+                    setInviteLoading(true); setInvitePasswordError("");
+                    try {
+                      const { error: pwErr } = await supabase.auth.updateUser({ password: invitePassword });
+                      if (pwErr) { setInvitePasswordError(pwErr.message || "Failed to set password."); return; }
+                      await fetch("/api/staff/record-activation", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: inviteEmail.trim().toLowerCase(), role: inviteRole, userId: inviteUserId }) }).catch(() => {});
+                      refreshStaffList();
+                      setInviteStep("success");
+                    } catch { setInvitePasswordError("Network error. Try again."); }
+                    finally { setInviteLoading(false); }
+                  }}
+                  style={{ width: "100%", padding: "11px", borderRadius: 100, border: "none", background: !invitePassword.trim() || inviteLoading ? "rgba(141,214,63,0.40)" : GREEN, color: NAVY, fontWeight: 800, fontSize: 13, fontFamily: '"DM Sans",sans-serif', cursor: !invitePassword.trim() || inviteLoading ? "default" : "pointer" }}
+                >
+                  {inviteLoading ? "Creating account…" : "Create account"}
+                </button>
+              </>
+            ) : inviteStep === "otp" ? (
+              <>
+                <p style={{ fontSize: 13, color: "rgba(255,255,255,0.65)", margin: 0, lineHeight: 1.5 }}>Enter the code sent to <strong style={{ color: "#fff" }}>{inviteEmail}</strong></p>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="Enter code"
+                  value={inviteOtpDigits.join("")}
+                  onChange={e => { setInviteOtpDigits(e.target.value.replace(/\D/g,"").split("")); setInviteError(""); }}
+                  style={{ width: "100%", padding: "14px 16px", borderRadius: 12, boxSizing: "border-box", background: "rgba(255,255,255,0.05)", color: "#fff", fontSize: 20, fontWeight: 700, fontFamily: '"DM Sans",sans-serif', outline: "none", border: `1.5px solid ${inviteError ? "#ef4444" : "rgba(255,255,255,0.20)"}`, textAlign: "center", letterSpacing: "0.18em", transition: "border-color 0.15s" }}
+                />
+                {inviteError && <p style={{ color: "#ef4444", fontSize: 11.5, fontWeight: 600, margin: 0 }}>{inviteError}</p>}
+                <button
+                  disabled={!inviteOtpDigits.join("").trim() || inviteLoading}
+                  onClick={async () => {
+                    const otp = inviteOtpDigits.join("");
+                    setInviteLoading(true); setInviteError("");
+                    try {
+                      const { data: vData, error: vErr } = await supabase.auth.verifyOtp({ email: inviteEmail.trim().toLowerCase(), token: otp, type: "email" });
+                      if (vErr) { setInviteError(vErr.message || "Invalid or expired code."); return; }
+                      setInviteUserId(vData?.user?.id ?? null);
+                      setInviteStep("password");
+                    } catch { setInviteError("Network error. Try again."); }
+                    finally { setInviteLoading(false); }
+                  }}
+                  style={{ width: "100%", padding: "11px", borderRadius: 100, border: "none", background: !inviteOtpDigits.join("").trim() || inviteLoading ? "rgba(141,214,63,0.40)" : GREEN, color: NAVY, fontWeight: 800, fontSize: 13, fontFamily: '"DM Sans",sans-serif', cursor: !inviteOtpDigits.join("").trim() || inviteLoading ? "default" : "pointer" }}
+                >
+                  {inviteLoading ? "Verifying…" : "Verify code"}
+                </button>
+                <button onClick={resetActivation} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.45)", fontSize: 12, cursor: "pointer", fontFamily: '"DM Sans",sans-serif', padding: 0, textAlign: "left" }}>← Change email</button>
+              </>
+            ) : (
                   <>
                     <input
                       type="email"

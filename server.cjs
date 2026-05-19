@@ -412,35 +412,38 @@ app.post('/api/auth/signup', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── Staff/admin activation — step 1: check whitelist, send OTP ───────────────
+// ── Staff/admin activation — step 1: check whitelists (auto-detect role), send OTP ──
 app.post('/api/staff/send-activation', async (req, res) => {
   if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });
-  const { email, role } = req.body || {};
-  if (!email || !role) return res.status(400).json({ error: 'email and role required' });
+  const { email } = req.body || {};
+  if (!email) return res.status(400).json({ error: 'email required' });
   const emailLower = email.toLowerCase().trim();
-  const table = role === 'admin' ? 'admin_whitelist' : 'staff_whitelist';
   try {
-    // Verify email is on the appropriate whitelist
-    const checkRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/${table}?email=eq.${encodeURIComponent(emailLower)}&select=id`,
-      { headers: SVC_HEADERS }
-    );
-    const rows = await checkRes.json().catch(() => []);
-    if (!checkRes.ok || !Array.isArray(rows) || !rows.length)
-      return res.status(403).json({ error: `This email is not on the approved ${role} list. Ask a super-admin to add it in Supabase.` });
+    // Check admin_whitelist first, then staff_whitelist — auto-detect role
+    let detectedRole = null;
+    for (const [table, r] of [['admin_whitelist', 'admin'], ['staff_whitelist', 'staff']]) {
+      const chk = await fetch(
+        `${SUPABASE_URL}/rest/v1/${table}?email=eq.${encodeURIComponent(emailLower)}&select=id`,
+        { headers: SVC_HEADERS }
+      );
+      const rows = await chk.json().catch(() => []);
+      if (chk.ok && Array.isArray(rows) && rows.length) { detectedRole = r; break; }
+    }
+    if (!detectedRole)
+      return res.status(403).json({ error: 'This email is not on the approved team list. Contact your admin.' });
 
-    // Send OTP via Supabase email
+    // Send OTP via Supabase
     const otpRes = await fetch(`${SUPABASE_URL}/auth/v1/otp`, {
       method: 'POST',
       headers: { 'apikey': SUPABASE_ANON, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, create_user: true }),
+      body: JSON.stringify({ email: emailLower, create_user: true }),
     });
     if (!otpRes.ok) {
       const err = await otpRes.json().catch(() => ({}));
-      return res.status(otpRes.status).json({ error: err.msg || err.message || err.error_description || 'Failed to send code. Check Supabase email settings.' });
+      return res.status(otpRes.status).json({ error: err.msg || err.message || err.error_description || 'Failed to send OTP. Check Supabase email settings.' });
     }
-    console.log(`[Activation] OTP sent to ${emailLower} (${role})`);
-    res.json({ sent: true });
+    console.log(`[Activation] OTP sent to ${emailLower} (${detectedRole})`);
+    res.json({ sent: true, role: detectedRole });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

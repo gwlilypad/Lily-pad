@@ -1044,13 +1044,7 @@ export default function AdminPage() {
     if (typeof window === "undefined") return false;
     try { return window.localStorage.getItem(ADMIN_LOGIN_KEY) === "1"; } catch { return false; }
   });
-  const [role, setRole] = useState<AdminRole | null>(() => {
-    if (typeof window === "undefined") return null;
-    try {
-      const v = window.localStorage.getItem(ADMIN_ROLE_KEY);
-      return v === "staff" || v === "admin" ? v : null;
-    } catch { return null; }
-  });
+  const [role, setRole] = useState<AdminRole | null>(null);
   const [email, setEmail]         = useState("");
   const [password, setPassword]   = useState("");
   const [error, setError]         = useState("");
@@ -1634,11 +1628,6 @@ export default function AdminPage() {
                   onBlur={() => setInviteEmailFocus(false)}
                   style={{ width: "100%", padding: "10px 14px", borderRadius: 10, boxSizing: "border-box", background: "rgba(255,255,255,0.05)", color: "#fff", fontSize: 13, fontFamily: '"DM Sans",sans-serif', outline: "none", border: `1.5px solid ${inviteError ? "#ef4444" : inviteEmailFocus ? GREEN : "rgba(255,255,255,0.10)"}`, transition: "border-color 0.15s" }}
                 />
-                <div style={{ display: "flex", gap: 6 }}>
-                  {(["admin","staff"] as const).map(r => (
-                    <button key={r} onClick={() => { setInviteRole(r); setInviteError(""); }} style={{ flex: 1, padding: "8px", borderRadius: 10, cursor: "pointer", fontFamily: '"DM Sans",sans-serif', fontSize: 12, fontWeight: 700, border: `1.5px solid ${inviteRole === r ? (r === "admin" ? GREEN : "rgba(255,255,255,0.40)") : "rgba(255,255,255,0.10)"}`, background: inviteRole === r ? (r === "admin" ? "rgba(141,214,63,0.12)" : "rgba(255,255,255,0.07)") : "transparent", color: inviteRole === r ? (r === "admin" ? GREEN : "#fff") : "rgba(255,255,255,0.40)", textTransform: "capitalize" }}>{r}</button>
-                  ))}
-                </div>
                 {inviteError && <p style={{ color: "#ef4444", fontSize: 11.5, fontWeight: 600, margin: 0 }}>{inviteError}</p>}
                 <button
                   disabled={inviteLoading}
@@ -1647,10 +1636,10 @@ export default function AdminPage() {
                     if (!em || !em.includes("@")) { setInviteError("Enter a valid email address."); return; }
                     setInviteLoading(true); setInviteError("");
                     try {
-                      const r = await fetch("/api/staff/send-activation", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: em, role: inviteRole }) });
+                      const r = await fetch("/api/staff/send-activation", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: em }) });
                       const data = await r.json();
                       if (!r.ok) { setInviteError(data.error || "Failed to send code."); }
-                      else { setInviteStep("otp"); }
+                      else { if (data.role) setInviteRole(data.role); setInviteStep("otp"); }
                     } catch { setInviteError("Network error. Try again."); }
                     finally { setInviteLoading(false); }
                   }}
@@ -1658,7 +1647,6 @@ export default function AdminPage() {
                 >
                   {inviteLoading ? "Sending…" : "Send code"}
                 </button>
-                <p style={{ fontSize: 11, color: "rgba(255,255,255,0.30)", margin: 0, lineHeight: 1.4 }}>Email must be on the approved {inviteRole} list in Supabase.</p>
               </>
             )}
           </div>
@@ -1890,11 +1878,6 @@ export default function AdminPage() {
                   onBlur={() => setInviteEmailFocus(false)}
                   style={{ width: "100%", padding: "10px 14px", borderRadius: 10, boxSizing: "border-box", background: "rgba(255,255,255,0.05)", color: "#fff", fontSize: 13, fontFamily: '"DM Sans",sans-serif', outline: "none", border: `1.5px solid ${inviteError ? "#ef4444" : inviteEmailFocus ? GREEN : "rgba(255,255,255,0.10)"}`, transition: "border-color 0.15s" }}
                 />
-                <div style={{ display: "flex", gap: 6 }}>
-                  {(["admin","staff"] as const).map(r => (
-                    <button key={r} onClick={() => { setInviteRole(r); setInviteError(""); }} style={{ flex: 1, padding: "8px", borderRadius: 10, cursor: "pointer", fontFamily: '"DM Sans",sans-serif', fontSize: 12, fontWeight: 700, border: `1.5px solid ${inviteRole === r ? (r === "admin" ? GREEN : "rgba(255,255,255,0.40)") : "rgba(255,255,255,0.10)"}`, background: inviteRole === r ? (r === "admin" ? "rgba(141,214,63,0.12)" : "rgba(255,255,255,0.07)") : "transparent", color: inviteRole === r ? (r === "admin" ? GREEN : "#fff") : "rgba(255,255,255,0.40)", textTransform: "capitalize" }}>{r}</button>
-                  ))}
-                </div>
                 {inviteError && <p style={{ color: "#ef4444", fontSize: 11.5, fontWeight: 600, margin: 0 }}>{inviteError}</p>}
                 <button
                   disabled={inviteLoading}
@@ -1903,10 +1886,10 @@ export default function AdminPage() {
                     if (!em || !em.includes("@")) { setInviteError("Enter a valid email address."); return; }
                     setInviteLoading(true); setInviteError("");
                     try {
-                      const r = await fetch("/api/staff/send-activation", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: em, role: inviteRole }) });
+                      const r = await fetch("/api/staff/send-activation", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: em }) });
                       const data = await r.json();
                       if (!r.ok) { setInviteError(data.error || "Failed to send code."); }
-                      else { setInviteStep("otp"); }
+                      else { if (data.role) setInviteRole(data.role); setInviteStep("otp"); }
                     } catch { setInviteError("Network error. Try again."); }
                     finally { setInviteLoading(false); }
                   }}
@@ -1914,7 +1897,6 @@ export default function AdminPage() {
                 >
                   {inviteLoading ? "Sending…" : "Send code"}
                 </button>
-                <p style={{ fontSize: 11, color: "rgba(255,255,255,0.30)", margin: 0, lineHeight: 1.4 }}>Email must be on the approved {inviteRole} list in Supabase.</p>
               </>
             )}
           </div>

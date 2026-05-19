@@ -2,11 +2,15 @@ import { useState, useRef, useEffect } from "react";
 import { useApp } from "@/context/AppContext";
 import { supabase } from "@/lib/supabase";
 import {
-  loadTickets, mutateTickets, subscribeTickets, makeId, formatSupportTime, ticketLastPreview,
+  makeId, formatSupportTime, ticketLastPreview,
   emptyResolutionDraft, ticketPipeline,
   gradeAgentMessage, conversationRating, staffRating,
   type SupportTicket, type SupportResolution, type TicketPipeline, type MessageRating,
 } from "@/lib/support";
+import {
+  fetchConversations, sendMessage as apiSendMessage,
+  updateConversationStatus, setLocalMeta, subscribeToSupport,
+} from "@/lib/supportApi";
 import {
   loadEmails, subscribeEmails, markEmailRead,
   emailCategoryLabel, emailAudienceLabel, formatEmailTime,
@@ -996,7 +1000,15 @@ export default function AdminPage() {
   useEffect(() => { refreshStaffList(); }, []);
 
   // Customer service — chat tickets + incoming email.
-  const [tickets, setTickets] = useState<SupportTicket[]>(() => loadTickets());
+  const lastTicketRefreshRef = useRef(0);
+  async function refreshTickets() {
+    const now = Date.now();
+    if (now - lastTicketRefreshRef.current < 1500) return;
+    lastTicketRefreshRef.current = now;
+    const data = await fetchConversations();
+    setTickets(data);
+  }
+  const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [emails, setEmails] = useState<SupportEmail[]>(() => loadEmails());
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null);
@@ -1028,15 +1040,10 @@ export default function AdminPage() {
   const [approveError, setApproveError] = useState("");
   const agentThreadEndRef = useRef<HTMLDivElement | null>(null);
 
-  // Refresh tickets/emails when entering service view, and listen for cross-tab changes.
-  useEffect(() => {
-    if (view === "service") {
-      setTickets(loadTickets());
-      setEmails(loadEmails());
-    }
-  }, [view]);
-  // Live sync across same tab, other tabs, and embedded iframes.
-  useEffect(() => subscribeTickets(() => setTickets(loadTickets())), []);
+  // Initial load + live sync.
+  useEffect(() => { refreshTickets(); }, []);
+  useEffect(() => subscribeToSupport(() => refreshTickets()), []);
+  useEffect(() => { if (view === "service") refreshTickets(); }, [view]);
   useEffect(() => subscribeEmails(() => setEmails(loadEmails())), []);
   // Auto-scroll the agent thread when messages arrive.
   useEffect(() => {
@@ -1068,29 +1075,36 @@ export default function AdminPage() {
 
   // Step 2: actually deliver the staged reply, attaching a quality grade.
   // The grade is admin-only and never surfaced to staff (gated in the UI).
-  function confirmSendAgentReply() {
+  async function confirmSendAgentReply() {
     if (!pendingReply || !selectedTicketId) return;
     if (pendingReply.ticketId !== selectedTicketId) {
-      // Defensive: ticket changed under us — discard rather than mis-deliver.
       setPendingReply(null);
       return;
     }
     const text = pendingReply.text;
     if (!text) { setPendingReply(null); return; }
     const now = Date.now();
-    // Find the customer's most recent message to compute response-time score.
     const cur = tickets.find(t => t.id === selectedTicketId);
     const lastUserTs = cur
       ? [...cur.messages].reverse().find(m => m.from === "user")?.ts ?? null
       : null;
     const rating = gradeAgentMessage(text, now, lastUserTs);
     const msg = { id: makeId("m"), from: "agent" as const, text, ts: now, agentName: agentName(), rating };
-    const next = mutateTickets(curList => curList.map(t => t.id === selectedTicketId
+    // Optimistic update
+    setTickets(prev => prev.map(t => t.id === selectedTicketId
       ? { ...t, status: "open" as const, updatedAt: now, messages: [...t.messages, msg] }
       : t));
-    setTickets(next);
     setAgentReplyDraft("");
     setPendingReply(null);
+    // Persist to Supabase
+    await apiSendMessage({
+      conversationId: selectedTicketId,
+      senderId: null,
+      senderName: agentName(),
+      senderRole: role === "admin" ? "admin" : "staff",
+      message: text,
+    });
+    refreshTickets();
   }
 
   // "Edit" returns the staged text to the textarea so the agent can revise it.
@@ -1100,8 +1114,8 @@ export default function AdminPage() {
   }
 
   function markTicketOpened(id: string) {
-    const next = mutateTickets(cur => cur.map(t => t.id === id && !t.openedByAgent ? { ...t, openedByAgent: true } : t));
-    setTickets(next);
+    setLocalMeta(id, { openedByAgent: true });
+    setTickets(prev => prev.map(t => t.id === id ? { ...t, openedByAgent: true } : t));
   }
 
   // Clears the resolution-flow password fields and any inline errors.
@@ -1164,10 +1178,13 @@ export default function AdminPage() {
       resolution.approvedAt = now;
     }
     const newStatus: SupportTicket["status"] = role === "admin" ? "resolved" : "pending_resolution";
-    const next = mutateTickets(cur => cur.map(t => t.id === selectedTicketId
+    // Optimistic local update
+    setTickets(prev => prev.map(t => t.id === selectedTicketId
       ? { ...t, status: newStatus, updatedAt: now, resolution }
       : t));
-    setTickets(next);
+    // Persist status to Supabase; resolution stored locally (not in DB schema)
+    setLocalMeta(selectedTicketId, { resolution });
+    updateConversationStatus(selectedTicketId, newStatus);
     setResolveOpen(false);
     setResolveError("");
     setResolveSubmitPassword("");
@@ -1180,21 +1197,18 @@ export default function AdminPage() {
     if (pw.length < 4) { setApproveError("Password is too short."); return; }
     const now = Date.now();
     const approver = agentName();
-    const next = mutateTickets(cur => cur.map(t => {
+    setTickets(prev => prev.map(t => {
       if (t.id !== id || t.status !== "pending_resolution" || !t.resolution) return t;
-      return {
+      const updated = {
         ...t,
         status: "resolved" as const,
         updatedAt: now,
-        resolution: {
-          ...t.resolution,
-          approvedBy: approver,
-          approvedByRole: "admin" as const,
-          approvedAt: now,
-        },
+        resolution: { ...t.resolution, approvedBy: approver, approvedByRole: "admin" as const, approvedAt: now },
       };
+      setLocalMeta(id, { resolution: updated.resolution });
+      return updated;
     }));
-    setTickets(next);
+    updateConversationStatus(id, "resolved");
     setApprovePassword("");
     setApproveError("");
   }
@@ -1202,21 +1216,21 @@ export default function AdminPage() {
   function rejectResolution(id: string) {
     if (role !== "admin") return;
     const now = Date.now();
-    const next = mutateTickets(cur => cur.map(t => t.id === id && t.status === "pending_resolution"
-      ? { ...t, status: "open", updatedAt: now, resolution: undefined }
+    setTickets(prev => prev.map(t => t.id === id && t.status === "pending_resolution"
+      ? { ...t, status: "open" as const, updatedAt: now, resolution: undefined }
       : t));
-    setTickets(next);
-    // Sending it back is a context exit — wipe any half-typed admin password.
+    setLocalMeta(id, { resolution: undefined });
+    updateConversationStatus(id, "open");
     resetResolutionAuthFields();
   }
 
   function reopenTicket(id: string) {
     if (role !== "admin") return;
     const now = Date.now();
-    const next = mutateTickets(cur => cur.map(t => t.id === id && t.status === "resolved"
-      ? { ...t, status: "open", updatedAt: now }
+    setTickets(prev => prev.map(t => t.id === id && t.status === "resolved"
+      ? { ...t, status: "open" as const, updatedAt: now }
       : t));
-    setTickets(next);
+    updateConversationStatus(id, "open");
   }
 
   // Forgot-password flow.

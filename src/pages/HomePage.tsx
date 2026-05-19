@@ -189,13 +189,10 @@ export default function HomePage() {
         alignItems: "center", padding: "48px 20px 0", boxSizing: "border-box", zIndex: 5,
       }}>
         <div style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-          <button
-            onClick={openAdmin}
-            style={{ display: "flex", alignItems: "center", gap: 8, background: "none", border: "none", cursor: "pointer", padding: 0 }}
-          >
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: 0 }}>
             <PadSVG size={28} />
             <span style={{ color: "rgba(255,255,255,0.55)", fontSize: 11, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase" }}>lily pad</span>
-          </button>
+          </div>
         </div>
 
         <div style={{ display: "flex", justifyContent: "center", marginTop: 24, flexShrink: 0 }}>

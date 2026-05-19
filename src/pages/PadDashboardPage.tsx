@@ -222,14 +222,9 @@ export default function PadDashboardPage() {
       {/* Header */}
       <div style={{ flexShrink: 0, padding: "52px 20px 22px", background: NAVY }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <button onClick={() => {
-            if (openPad) { setOpenPadId(null); return; }
-            setState(s => ({ ...s, openAcctOnFind: true }));
-            goTo("find");
-          }}
-            style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.12)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
+          <div style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
-          </button>
+          </div>
           <div>
             <div style={{ fontSize: 20, fontWeight: 800, color: "#fff", letterSpacing: -0.5 }}>
               {openPad ? openPad.nickname || openPad.address : "My Pads"}

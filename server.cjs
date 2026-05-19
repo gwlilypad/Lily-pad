@@ -498,6 +498,30 @@ app.post('/api/staff/record-activation', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Staff whitelist-add — just inserts email, no email sending ───────────────
+app.post('/api/staff/whitelist-add', async (req, res) => {
+  if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });
+  const { email, role } = req.body || {};
+  if (!email || !role) return res.status(400).json({ error: 'email and role required' });
+  const emailLower = email.toLowerCase().trim();
+  if (!emailLower.includes('@')) return res.status(400).json({ error: 'Invalid email address' });
+  if (!['staff', 'admin'].includes(role)) return res.status(400).json({ error: 'role must be staff or admin' });
+  try {
+    const table = role === 'admin' ? 'admin_whitelist' : 'staff_whitelist';
+    const wlRes = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+      method : 'POST',
+      headers: { ...SVC_HEADERS, 'Prefer': 'resolution=ignore-duplicates,return=minimal' },
+      body   : JSON.stringify({ email: emailLower }),
+    });
+    if (!wlRes.ok && wlRes.status !== 409) {
+      const wlErr = await wlRes.json().catch(() => ({}));
+      throw new Error(wlErr.message || `Failed to add to whitelist (${wlRes.status})`);
+    }
+    console.log(`[Whitelist] ${emailLower} added to ${table} as ${role}`);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Staff invite — whitelist email + send Resend invitation ──────────────────
 app.post('/api/staff/invite', async (req, res) => {
   if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });

@@ -3115,25 +3115,25 @@ export default function FindPage() {
                     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
                     label: "My Account",
                     sub: "Photo & personal info",
-                    onClick: () => setAcctView("account"),
+                    onClick: () => { setAcctOpen(false); acctOpenRef.current = false; goTo(state.accountType === "padRenter" ? "account" : "driveraccount"); },
                   },
                   {
                     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>,
                     label: "My Bookings",
                     sub: upcoming > 0 ? `${upcoming} upcoming` : "Past & upcoming",
-                    onClick: () => setAcctView("bookings"),
+                    onClick: () => { setAcctOpen(false); acctOpenRef.current = false; goTo("bookings"); },
                   },
                   {
                     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>,
                     label: "Customer Service",
                     sub: openCount > 0 ? `${openCount} open conversation${openCount !== 1 ? "s" : ""}` : "Contact us or chat with a rep",
-                    onClick: () => setAcctView("support"),
+                    onClick: () => { setAcctOpen(false); acctOpenRef.current = false; setAcctView("support"); setTimeout(() => setAcctOpen(true), 50); },
                   },
                   {
                     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
                     label: "Saved Spots",
                     sub: `${savedSpots.length} spot${savedSpots.length !== 1 ? "s" : ""} saved`,
-                    onClick: () => setAcctView("saved"),
+                    onClick: () => { setAcctOpen(false); acctOpenRef.current = false; setAcctView("saved"); setTimeout(() => setAcctOpen(true), 50); },
                   },
                 ];
                 return items.map(item => (

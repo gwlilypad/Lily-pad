@@ -204,12 +204,6 @@ export default function HomePage() {
             <PadSVG size={28} />
             <span style={{ color: "rgba(255,255,255,0.55)", fontSize: 11, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase" }}>lily pad</span>
           </button>
-          <button
-            onClick={() => goTo("home")}
-            style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(255,255,255,0.12)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-          </button>
         </div>
 
         <div style={{ display: "flex", justifyContent: "center", marginTop: 24, flexShrink: 0 }}>

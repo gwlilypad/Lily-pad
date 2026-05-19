@@ -28,155 +28,9 @@ const NEIGHBORHOOD_ZOOM = 14;
 const GLOBE_CENTER: [number, number] = [20, 0];
 const GLOBE_ZOOM = 2;
 
-const SPOTS = [
-  // Downtown
-  { id:1,  price:"$6/hr", addr:"811 Main St",           meta:"Garage · 0.1 mi",   lat:29.7570, lng:-95.3677, featured:true  },
-  { id:2,  price:"$5/hr", addr:"1200 Travis St",         meta:"Covered · 0.2 mi",  lat:29.7583, lng:-95.3692, featured:false },
-  { id:3,  price:"$4/hr", addr:"910 Louisiana St",       meta:"Garage · 0.3 mi",   lat:29.7561, lng:-95.3703, featured:false },
-  { id:4,  price:"$3/hr", addr:"602 Smith St",           meta:"Street · 0.4 mi",   lat:29.7550, lng:-95.3715, featured:false },
-  { id:5,  price:"$7/hr", addr:"1400 Milam St",          meta:"Garage · 0.2 mi",   lat:29.7590, lng:-95.3660, featured:true  },
-  { id:6,  price:"$4/hr", addr:"320 Bagby St",           meta:"Driveway · 0.5 mi", lat:29.7545, lng:-95.3728, featured:false },
-  { id:7,  price:"$5/hr", addr:"700 Rusk St",            meta:"Covered · 0.3 mi",  lat:29.7535, lng:-95.3680, featured:false },
-  { id:8,  price:"$3/hr", addr:"415 Polk St",            meta:"Street · 0.6 mi",   lat:29.7520, lng:-95.3695, featured:false },
-  // Midtown
-  { id:9,  price:"$4/hr", addr:"3200 Milam St",          meta:"Driveway · 0.4 mi", lat:29.7418, lng:-95.3742, featured:false },
-  { id:10, price:"$3/hr", addr:"2800 Main St",           meta:"Street · 0.5 mi",   lat:29.7438, lng:-95.3700, featured:false },
-  { id:11, price:"$5/hr", addr:"3100 Travis St",         meta:"Garage · 0.3 mi",   lat:29.7425, lng:-95.3720, featured:true  },
-  { id:12, price:"$2/hr", addr:"2600 Fannin St",         meta:"Street · 0.7 mi",   lat:29.7410, lng:-95.3760, featured:false },
-  { id:13, price:"$4/hr", addr:"3400 San Jacinto St",    meta:"Driveway · 0.5 mi", lat:29.7400, lng:-95.3690, featured:false },
-  // Montrose
-  { id:14, price:"$3/hr", addr:"1701 Montrose Blvd",     meta:"Driveway · 0.3 mi", lat:29.7463, lng:-95.3910, featured:false },
-  { id:15, price:"$4/hr", addr:"2010 Westheimer Rd",     meta:"Covered · 0.4 mi",  lat:29.7452, lng:-95.3945, featured:false },
-  { id:16, price:"$2/hr", addr:"515 Harold St",          meta:"Street · 0.6 mi",   lat:29.7480, lng:-95.3888, featured:false },
-  { id:17, price:"$5/hr", addr:"1805 Sul Ross St",       meta:"Garage · 0.2 mi",   lat:29.7440, lng:-95.3930, featured:false },
-  { id:18, price:"$3/hr", addr:"618 Avondale St",        meta:"Driveway · 0.8 mi", lat:29.7470, lng:-95.3870, featured:false },
-  // Heights
-  { id:19, price:"$3/hr", addr:"720 Heights Blvd",       meta:"Driveway · 0.5 mi", lat:29.7920, lng:-95.4010, featured:false },
-  { id:20, price:"$2/hr", addr:"1012 Harvard St",        meta:"Street · 0.6 mi",   lat:29.7935, lng:-95.4028, featured:false },
-  { id:21, price:"$4/hr", addr:"1350 Yale St",           meta:"Covered · 0.4 mi",  lat:29.7950, lng:-95.3990, featured:true  },
-  { id:22, price:"$3/hr", addr:"830 Oxford St",          meta:"Driveway · 0.7 mi", lat:29.7905, lng:-95.4050, featured:false },
-  { id:23, price:"$2/hr", addr:"1100 Columbia St",       meta:"Street · 0.9 mi",   lat:29.7960, lng:-95.3970, featured:false },
-  // Washington Ave corridor
-  { id:24, price:"$4/hr", addr:"4100 Washington Ave",    meta:"Driveway · 0.4 mi", lat:29.7730, lng:-95.4100, featured:false },
-  { id:25, price:"$3/hr", addr:"3800 Washington Ave",    meta:"Street · 0.5 mi",   lat:29.7720, lng:-95.4060, featured:false },
-  { id:26, price:"$5/hr", addr:"4500 Washington Ave",    meta:"Garage · 0.3 mi",   lat:29.7740, lng:-95.4140, featured:false },
-  // Galleria / Uptown
-  { id:27, price:"$6/hr", addr:"5000 Westheimer Rd",     meta:"Garage · 0.2 mi",   lat:29.7390, lng:-95.4620, featured:true  },
-  { id:28, price:"$5/hr", addr:"1700 Post Oak Blvd",     meta:"Covered · 0.3 mi",  lat:29.7408, lng:-95.4640, featured:false },
-  { id:29, price:"$4/hr", addr:"4800 Richmond Ave",      meta:"Driveway · 0.5 mi", lat:29.7375, lng:-95.4590, featured:false },
-  { id:30, price:"$7/hr", addr:"5300 Westheimer Rd",     meta:"Garage · 0.1 mi",   lat:29.7382, lng:-95.4665, featured:true  },
-  { id:31, price:"$3/hr", addr:"2100 Briargrove Dr",     meta:"Driveway · 0.6 mi", lat:29.7360, lng:-95.4610, featured:false },
-  // Greenway Plaza
-  { id:32, price:"$5/hr", addr:"3400 Bissonnet St",      meta:"Garage · 0.3 mi",   lat:29.7320, lng:-95.4510, featured:false },
-  { id:33, price:"$4/hr", addr:"3200 Richmond Ave",      meta:"Covered · 0.4 mi",  lat:29.7338, lng:-95.4480, featured:false },
-  { id:34, price:"$3/hr", addr:"2900 Weslayan St",       meta:"Driveway · 0.5 mi", lat:29.7350, lng:-95.4420, featured:false },
-  // Medical Center
-  { id:35, price:"$6/hr", addr:"6800 Fannin St",         meta:"Garage · 0.2 mi",   lat:29.7085, lng:-95.3980, featured:true  },
-  { id:36, price:"$5/hr", addr:"7200 Cambridge St",      meta:"Covered · 0.3 mi",  lat:29.7060, lng:-95.4010, featured:false },
-  { id:37, price:"$4/hr", addr:"6600 Main St",           meta:"Driveway · 0.4 mi", lat:29.7100, lng:-95.3955, featured:false },
-  { id:38, price:"$3/hr", addr:"7000 Bertner Ave",       meta:"Street · 0.5 mi",   lat:29.7072, lng:-95.3940, featured:false },
-  // Rice Village / Museum District
-  { id:39, price:"$4/hr", addr:"2400 University Blvd",   meta:"Driveway · 0.4 mi", lat:29.7182, lng:-95.4052, featured:false },
-  { id:40, price:"$3/hr", addr:"5700 Greenbriar Dr",     meta:"Street · 0.6 mi",   lat:29.7165, lng:-95.4080, featured:false },
-  { id:41, price:"$5/hr", addr:"2600 Bissonnet St",      meta:"Covered · 0.3 mi",  lat:29.7200, lng:-95.4020, featured:false },
-  // Energy Corridor
-  { id:42, price:"$3/hr", addr:"1200 Enclave Pkwy",      meta:"Driveway · 0.5 mi", lat:29.7632, lng:-95.5780, featured:false },
-  { id:43, price:"$4/hr", addr:"900 Eldridge Pkwy",      meta:"Covered · 0.4 mi",  lat:29.7645, lng:-95.5820, featured:false },
-  { id:44, price:"$2/hr", addr:"1550 Dairy Ashford Rd",  meta:"Street · 0.7 mi",   lat:29.7618, lng:-95.5750, featured:false },
-  { id:45, price:"$5/hr", addr:"2100 City West Blvd",    meta:"Garage · 0.3 mi",   lat:29.7660, lng:-95.5698, featured:false },
-  { id:46, price:"$3/hr", addr:"1800 Barker Cypress Rd", meta:"Driveway · 0.6 mi", lat:29.7672, lng:-95.5840, featured:false },
-  // Westchase
-  { id:47, price:"$3/hr", addr:"3600 Westchase Dr",      meta:"Driveway · 0.5 mi", lat:29.7285, lng:-95.5480, featured:false },
-  { id:48, price:"$4/hr", addr:"3200 Wilcrest Dr",       meta:"Covered · 0.4 mi",  lat:29.7270, lng:-95.5510, featured:false },
-  { id:49, price:"$2/hr", addr:"10500 Richmond Ave",     meta:"Street · 0.6 mi",   lat:29.7300, lng:-95.5420, featured:false },
-  // Memorial / Spring Branch
-  { id:50, price:"$3/hr", addr:"1400 Tully Rd",          meta:"Driveway · 0.5 mi", lat:29.7780, lng:-95.5120, featured:false },
-  { id:51, price:"$4/hr", addr:"8800 Memorial Dr",       meta:"Covered · 0.4 mi",  lat:29.7760, lng:-95.5050, featured:false },
-  { id:52, price:"$2/hr", addr:"1700 Gessner Rd",        meta:"Street · 0.7 mi",   lat:29.7800, lng:-95.5080, featured:false },
-  { id:53, price:"$5/hr", addr:"9400 Katy Fwy",          meta:"Garage · 0.2 mi",   lat:29.7755, lng:-95.5180, featured:true  },
-  // River Oaks
-  { id:54, price:"$4/hr", addr:"3400 Westheimer Rd",     meta:"Driveway · 0.4 mi", lat:29.7502, lng:-95.4338, featured:false },
-  { id:55, price:"$3/hr", addr:"2200 River Oaks Blvd",   meta:"Street · 0.5 mi",   lat:29.7518, lng:-95.4360, featured:false },
-  { id:56, price:"$5/hr", addr:"3000 Kirby Dr",          meta:"Covered · 0.3 mi",  lat:29.7488, lng:-95.4302, featured:false },
-  // EaDo / East End
-  { id:57, price:"$3/hr", addr:"2100 Edwards St",        meta:"Driveway · 0.5 mi", lat:29.7508, lng:-95.3420, featured:false },
-  { id:58, price:"$2/hr", addr:"1800 Sampson St",        meta:"Street · 0.7 mi",   lat:29.7525, lng:-95.3380, featured:false },
-  { id:59, price:"$4/hr", addr:"2400 Canal St",          meta:"Covered · 0.4 mi",  lat:29.7490, lng:-95.3450, featured:false },
-  // Third Ward
-  { id:60, price:"$2/hr", addr:"3100 Emancipation Ave",  meta:"Street · 0.6 mi",   lat:29.7342, lng:-95.3618, featured:false },
-  { id:61, price:"$3/hr", addr:"2800 Ennis St",          meta:"Driveway · 0.5 mi", lat:29.7328, lng:-95.3640, featured:false },
-  // Sugar Land
-  { id:62, price:"$2/hr", addr:"14500 Hwy 6 S",          meta:"Driveway · 1.2 mi", lat:29.6198, lng:-95.6482, featured:false },
-  { id:63, price:"$3/hr", addr:"2200 Williams Trace Blvd",meta:"Covered · 0.8 mi", lat:29.6220, lng:-95.6440, featured:false },
-  { id:64, price:"$2/hr", addr:"4400 Sweetwater Blvd",   meta:"Street · 1.0 mi",   lat:29.6178, lng:-95.6510, featured:false },
-  { id:65, price:"$4/hr", addr:"1800 First Colony Blvd", meta:"Garage · 0.6 mi",   lat:29.6155, lng:-95.6390, featured:false },
-  // Pearland
-  { id:66, price:"$2/hr", addr:"2800 Pearland Pkwy",     meta:"Driveway · 0.9 mi", lat:29.5598, lng:-95.3142, featured:false },
-  { id:67, price:"$3/hr", addr:"1500 Broadway St",       meta:"Street · 1.1 mi",   lat:29.5618, lng:-95.3108, featured:false },
-  { id:68, price:"$2/hr", addr:"3200 Miller Ranch Rd",   meta:"Driveway · 1.3 mi", lat:29.5575, lng:-95.3178, featured:false },
-  // Pasadena / East Houston
-  { id:69, price:"$2/hr", addr:"4100 Fairmont Pkwy",     meta:"Driveway · 1.0 mi", lat:29.6882, lng:-95.2108, featured:false },
-  { id:70, price:"$3/hr", addr:"1700 Red Bluff Rd",      meta:"Street · 0.8 mi",   lat:29.6905, lng:-95.2048, featured:false },
-  { id:71, price:"$2/hr", addr:"3800 Spencer Hwy",       meta:"Driveway · 1.2 mi", lat:29.6862, lng:-95.2168, featured:false },
-  // Clear Lake / Webster
-  { id:72, price:"$3/hr", addr:"1200 NASA Rd 1",         meta:"Covered · 0.6 mi",  lat:29.5522, lng:-95.1128, featured:false },
-  { id:73, price:"$2/hr", addr:"800 Bay Area Blvd",      meta:"Driveway · 0.8 mi", lat:29.5545, lng:-95.1182, featured:false },
-  { id:74, price:"$4/hr", addr:"1600 El Camino Real",    meta:"Garage · 0.5 mi",   lat:29.5500, lng:-95.1068, featured:false },
-  // Katy
-  { id:75, price:"$2/hr", addr:"22000 Kingsland Blvd",   meta:"Driveway · 1.0 mi", lat:29.7878, lng:-95.8148, featured:false },
-  { id:76, price:"$3/hr", addr:"1800 Mason Rd",          meta:"Street · 0.8 mi",   lat:29.7892, lng:-95.8188, featured:false },
-  { id:77, price:"$2/hr", addr:"3600 S Mason Rd",        meta:"Driveway · 1.2 mi", lat:29.7858, lng:-95.8118, featured:false },
-  // The Woodlands
-  { id:78, price:"$3/hr", addr:"2200 Woodlands Pkwy",    meta:"Driveway · 0.7 mi", lat:30.1638, lng:-95.5018, featured:false },
-  { id:79, price:"$4/hr", addr:"1400 Lake Woodlands Dr", meta:"Covered · 0.5 mi",  lat:30.1658, lng:-95.4988, featured:false },
-  { id:80, price:"$2/hr", addr:"3800 Research Forest Dr",meta:"Street · 0.9 mi",   lat:30.1618, lng:-95.5048, featured:false },
-  { id:81, price:"$5/hr", addr:"1100 Cynthia Woods Mitchell Pkwy",meta:"Garage · 0.3 mi",lat:30.1675,lng:-95.4958,featured:true },
-  // Cypress
-  { id:82, price:"$2/hr", addr:"12800 Barker Cypress Rd",meta:"Driveway · 1.0 mi", lat:29.9698, lng:-95.7028, featured:false },
-  { id:83, price:"$3/hr", addr:"9400 Fry Rd",            meta:"Street · 0.8 mi",   lat:29.9718, lng:-95.6988, featured:false },
-  { id:84, price:"$2/hr", addr:"7200 Cypress Creek Pkwy",meta:"Driveway · 1.1 mi", lat:29.9678, lng:-95.7068, featured:false },
-  // Humble / Kingwood
-  { id:85, price:"$2/hr", addr:"8800 Kingwood Dr",       meta:"Driveway · 0.9 mi", lat:29.9962, lng:-95.2908, featured:false },
-  { id:86, price:"$3/hr", addr:"2100 Humble Westfield Rd",meta:"Street · 1.0 mi",  lat:29.9982, lng:-95.2868, featured:false },
-  { id:87, price:"$2/hr", addr:"4200 Atascocita Rd",     meta:"Driveway · 1.2 mi", lat:29.9942, lng:-95.2948, featured:false },
-  // Stafford / Missouri City
-  { id:88, price:"$2/hr", addr:"3200 Boone Rd",          meta:"Driveway · 0.8 mi", lat:29.6278, lng:-95.5488, featured:false },
-  { id:89, price:"$3/hr", addr:"1500 Murphy Rd",         meta:"Street · 1.0 mi",   lat:29.6298, lng:-95.5448, featured:false },
-  { id:90, price:"$2/hr", addr:"2800 Texas Pkwy",        meta:"Driveway · 1.1 mi", lat:29.6258, lng:-95.5528, featured:false },
-  // Bellaire
-  { id:91, price:"$3/hr", addr:"5100 Bellaire Blvd",     meta:"Driveway · 0.4 mi", lat:29.7058, lng:-95.4588, featured:false },
-  { id:92, price:"$4/hr", addr:"4700 Evergreen St",      meta:"Covered · 0.5 mi",  lat:29.7075, lng:-95.4552, featured:false },
-  { id:93, price:"$2/hr", addr:"5400 Cedar St",          meta:"Street · 0.6 mi",   lat:29.7040, lng:-95.4620, featured:false },
-  // Northeast Houston
-  { id:94, price:"$2/hr", addr:"6200 Jensen Dr",         meta:"Driveway · 1.0 mi", lat:29.8002, lng:-95.3348, featured:false },
-  { id:95, price:"$3/hr", addr:"8100 Fulton St",         meta:"Street · 0.8 mi",   lat:29.8022, lng:-95.3308, featured:false },
-  // Southwest Houston
-  { id:96, price:"$2/hr", addr:"9200 Bissonnet St",      meta:"Driveway · 0.9 mi", lat:29.6982, lng:-95.5108, featured:false },
-  { id:97, price:"$3/hr", addr:"6800 Hillcroft Ave",     meta:"Street · 0.7 mi",   lat:29.6958, lng:-95.5148, featured:false },
-  { id:98, price:"$2/hr", addr:"7500 Westheimer Rd",     meta:"Driveway · 1.0 mi", lat:29.7338, lng:-95.5068, featured:false },
-  // Meyerland / Braeswood
-  { id:99,  price:"$3/hr", addr:"4900 Braeswood Blvd",   meta:"Covered · 0.5 mi",  lat:29.6985, lng:-95.4428, featured:false },
-  { id:100, price:"$4/hr", addr:"4200 Beechnut St",      meta:"Garage · 0.4 mi",   lat:29.7002, lng:-95.4468, featured:true  },
-  // Lancaster Lane / Sunnyside (77051)
-  { id:131, price:"$3/hr", addr:"10402 Lancaster Ln",    meta:"Driveway · 0.1 mi", lat:29.6712, lng:-95.3962, featured:false },
-  { id:132, price:"$4/hr", addr:"10614 Lancaster Ln",    meta:"Covered · 0.1 mi",  lat:29.6705, lng:-95.4005, featured:false },
-  { id:133, price:"$3/hr", addr:"3912 Wichita St",       meta:"Street · 0.3 mi",   lat:29.6732, lng:-95.3928, featured:false },
-  { id:134, price:"$2/hr", addr:"10118 Culberson St",    meta:"Driveway · 0.3 mi", lat:29.6748, lng:-95.3990, featured:false },
-  { id:135, price:"$3/hr", addr:"4205 Calhoun Rd",       meta:"Street · 0.4 mi",   lat:29.6682, lng:-95.4038, featured:false },
-  { id:136, price:"$4/hr", addr:"9802 Culberson St",     meta:"Covered · 0.6 mi",  lat:29.6778, lng:-95.3975, featured:false },
-  { id:137, price:"$5/hr", addr:"3720 S MacGregor Way",  meta:"Garage · 0.7 mi",   lat:29.6662, lng:-95.3888, featured:true  },
-  { id:138, price:"$2/hr", addr:"4508 Reed Rd",          meta:"Driveway · 0.8 mi", lat:29.6642, lng:-95.4062, featured:false },
-  { id:139, price:"$3/hr", addr:"10305 Melnrose St",     meta:"Street · 0.7 mi",   lat:29.6798, lng:-95.4048, featured:false },
-  { id:140, price:"$4/hr", addr:"3801 Old Spanish Trail", meta:"Garage · 1.1 mi",  lat:29.6602, lng:-95.3918, featured:false },
-  { id:141, price:"$2/hr", addr:"4812 Yellowstone Blvd", meta:"Driveway · 1.0 mi", lat:29.6832, lng:-95.4108, featured:false },
-  { id:142, price:"$4/hr", addr:"10850 Culberson St",    meta:"Covered · 0.9 mi",  lat:29.6822, lng:-95.3982, featured:true  },
-  // Near 10509 Lancaster Ln
-  { id:143, price:"$3/hr", addr:"10509 Lancaster Ln",   meta:"Driveway · 0.0 mi", lat:29.6708, lng:-95.3984, featured:true  },
-  { id:144, price:"$2/hr", addr:"10523 Culberson St",   meta:"Street · 0.2 mi",   lat:29.6735, lng:-95.3985, featured:false },
-  { id:145, price:"$4/hr", addr:"4110 Mykawa Rd",       meta:"Driveway · 0.3 mi", lat:29.6712, lng:-95.3942, featured:false },
-  { id:146, price:"$5/hr", addr:"3815 Reed Rd",         meta:"EV · 0.4 mi",       lat:29.6682, lng:-95.4012, featured:false },
-  { id:147, price:"$4/hr", addr:"4104 Scott St",        meta:"Covered · 0.5 mi",  lat:29.6752, lng:-95.3990, featured:false },
-];
+type SpotRecord = { id: number; price: string; addr: string; meta: string; lat: number; lng: number; featured: boolean; host_name?: string };
+
+const SPOTS: SpotRecord[] = [];
 
 const FILTERS = ["All", "Driveway", "Garage", "Covered", "EV"];
 // CartoDB Voyager (light) — kept for reference but not currently used
@@ -455,18 +309,12 @@ function photonToNom(f: PhotonFeature, idx: number): NominatimResult {
 }
 
 type SpotStatus = "available" | "booked" | "almost";
-function getSpotStatus(id: number): SpotStatus {
-  if (id % 5 === 2) return "booked";
-  if (id % 5 === 4) return "almost";
+function getSpotStatus(_id: number): SpotStatus {
   return "available";
 }
 
-// Synthesized open hours per spot (mirrors windowKind logic in pad detail).
-function getSpotHours(id: number): { openHour: number; closeHour: number } {
-  const k = id % 3;
-  if (k === 0) return { openHour: 0, closeHour: 24 };
-  if (k === 1) return { openHour: 6, closeHour: 22 };
-  return { openHour: 8, closeHour: 20 };
+function getSpotHours(_id: number): { openHour: number; closeHour: number } {
+  return { openHour: 0, closeHour: 24 };
 }
 
 const _boltSvg = `<svg width="9" height="11" viewBox="0 0 13 17" fill="rgba(255,255,255,0.95)" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 0 3px rgba(255,255,255,0.80)) drop-shadow(0 0 6px rgba(140,205,255,0.65))"><path d="M8.5 0L1 10h5.2L5 17L13 7H7.8L8.5 0z"/></svg>`;
@@ -1143,7 +991,7 @@ try {
 export default function FindPage() {
   const { goTo, state, setState: setAppState } = useApp();
   const { profile, signOut: authSignOut } = useAuth();
-  const [spots, setSpots] = useState(SPOTS);
+  const [spots, setSpots] = useState<SpotRecord[]>([]);
 
   useEffect(() => {
     fetch("/api/spots")
@@ -1151,13 +999,14 @@ export default function FindPage() {
       .then((data: unknown) => {
         if (Array.isArray(data) && data.length > 0) {
           const mapped = (data as Record<string, unknown>[]).map(s => ({
-            id:       Number(s.id),
-            price:    s.price_per_hr ? `$${s.price_per_hr}/hr` : "$4/hr",
-            addr:     String(s.address || s.addr || "Houston, TX"),
-            meta:     `${s.pad_type || "Driveway"} · nearby`,
-            lat:      Number(s.lat),
-            lng:      Number(s.lng),
-            featured: Boolean(s.featured),
+            id:        Number(s.id),
+            price:     s.price_per_hr ? `$${s.price_per_hr}/hr` : "$4/hr",
+            addr:      String(s.address || s.addr || "Houston, TX"),
+            meta:      `${s.pad_type || "Driveway"} · nearby`,
+            lat:       Number(s.lat),
+            lng:       Number(s.lng),
+            featured:  Boolean(s.featured),
+            host_name: String(s.host_name || s.host_full_name || ""),
           }));
           setSpots(mapped);
         }
@@ -2782,29 +2631,9 @@ export default function FindPage() {
                     </p>
                   </div>
                 ) : (() => {
-                  const HOST_NAMES = ["Marcus T.", "Sarah L.", "James R.", "Priya K.", "David M.", "Emma W.", "Tyler B.", "Ana M."];
-                  const nowD = new Date();
-                  const nowMin = nowD.getHours() * 60 + nowD.getMinutes();
                   type Avail = { kind: "open" | "soon" | "later"; openMin: number; closeMin: number; openLabel: string };
-                  const computeAvail = (id: number): Avail => {
-                    const h = getSpotHours(id);
-                    const closeMin = h.closeHour * 60;
-                    // Distribution tuned for demo: ~30% open, ~50% soon (within an hour, varying times), ~20% later
-                    const bucket = id % 10;
-                    if (bucket <= 2) {
-                      const openMin = h.openHour * 60;
-                      return { kind: "open", openMin, closeMin, openLabel: fmtMinLabel(openMin) };
-                    }
-                    if (bucket <= 7) {
-                      const offsets = [10, 20, 30, 40, 50];
-                      const offset = offsets[(id * 7) % offsets.length];
-                      const rawMin = nowMin + offset;
-                      const roundedMin = Math.round(rawMin / 5) * 5;
-                      const openMin = roundedMin % (24 * 60);
-                      return { kind: "soon", openMin, closeMin, openLabel: fmtMinLabel(openMin) };
-                    }
-                    const laterMin = (nowMin + 90 + (id * 13) % 240) % (24 * 60);
-                    return { kind: "later", openMin: laterMin, closeMin, openLabel: fmtMinLabel(laterMin) };
+                  const computeAvail = (_id: number): Avail => {
+                    return { kind: "open", openMin: 0, closeMin: 24 * 60, openLabel: "" };
                   };
                   const padsWithAvail = pads.map(s => ({ spot: s, avail: computeAvail(s.id) }));
                   const grouping = parkMode === "now";
@@ -2816,7 +2645,7 @@ export default function FindPage() {
                   }
 
                   const renderCard = ({ spot, avail }: { spot: typeof pads[number]; avail: Avail }) => {
-                    const hostName = HOST_NAMES[spot.id % HOST_NAMES.length];
+                    const hostName = spot.host_name || "Host";
                     const parts = spot.meta.split("·").map(s => s.trim());
                     const padType = parts[0];
                     const priceNum = spot.price.replace(/[^0-9]/g, "");
@@ -2906,11 +2735,8 @@ export default function FindPage() {
         {/* ── Pad detail dashboard — shown when a spot is selected ── */}
         {selectedSpot !== null && (() => {
           const spot = spots.find(s => s.id === selectedSpot)!;
-          const HOST_NAMES = ["Marcus T.", "Sarah L.", "James R.", "Priya K.", "David M.", "Emma W.", "Tyler B.", "Ana M."];
-          const hostName = HOST_NAMES[spot.id % HOST_NAMES.length];
-          const hostInitials = hostName.split(" ").map(w => w[0]).join("");
-          const rating = (4.5 + (spot.id % 5) * 0.1).toFixed(1);
-          const reviews = 12 + (spot.id * 17) % 188;
+          const hostName = spot.host_name || "Host";
+          const hostInitials = hostName.split(" ").filter(Boolean).map((w: string) => w[0]).join("") || "H";
           const padType = spot.meta.split("·")[0].trim();
           const ALL_GRADIENTS = [
             "linear-gradient(145deg,#1e3a5f 0%,#2d5986 100%)",
@@ -2919,39 +2745,15 @@ export default function FindPage() {
             "linear-gradient(145deg,#1e2a3a 0%,#2a3d5c 100%)",
             "linear-gradient(145deg,#3a1e2a 0%,#5c2a3d 100%)",
           ];
-          const photoCount = 3 + (spot.id % 3);
-          const PHOTO_GRADIENTS = Array.from({ length: photoCount }, (_, i) => ALL_GRADIENTS[(spot.id + i) % ALL_GRADIENTS.length]);
+          const photoCount = 1;
+          const PHOTO_GRADIENTS = [ALL_GRADIENTS[spot.id % ALL_GRADIENTS.length]];
           const status = getSpotStatus(spot.id);
           const userBookings = state.bookings.filter(b => b.spotId === spot.id && b.status === "active");
           const nowMs = Date.now();
           const liveBooked = userBookings.some(b => b.startTs <= nowMs && nowMs < b.endTs);
           const isBooked = status === "booked" || liveBooked;
           const conflict = bookStartTs != null && bookEndTs != null && userBookings.some(b => Math.max(b.startTs, bookStartTs) < Math.min(b.endTs, bookEndTs));
-          // Same availability marker logic as the list view
-          const _detailNow = new Date();
-          const _detailNowMin = _detailNow.getHours() * 60 + _detailNow.getMinutes();
-          const _detailFmt = (totalMin: number) => {
-            const h = Math.floor(totalMin / 60) % 24, m = totalMin % 60;
-            const ap = h >= 12 ? "PM" : "AM";
-            const hr = h === 0 ? 12 : h > 12 ? h - 12 : h;
-            return `${hr}:${String(m).padStart(2, "0")} ${ap}`;
-          };
-          let detailAvail: { kind: "open" | "soon" | "later"; openLabel: string };
-          {
-            const bucket = spot.id % 10;
-            if (bucket <= 2) {
-              detailAvail = { kind: "open", openLabel: "" };
-            } else if (bucket <= 7) {
-              const offsets = [10, 20, 30, 40, 50];
-              const offset = offsets[(spot.id * 7) % offsets.length];
-              const rawMin = _detailNowMin + offset;
-              const roundedMin = Math.round(rawMin / 5) * 5;
-              detailAvail = { kind: "soon", openLabel: _detailFmt(roundedMin % (24 * 60)) };
-            } else {
-              const laterMin = (_detailNowMin + 90 + (spot.id * 13) % 240) % (24 * 60);
-              detailAvail = { kind: "later", openLabel: _detailFmt(laterMin) };
-            }
-          }
+          const detailAvail = { kind: "open" as const, openLabel: "" };
           return (
             <div style={{ flex: 1, minHeight: 0, overflowY: "auto", WebkitOverflowScrolling: "touch" as any, touchAction: "pan-y", display: "flex", flexDirection: "column", scrollbarWidth: "none" }}>
 
@@ -3037,11 +2839,7 @@ export default function FindPage() {
                   <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 1 }}>Pad host · Joined 2023</div>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <span style={{ color: "#FBBF24", fontSize: 12 }}>★</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>{rating}</span>
-                  </div>
-                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)" }}>{reviews} reviews</div>
+                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)" }}>Pad host</div>
                 </div>
               </div>
 
@@ -3049,9 +2847,8 @@ export default function FindPage() {
               {/* ── Inline booking ── */}
               {(() => {
                 const priceNum = Number(spot.price.replace(/[^0-9]/g, "")) || 0;
-                const windowKind = spot.id % 3;
-                const openHour = windowKind === 0 ? 0 : windowKind === 1 ? 6 : 8;
-                const closeHour = windowKind === 0 ? 24 : windowKind === 1 ? 22 : 20;
+                const openHour = 0;
+                const closeHour = 24;
                 const startD = bookStartTs != null ? new Date(bookStartTs) : null;
                 const endD = bookEndTs != null ? new Date(bookEndTs) : null;
                 const toDateInput = (d: Date | null) => d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}` : "";
@@ -3731,8 +3528,8 @@ export default function FindPage() {
           "linear-gradient(145deg,#1e2a3a 0%,#2a3d5c 100%)",
           "linear-gradient(145deg,#3a1e2a 0%,#5c2a3d 100%)",
         ];
-        const photoCount = 3 + (spot.id % 3);
-        const grads = Array.from({ length: photoCount }, (_, i) => ALL_GRADIENTS[(spot.id + i) % ALL_GRADIENTS.length]);
+        const photoCount = 1;
+        const grads = [ALL_GRADIENTS[spot.id % ALL_GRADIENTS.length]];
         const idx = Math.max(0, Math.min(lightboxIdx, photoCount - 1));
         return (
           <div

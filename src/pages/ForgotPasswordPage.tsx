@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
-import { PadSVG } from "@/components/PadSVG";
 
 const GREEN = "#8DD63F";
 const NAVY = "#0E1F40";
@@ -78,7 +77,6 @@ export default function ForgotPasswordPage() {
     }}>
       <div style={{ width: "100%", maxWidth: 400 }}>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 36 }}>
-          <PadSVG size={52} />
           <h1 style={{ color: "#fff", fontSize: 24, fontWeight: 800, margin: "16px 0 6px", letterSpacing: -0.5, textAlign: "center" }}>
             {step === "done" ? "Password updated" : step === "password" ? "Create new password" : step === "otp" ? "Enter your code" : "Reset password"}
           </h1>

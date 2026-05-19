@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useApp } from "@/context/AppContext";
 import { supabase } from "@/lib/supabase";
-import { PadSVG } from "@/components/PadSVG";
 import {
   loadTickets, mutateTickets, subscribeTickets, makeId, formatSupportTime, ticketLastPreview,
   emptyResolutionDraft, ticketPipeline,
@@ -1558,7 +1557,7 @@ export default function AdminPage() {
           <div style={{ width: "100%", background: "#142A52", borderRadius: 28, padding: "40px 28px 32px", boxShadow: "0 12px 40px rgba(0,0,0,0.55)", display: "flex", flexDirection: "column", gap: 22 }}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
               <div style={{ width: 60, height: 60, borderRadius: "50%", background: `rgba(255,255,255,0.08)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <PadSVG size={46} />
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
               </div>
               <p style={{ fontSize: 22, fontWeight: 800, color: "#fff", margin: 0, letterSpacing: "-0.02em", textAlign: "center" }}>Choose your role</p>
             </div>
@@ -1607,7 +1606,7 @@ export default function AdminPage() {
               }}>
                 {role === "admin"
                   ? <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                  : <PadSVG size={46} />}
+                  : <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>}
               </div>
               <p style={{ fontSize: 22, fontWeight: 800, color: "#fff", margin: 0, letterSpacing: "-0.02em", textAlign: "center" }}>
                 {role === "admin" ? "Admin Sign In" : "Staff Sign In"}

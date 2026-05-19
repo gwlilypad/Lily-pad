@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-import { PadSVG } from "@/components/PadSVG";
 
 export default function SignInPage() {
   const { signIn } = useAuth();
@@ -35,7 +34,6 @@ export default function SignInPage() {
     }}>
       <div style={{ width: "100%", maxWidth: 400 }}>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 36 }}>
-          <PadSVG size={52} />
           <h1 style={{ color: "#fff", fontSize: 26, fontWeight: 800, margin: "16px 0 4px", letterSpacing: -0.5 }}>
             Welcome back.
           </h1>

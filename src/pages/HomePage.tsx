@@ -2,7 +2,6 @@ import { useState, useRef, useEffect } from "react";
 import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/context/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { PadSVG } from "@/components/PadSVG";
 
 function AdminSlide({ open }: { open: boolean }) {
   return (
@@ -14,7 +13,6 @@ function AdminSlide({ open }: { open: boolean }) {
       zIndex: 200,
     }}>
       <div style={{ background: "#0E1F40", padding: "48px 24px 28px", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-        <PadSVG size={36} />
         <div>
           <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 10, fontWeight: 600, letterSpacing: "0.18em", textTransform: "uppercase", margin: 0 }}>lily pad</p>
           <p style={{ color: "#fff", fontSize: 20, fontWeight: 700, margin: 0, letterSpacing: "-0.01em" }}>Admin</p>
@@ -201,7 +199,6 @@ export default function HomePage() {
             onClick={openAdmin}
             style={{ display: "flex", alignItems: "center", gap: 8, background: "none", border: "none", cursor: "pointer", padding: 0 }}
           >
-            <PadSVG size={28} />
             <span style={{ color: "rgba(255,255,255,0.55)", fontSize: 11, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase" }}>lily pad</span>
           </button>
         </div>
@@ -325,7 +322,6 @@ export default function HomePage() {
               : "none",
         }}
       >
-        <PadSVG size={PAD_SIZE} />
       </div>
 
       {/* Connect flash overlay */}

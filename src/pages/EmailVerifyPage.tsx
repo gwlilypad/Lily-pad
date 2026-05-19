@@ -5,18 +5,6 @@ import { supabase } from "@/lib/supabase";
 const NAVY  = "#0E1F40";
 const GREEN = "#8DD63F";
 
-function PadSVG() {
-  return (
-    <svg width="38" height="38" viewBox="0 0 120 120" fill="none">
-      <ellipse cx="60" cy="64" rx="52" ry="44" fill="#1a3a6e"/>
-      <ellipse cx="60" cy="60" rx="52" ry="44" fill="#142A52"/>
-      <ellipse cx="60" cy="58" rx="46" ry="38" fill="#1e3d72"/>
-      <ellipse cx="60" cy="56" rx="40" ry="32" fill={GREEN} opacity="0.85"/>
-      <ellipse cx="60" cy="54" rx="32" ry="24" fill={GREEN}/>
-      <ellipse cx="55" cy="50" rx="18" ry="13" fill="rgba(255,255,255,0.18)"/>
-    </svg>
-  );
-}
 
 export default function EmailVerifyPage() {
   const navigate = useNavigate();
@@ -101,7 +89,6 @@ export default function EmailVerifyPage() {
       {/* ── EMAIL CONFIRMED ── */}
       {status === "confirmed" && (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 22, maxWidth: 340, width: "100%", textAlign: "center" }}>
-          <PadSVG />
           <div style={{
             width: 64, height: 64, borderRadius: "50%",
             background: "rgba(141,214,63,0.15)",
@@ -130,7 +117,6 @@ export default function EmailVerifyPage() {
       {status === "recovery" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 360, width: "100%" }}>
           <div style={{ textAlign: "center", marginBottom: 4 }}>
-            <PadSVG />
             <p style={{ fontSize: 22, fontWeight: 800, color: "#fff", margin: "16px 0 0", letterSpacing: "-0.02em" }}>
               {pwDone ? "Password updated!" : "Set a new password"}
             </p>
@@ -205,7 +191,6 @@ export default function EmailVerifyPage() {
       {/* ── ERROR ── */}
       {status === "error" && (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 20, maxWidth: 340, width: "100%", textAlign: "center" }}>
-          <PadSVG />
           <div style={{
             width: 64, height: 64, borderRadius: "50%",
             background: "rgba(239,68,68,0.12)",

@@ -1034,7 +1034,7 @@ function ResolutionReadout({ r }: { r: SupportResolution }) {
 }
 
 // ── Main page ───────────────────────────────────────────────────────────────
-type View = "dashboard" | "users" | "userDetail" | "service" | "staff";
+type View = "dashboard" | "users" | "userDetail" | "service" | "staff" | "activate";
 type AdminView = "renters" | "hosts";
 type StaffAuthAction = { kind: "suspend" | "reinstate"; staffId: number; staffName: string };
 
@@ -1620,6 +1620,138 @@ export default function AdminPage() {
             >
               Forgot password?
             </button>
+            <button
+              type="button"
+              onClick={() => { resetActivation(); setView("activate"); }}
+              style={{ background: "none", border: "none", textAlign: "center", fontSize: 12.5, color: GREEN, margin: 0, cursor: "pointer", fontFamily: '"DM Sans", sans-serif', fontWeight: 700, marginTop: 4 }}
+            >
+              New here? Activate your account →
+            </button>
+          </div>
+        </div>
+      ) : view === "activate" ? (
+        /* ── PRE-LOGIN ACCOUNT ACTIVATION ── */
+        <div style={{ flex: 1, overflowY: "auto", padding: "24px 20px 32px", display: "flex", flexDirection: "column", gap: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <button onClick={() => { resetActivation(); setView("login"); }} style={{ background: "rgba(255,255,255,0.08)", border: "none", borderRadius: "50%", width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#fff", flexShrink: 0 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+            </button>
+            <div>
+              <p style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.12em", textTransform: "uppercase", margin: 0 }}>Lily Pad</p>
+              <p style={{ fontSize: 17, fontWeight: 800, color: "#fff", margin: "1px 0 0", letterSpacing: "-0.02em" }}>Activate Account</p>
+            </div>
+          </div>
+          <p style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", margin: 0, lineHeight: 1.5 }}>
+            Enter the email address your manager added to the team list. You'll receive a 6-digit code to activate your account.
+          </p>
+          <div style={{ background: "#142A52", borderRadius: 18, padding: "18px", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 14px rgba(0,0,0,0.30)", display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div>
+                <p style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.12em", textTransform: "uppercase", margin: 0 }}>Email activation</p>
+                <p style={{ fontSize: 14, fontWeight: 700, color: "#fff", margin: "2px 0 0" }}>{inviteStep === "success" ? "Account activated" : inviteStep === "otp" ? "Enter your code" : "Activate account"}</p>
+              </div>
+              <div style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(141,214,63,0.14)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+              </div>
+            </div>
+            {inviteStep === "success" ? (
+              <>
+                <div style={{ background: "rgba(141,214,63,0.10)", border: "1px solid rgba(141,214,63,0.30)", borderRadius: 12, padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth="2.5" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
+                  <div>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: GREEN, margin: 0 }}>Account activated!</p>
+                    <p style={{ fontSize: 11.5, color: "rgba(255,255,255,0.55)", margin: "2px 0 0" }}>{inviteEmail} is now active as {inviteRole}. You can now sign in.</p>
+                  </div>
+                </div>
+                <button onClick={() => { resetActivation(); setView("login"); }} style={{ width: "100%", padding: "11px", borderRadius: 100, border: "none", background: GREEN, color: NAVY, fontWeight: 800, fontSize: 13, fontFamily: '"DM Sans",sans-serif', cursor: "pointer" }}>Sign in now →</button>
+              </>
+            ) : inviteStep === "otp" ? (
+              <>
+                <p style={{ fontSize: 13, color: "rgba(255,255,255,0.65)", margin: 0, lineHeight: 1.5 }}>Enter the 6-digit code sent to <strong style={{ color: "#fff" }}>{inviteEmail}</strong></p>
+                <div style={{ display: "flex", gap: 7, justifyContent: "center" }}>
+                  {[0,1,2,3,4,5].map(i => (
+                    <input
+                      key={i}
+                      ref={el => { inviteOtpRefs.current[i] = el; }}
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={1}
+                      value={inviteOtpDigits[i]}
+                      onChange={e => {
+                        const d = e.target.value.replace(/\D/g,"").slice(-1);
+                        const next = [...inviteOtpDigits]; next[i] = d; setInviteOtpDigits(next); setInviteError("");
+                        if (d && i < 5) inviteOtpRefs.current[i+1]?.focus();
+                      }}
+                      onKeyDown={e => { if (e.key === "Backspace" && !inviteOtpDigits[i] && i > 0) inviteOtpRefs.current[i-1]?.focus(); }}
+                      onPaste={i === 0 ? e => {
+                        e.preventDefault();
+                        const txt = e.clipboardData.getData("text").replace(/\D/g,"").slice(0,6);
+                        const next = [...inviteOtpDigits]; txt.split("").forEach((c,j) => { next[j]=c; });
+                        setInviteOtpDigits(next); setInviteError("");
+                        inviteOtpRefs.current[Math.min(txt.length,5)]?.focus();
+                      } : undefined}
+                      style={{ width: 38, height: 46, textAlign: "center", fontSize: 20, fontWeight: 700, color: "#fff", borderRadius: 10, outline: "none", border: `2px solid ${inviteOtpDigits[i] ? "rgba(141,214,63,0.70)" : "rgba(255,255,255,0.15)"}`, background: inviteOtpDigits[i] ? "rgba(141,214,63,0.08)" : "rgba(255,255,255,0.04)", fontFamily: '"DM Sans",sans-serif', transition: "border-color 0.15s" }}
+                    />
+                  ))}
+                </div>
+                {inviteError && <p style={{ color: "#ef4444", fontSize: 11.5, fontWeight: 600, margin: 0 }}>{inviteError}</p>}
+                <button
+                  disabled={inviteOtpDigits.join("").length < 6 || inviteLoading}
+                  onClick={async () => {
+                    const otp = inviteOtpDigits.join("");
+                    setInviteLoading(true); setInviteError("");
+                    try {
+                      const r = await fetch("/api/staff/verify-activation", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: inviteEmail.trim().toLowerCase(), token: otp, role: inviteRole }) });
+                      const data = await r.json();
+                      if (!r.ok) { setInviteError(data.error || "Invalid code. Try again."); }
+                      else { setInviteStep("success"); }
+                    } catch { setInviteError("Network error. Try again."); }
+                    finally { setInviteLoading(false); }
+                  }}
+                  style={{ width: "100%", padding: "11px", borderRadius: 100, border: "none", background: inviteOtpDigits.join("").length < 6 || inviteLoading ? "rgba(141,214,63,0.40)" : GREEN, color: NAVY, fontWeight: 800, fontSize: 13, fontFamily: '"DM Sans",sans-serif', cursor: inviteOtpDigits.join("").length < 6 || inviteLoading ? "default" : "pointer" }}
+                >
+                  {inviteLoading ? "Verifying…" : "Activate account"}
+                </button>
+                <button onClick={resetActivation} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.45)", fontSize: 12, cursor: "pointer", fontFamily: '"DM Sans",sans-serif', padding: 0, textAlign: "left" }}>← Change email</button>
+              </>
+            ) : (
+              <>
+                <input
+                  type="email"
+                  placeholder="your@email.com"
+                  value={inviteEmail}
+                  onChange={e => { setInviteEmail(e.target.value); setInviteError(""); }}
+                  onFocus={() => setInviteEmailFocus(true)}
+                  onBlur={() => setInviteEmailFocus(false)}
+                  style={{ width: "100%", padding: "10px 14px", borderRadius: 10, boxSizing: "border-box", background: "rgba(255,255,255,0.05)", color: "#fff", fontSize: 13, fontFamily: '"DM Sans",sans-serif', outline: "none", border: `1.5px solid ${inviteError ? "#ef4444" : inviteEmailFocus ? GREEN : "rgba(255,255,255,0.10)"}`, transition: "border-color 0.15s" }}
+                />
+                <div style={{ display: "flex", gap: 6 }}>
+                  {(["admin","staff"] as const).map(r => (
+                    <button key={r} onClick={() => { setInviteRole(r); setInviteError(""); }} style={{ flex: 1, padding: "8px", borderRadius: 10, cursor: "pointer", fontFamily: '"DM Sans",sans-serif', fontSize: 12, fontWeight: 700, border: `1.5px solid ${inviteRole === r ? (r === "admin" ? GREEN : "rgba(255,255,255,0.40)") : "rgba(255,255,255,0.10)"}`, background: inviteRole === r ? (r === "admin" ? "rgba(141,214,63,0.12)" : "rgba(255,255,255,0.07)") : "transparent", color: inviteRole === r ? (r === "admin" ? GREEN : "#fff") : "rgba(255,255,255,0.40)", textTransform: "capitalize" }}>{r}</button>
+                  ))}
+                </div>
+                {inviteError && <p style={{ color: "#ef4444", fontSize: 11.5, fontWeight: 600, margin: 0 }}>{inviteError}</p>}
+                <button
+                  disabled={inviteLoading}
+                  onClick={async () => {
+                    const em = inviteEmail.trim().toLowerCase();
+                    if (!em || !em.includes("@")) { setInviteError("Enter a valid email address."); return; }
+                    setInviteLoading(true); setInviteError("");
+                    try {
+                      const r = await fetch("/api/staff/send-activation", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: em, role: inviteRole }) });
+                      const data = await r.json();
+                      if (!r.ok) { setInviteError(data.error || "Failed to send code."); }
+                      else { setInviteStep("otp"); }
+                    } catch { setInviteError("Network error. Try again."); }
+                    finally { setInviteLoading(false); }
+                  }}
+                  style={{ width: "100%", padding: "11px", borderRadius: 100, border: "none", background: inviteLoading ? "rgba(141,214,63,0.50)" : GREEN, color: NAVY, fontWeight: 800, fontSize: 13, fontFamily: '"DM Sans",sans-serif', cursor: inviteLoading ? "not-allowed" : "pointer" }}
+                >
+                  {inviteLoading ? "Sending…" : "Send code"}
+                </button>
+                <p style={{ fontSize: 11, color: "rgba(255,255,255,0.30)", margin: 0, lineHeight: 1.4 }}>Email must be on the approved {inviteRole} list in Supabase.</p>
+              </>
+            )}
           </div>
         </div>
       ) : view === "dashboard" ? (

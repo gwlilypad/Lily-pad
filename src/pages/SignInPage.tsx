@@ -108,19 +108,7 @@ export default function SignInPage() {
           </div>
         </form>
 
-        <div style={{ marginTop: 32, paddingTop: 24, borderTop: "1px solid rgba(255,255,255,0.1)", display: "flex", flexDirection: "column", gap: 10 }}>
-          <p style={{ textAlign: "center", fontSize: 13, color: "rgba(255,255,255,0.35)", margin: "0 0 4px" }}>
-            New to Lily Pad?
-          </p>
-          <Link to="/driversignup" style={{ display: "block", textAlign: "center", padding: "14px 0", borderRadius: 100, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", color: "#fff", fontSize: 14, fontWeight: 700, textDecoration: "none" }}>
-            Sign up as a driver
-          </Link>
-          <Link to="/padtype" style={{ display: "block", textAlign: "center", padding: "14px 0", borderRadius: 100, background: "rgba(141,214,63,0.08)", border: "1px solid rgba(141,214,63,0.2)", color: "#8DD63F", fontSize: 14, fontWeight: 700, textDecoration: "none" }}>
-            List my lily pad
-          </Link>
-        </div>
-
-        <div style={{ marginTop: 20, textAlign: "center" }}>
+        <div style={{ marginTop: 24, textAlign: "center" }}>
           <Link to="/" style={{ fontSize: 13, color: "rgba(255,255,255,0.25)", textDecoration: "none" }}>
             ← Back to home
           </Link>

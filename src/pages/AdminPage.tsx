@@ -1034,7 +1034,7 @@ function ResolutionReadout({ r }: { r: SupportResolution }) {
 }
 
 // ── Main page ───────────────────────────────────────────────────────────────
-type View = "dashboard" | "users" | "userDetail" | "service" | "staff" | "activate";
+type View = "dashboard" | "users" | "userDetail" | "service" | "staff";
 type AdminView = "renters" | "hosts";
 type StaffAuthAction = { kind: "suspend" | "reinstate"; staffId: number; staffName: string };
 
@@ -1088,6 +1088,7 @@ export default function AdminPage() {
   const [inviteStep, setInviteStep] = useState<"email" | "otp" | "success">("email");
   const [inviteOtpDigits, setInviteOtpDigits] = useState(["","","","","",""]);
   const inviteOtpRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const [showActivate, setShowActivate] = useState(false);
   function resetActivation() { setInviteStep("email"); setInviteEmail(""); setInviteOtpDigits(["","","","","",""]); setInviteError(""); setInviteEmailFocus(false); }
 
   // Customer service — chat tickets + incoming email.
@@ -1537,109 +1538,11 @@ export default function AdminPage() {
       </div>
 
       {/* ── Content ── */}
-      {!loggedIn && !role && view !== "activate" ? (
-        /* ── ROLE CHOOSER ── */
-        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "28px 24px" }}>
-          <div style={{ width: "100%", background: "#142A52", borderRadius: 28, padding: "40px 28px 32px", boxShadow: "0 12px 40px rgba(0,0,0,0.55)", display: "flex", flexDirection: "column", gap: 22 }}>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-              <div style={{ width: 60, height: 60, borderRadius: "50%", background: `rgba(255,255,255,0.08)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <PadSVG size={46} />
-              </div>
-              <p style={{ fontSize: 22, fontWeight: 800, color: "#fff", margin: 0, letterSpacing: "-0.02em", textAlign: "center" }}>Choose your role</p>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <button onClick={() => { setRole("staff"); setError(""); setEmail(""); setPassword(""); }} style={{
-                background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 16, padding: "18px",
-                display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#fff", fontFamily: '"DM Sans",sans-serif',
-                fontSize: 16, fontWeight: 800, letterSpacing: "-0.01em",
-              }}>
-                Staff
-              </button>
-              <button onClick={() => { setRole("admin"); setError(""); setEmail(""); setPassword(""); }} style={{
-                background: GREEN, border: "none", borderRadius: 16, padding: "18px",
-                display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: NAVY, fontFamily: '"DM Sans",sans-serif',
-                fontSize: 16, fontWeight: 800, letterSpacing: "-0.01em",
-              }}>
-                Admin
-              </button>
-              <button onClick={() => { resetActivation(); setView("activate"); }} style={{
-                background: "none", border: "none", padding: "8px", cursor: "pointer",
-                color: GREEN, fontFamily: '"DM Sans",sans-serif', fontSize: 13, fontWeight: 700, textAlign: "center",
-              }}>
-                New here? Activate your account →
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : !loggedIn && role && view !== "activate" ? (
-        /* ── ROLE-AWARE SIGN IN ── */
-        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "28px 24px" }}>
-          <div style={{
-            width: "100%", background: "#142A52", borderRadius: 28, padding: "36px 28px 32px",
-            boxShadow: "0 12px 40px rgba(0,0,0,0.55)", display: "flex", flexDirection: "column", alignItems: "stretch", gap: 14,
-          }}>
-            <div style={{ display: "flex", alignItems: "center", marginBottom: 4 }}>
-              <button onClick={() => { setRole(null); setError(""); }} style={{ background: "rgba(255,255,255,0.08)", border: "none", borderRadius: "50%", width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#fff" }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M15 18l-6-6 6-6"/></svg>
-              </button>
-              <span style={{ marginLeft: 10, fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.50)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Change role</span>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, marginBottom: 4 }}>
-              <div style={{
-                width: 60, height: 60, borderRadius: "50%",
-                background: role === "admin" ? GREEN : `rgba(255,255,255,0.08)`,
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
-                {role === "admin"
-                  ? <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                  : <PadSVG size={46} />}
-              </div>
-              <p style={{ fontSize: 22, fontWeight: 800, color: "#fff", margin: 0, letterSpacing: "-0.02em", textAlign: "center" }}>
-                {role === "admin" ? "Admin Sign In" : "Staff Sign In"}
-              </p>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.62)", letterSpacing: "0.04em" }}>Email</label>
-              <input type="email" placeholder={role === "admin" ? "admin@lilypad.com" : "you@lilypad.com"} value={email}
-                onChange={e => { setEmail(e.target.value); setError(""); }}
-                onFocus={() => setEmailFocus(true)} onBlur={() => setEmailFocus(false)}
-                style={{ ...inputStyle, borderColor: emailFocus ? GREEN : "rgba(255,255,255,0.10)" }} />
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.62)", letterSpacing: "0.04em" }}>Password</label>
-              <input type="password" placeholder="••••••••" value={password}
-                onChange={e => { setPassword(e.target.value); setError(""); }}
-                onFocus={() => setPwFocus(true)} onBlur={() => setPwFocus(false)}
-                onKeyDown={e => { if (e.key === "Enter") handleLogin(); }}
-                style={{ ...inputStyle, borderColor: pwFocus ? GREEN : "rgba(255,255,255,0.10)" }} />
-            </div>
-            {error && (
-              <p style={{ fontSize: 12, color: "#ef4444", textAlign: "center", margin: 0, fontFamily: '"DM Sans", sans-serif' }}>{error}</p>
-            )}
-            <button onClick={handleLogin} disabled={loginLoading} style={{ background: loginLoading ? "rgba(141,214,63,0.55)" : GREEN, color: NAVY, border: "none", borderRadius: 100, padding: "15px", fontWeight: 800, fontSize: 15, fontFamily: '"DM Sans", sans-serif', cursor: loginLoading ? "not-allowed" : "pointer", marginTop: 4, letterSpacing: "0.01em" }}>
-              {loginLoading ? "Signing in…" : `Sign in as ${role === "admin" ? "Admin" : "Staff"}`}
-            </button>
-            <button
-              type="button"
-              onClick={() => { setForgotEmail(email); setForgotError(""); setForgotSent(false); setForgotOpen(true); }}
-              style={{ background: "none", border: "none", textAlign: "center", fontSize: 12, color: "rgba(255,255,255,0.55)", margin: 0, cursor: "pointer", fontFamily: '"DM Sans", sans-serif', textDecoration: "underline", textUnderlineOffset: 3 }}
-            >
-              Forgot password?
-            </button>
-            <button
-              type="button"
-              onClick={() => { resetActivation(); setView("activate"); }}
-              style={{ background: "none", border: "none", textAlign: "center", fontSize: 12.5, color: GREEN, margin: 0, cursor: "pointer", fontFamily: '"DM Sans", sans-serif', fontWeight: 700, marginTop: 4 }}
-            >
-              New here? Activate your account →
-            </button>
-          </div>
-        </div>
-      ) : view === "activate" ? (
-        /* ── PRE-LOGIN ACCOUNT ACTIVATION ── */
+      {showActivate ? (
+        /* ── ACCOUNT ACTIVATION (pre-login, accessible from role picker or sign-in) ── */
         <div style={{ flex: 1, overflowY: "auto", padding: "24px 20px 32px", display: "flex", flexDirection: "column", gap: 20 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <button onClick={() => { resetActivation(); setRole(null); setView("dashboard"); }} style={{ background: "rgba(255,255,255,0.08)", border: "none", borderRadius: "50%", width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#fff", flexShrink: 0 }}>
+            <button onClick={() => { resetActivation(); setShowActivate(false); }} style={{ background: "rgba(255,255,255,0.08)", border: "none", borderRadius: "50%", width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#fff", flexShrink: 0 }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
             </button>
             <div>
@@ -1669,7 +1572,7 @@ export default function AdminPage() {
                     <p style={{ fontSize: 11.5, color: "rgba(255,255,255,0.55)", margin: "2px 0 0" }}>{inviteEmail} is now active as {inviteRole}. You can now sign in.</p>
                   </div>
                 </div>
-                <button onClick={() => { resetActivation(); setRole(inviteRole); setView("dashboard"); }} style={{ width: "100%", padding: "11px", borderRadius: 100, border: "none", background: GREEN, color: NAVY, fontWeight: 800, fontSize: 13, fontFamily: '"DM Sans",sans-serif', cursor: "pointer" }}>Sign in now →</button>
+                <button onClick={() => { resetActivation(); setShowActivate(false); setRole(inviteRole); }} style={{ width: "100%", padding: "11px", borderRadius: 100, border: "none", background: GREEN, color: NAVY, fontWeight: 800, fontSize: 13, fontFamily: '"DM Sans",sans-serif', cursor: "pointer" }}>Sign in now →</button>
               </>
             ) : inviteStep === "otp" ? (
               <>
@@ -1758,6 +1661,104 @@ export default function AdminPage() {
                 <p style={{ fontSize: 11, color: "rgba(255,255,255,0.30)", margin: 0, lineHeight: 1.4 }}>Email must be on the approved {inviteRole} list in Supabase.</p>
               </>
             )}
+          </div>
+        </div>
+      ) : !loggedIn && !role ? (
+        /* ── ROLE CHOOSER ── */
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "28px 24px" }}>
+          <div style={{ width: "100%", background: "#142A52", borderRadius: 28, padding: "40px 28px 32px", boxShadow: "0 12px 40px rgba(0,0,0,0.55)", display: "flex", flexDirection: "column", gap: 22 }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+              <div style={{ width: 60, height: 60, borderRadius: "50%", background: `rgba(255,255,255,0.08)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <PadSVG size={46} />
+              </div>
+              <p style={{ fontSize: 22, fontWeight: 800, color: "#fff", margin: 0, letterSpacing: "-0.02em", textAlign: "center" }}>Choose your role</p>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <button onClick={() => { setRole("staff"); setError(""); setEmail(""); setPassword(""); }} style={{
+                background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 16, padding: "18px",
+                display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#fff", fontFamily: '"DM Sans",sans-serif',
+                fontSize: 16, fontWeight: 800, letterSpacing: "-0.01em",
+              }}>
+                Staff
+              </button>
+              <button onClick={() => { setRole("admin"); setError(""); setEmail(""); setPassword(""); }} style={{
+                background: GREEN, border: "none", borderRadius: 16, padding: "18px",
+                display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: NAVY, fontFamily: '"DM Sans",sans-serif',
+                fontSize: 16, fontWeight: 800, letterSpacing: "-0.01em",
+              }}>
+                Admin
+              </button>
+              <button onClick={() => { resetActivation(); setShowActivate(true); }} style={{
+                background: "none", border: "none", padding: "8px", cursor: "pointer",
+                color: GREEN, fontFamily: '"DM Sans",sans-serif', fontSize: 13, fontWeight: 700, textAlign: "center",
+              }}>
+                New here? Activate your account →
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : !loggedIn && role ? (
+        /* ── ROLE-AWARE SIGN IN ── */
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "28px 24px" }}>
+          <div style={{
+            width: "100%", background: "#142A52", borderRadius: 28, padding: "36px 28px 32px",
+            boxShadow: "0 12px 40px rgba(0,0,0,0.55)", display: "flex", flexDirection: "column", alignItems: "stretch", gap: 14,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", marginBottom: 4 }}>
+              <button onClick={() => { setRole(null); setError(""); }} style={{ background: "rgba(255,255,255,0.08)", border: "none", borderRadius: "50%", width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#fff" }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+              </button>
+              <span style={{ marginLeft: 10, fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.50)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Change role</span>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, marginBottom: 4 }}>
+              <div style={{
+                width: 60, height: 60, borderRadius: "50%",
+                background: role === "admin" ? GREEN : `rgba(255,255,255,0.08)`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                {role === "admin"
+                  ? <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                  : <PadSVG size={46} />}
+              </div>
+              <p style={{ fontSize: 22, fontWeight: 800, color: "#fff", margin: 0, letterSpacing: "-0.02em", textAlign: "center" }}>
+                {role === "admin" ? "Admin Sign In" : "Staff Sign In"}
+              </p>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.62)", letterSpacing: "0.04em" }}>Email</label>
+              <input type="email" placeholder={role === "admin" ? "admin@lilypad.com" : "you@lilypad.com"} value={email}
+                onChange={e => { setEmail(e.target.value); setError(""); }}
+                onFocus={() => setEmailFocus(true)} onBlur={() => setEmailFocus(false)}
+                style={{ ...inputStyle, borderColor: emailFocus ? GREEN : "rgba(255,255,255,0.10)" }} />
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.62)", letterSpacing: "0.04em" }}>Password</label>
+              <input type="password" placeholder="••••••••" value={password}
+                onChange={e => { setPassword(e.target.value); setError(""); }}
+                onFocus={() => setPwFocus(true)} onBlur={() => setPwFocus(false)}
+                onKeyDown={e => { if (e.key === "Enter") handleLogin(); }}
+                style={{ ...inputStyle, borderColor: pwFocus ? GREEN : "rgba(255,255,255,0.10)" }} />
+            </div>
+            {error && (
+              <p style={{ fontSize: 12, color: "#ef4444", textAlign: "center", margin: 0, fontFamily: '"DM Sans", sans-serif' }}>{error}</p>
+            )}
+            <button onClick={handleLogin} disabled={loginLoading} style={{ background: loginLoading ? "rgba(141,214,63,0.55)" : GREEN, color: NAVY, border: "none", borderRadius: 100, padding: "15px", fontWeight: 800, fontSize: 15, fontFamily: '"DM Sans", sans-serif', cursor: loginLoading ? "not-allowed" : "pointer", marginTop: 4, letterSpacing: "0.01em" }}>
+              {loginLoading ? "Signing in…" : `Sign in as ${role === "admin" ? "Admin" : "Staff"}`}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setForgotEmail(email); setForgotError(""); setForgotSent(false); setForgotOpen(true); }}
+              style={{ background: "none", border: "none", textAlign: "center", fontSize: 12, color: "rgba(255,255,255,0.55)", margin: 0, cursor: "pointer", fontFamily: '"DM Sans", sans-serif', textDecoration: "underline", textUnderlineOffset: 3 }}
+            >
+              Forgot password?
+            </button>
+            <button
+              type="button"
+              onClick={() => { resetActivation(); setShowActivate(true); }}
+              style={{ background: "none", border: "none", textAlign: "center", fontSize: 12.5, color: GREEN, margin: 0, cursor: "pointer", fontFamily: '"DM Sans", sans-serif', fontWeight: 700, marginTop: 4 }}
+            >
+              New here? Activate your account →
+            </button>
           </div>
         </div>
       ) : view === "dashboard" ? (

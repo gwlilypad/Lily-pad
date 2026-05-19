@@ -60,7 +60,10 @@ interface MockUser {
 }
 
 // ── localStorage keys ───────────────────────────────────────────────────────
-const ADMIN_LOGIN_KEY = "lilypad.admin.loggedIn.v1";
+const ADMIN_LOGIN_KEY   = "lilypad.admin.loggedIn.v1";
+const ADMIN_ROLE_KEY    = "lilypad.admin.role.v1";
+const ADMIN_USERS_KEY   = "lilypad.admin.users.v1";
+const STAFF_ACCOUNTS_KEY = "lilypad.admin.staff.v1";
 
 type AdminRole = "staff" | "admin";
 
@@ -907,7 +910,13 @@ export default function AdminPage() {
     if (typeof window === "undefined") return false;
     try { return window.localStorage.getItem(ADMIN_LOGIN_KEY) === "1"; } catch { return false; }
   });
-  const [role, setRole] = useState<AdminRole | null>(null);
+  const [role, setRole] = useState<AdminRole | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const r = window.localStorage.getItem(ADMIN_ROLE_KEY);
+      return r === "admin" || r === "staff" ? (r as AdminRole) : null;
+    } catch { return null; }
+  });
   const [email, setEmail]         = useState("");
   const [password, setPassword]   = useState("");
   const [error, setError]         = useState("");
@@ -1215,6 +1224,16 @@ export default function AdminPage() {
       else window.localStorage.removeItem(ADMIN_ROLE_KEY);
     } catch {}
   }, [role]);
+  // Safety: if localStorage says "logged in" but role couldn't be restored
+  // (e.g. stale data from before ADMIN_ROLE_KEY was defined), force re-login
+  // so the role-chooser + sign-in screen appear correctly.
+  useEffect(() => {
+    if (loggedIn && !role) {
+      setLoggedIn(false);
+      try { window.localStorage.setItem(ADMIN_LOGIN_KEY, "0"); } catch {}
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Auto-dismiss toast.
   useEffect(() => {

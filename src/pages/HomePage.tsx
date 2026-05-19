@@ -115,6 +115,9 @@ export default function HomePage() {
         <div onClick={() => setModalOpen(true)} style={{ fontSize: 12, color: "rgba(14,31,64,0.38)", cursor: "pointer", textDecoration: "underline", textDecorationColor: "rgba(14,31,64,0.2)" }}>
           Have a referral code?
         </div>
+        <div onClick={() => navigate("/admin")} style={{ fontSize: 11, color: "rgba(14,31,64,0.28)", cursor: "pointer", letterSpacing: "0.04em", marginTop: 4 }}>
+          Staff / Admin Portal
+        </div>
       </div>
 
       {/* Referral modal */}

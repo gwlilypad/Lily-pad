@@ -6,6 +6,7 @@ import {
   getOrCreateUserId, makeId, formatSupportTime, ticketLastPreview,
   type SupportTicket,
 } from "@/lib/support";
+import { supabase } from "@/lib/supabase";
 import { MapContainer, TileLayer, Marker, Pane, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -1056,7 +1057,12 @@ export default function FindPage() {
   const [savedSpots, setSavedSpots] = useState<number[]>(() => {
     try { return JSON.parse(localStorage.getItem("lilypad_saved") ?? "[]") as number[]; } catch { return []; }
   });
-  const [acctView, setAcctView] = useState<"menu" | "saved" | "account" | "support">("menu");
+  const [acctView, setAcctView] = useState<"menu" | "saved" | "account" | "support" | "bookings" | "manage-spot">("menu");
+  const [drawerMode, setDrawerMode] = useState<"driver" | "lister">(() => {
+    try { return (localStorage.getItem("lilypad_drawer_mode") as "driver" | "lister") || "driver"; } catch { return "driver"; }
+  });
+  const [myHostSpots, setMyHostSpots] = useState<SpotRecord[]>([]);
+  const [managingSpot, setManagingSpot] = useState<SpotRecord | null>(null);
   const [supportView, setSupportView] = useState<"menu" | "thread">("menu");
   const [supportTickets, setSupportTickets] = useState<SupportTicket[]>(() => loadTickets());
   const supportUserId = useRef<string>(getOrCreateUserId());
@@ -1077,6 +1083,32 @@ export default function FindPage() {
       setSupportTickets(loadTickets());
     }
   }, [acctView]);
+
+  // Persist drawer mode selection
+  useEffect(() => {
+    try { localStorage.setItem("lilypad_drawer_mode", drawerMode); } catch { /* ignore */ }
+  }, [drawerMode]);
+
+  // Fetch user's listed spots when lister mode is active
+  useEffect(() => {
+    if (drawerMode !== "lister" || !user) { setMyHostSpots([]); return; }
+    supabase.from("spots").select("*").eq("auth_user_id", user.id).then(({ data }) => {
+      if (data && data.length > 0) {
+        setMyHostSpots((data as Record<string, unknown>[]).map(s => ({
+          id: Number(s.id),
+          price: s.price_per_hr ? `$${s.price_per_hr}/hr` : "$4/hr",
+          addr: String(s.address || s.addr || "Houston, TX"),
+          meta: `${s.pad_type || "Driveway"} · nearby`,
+          lat: Number(s.lat),
+          lng: Number(s.lng),
+          featured: Boolean(s.featured),
+          host_name: String(s.host_name || ""),
+        })));
+      } else {
+        setMyHostSpots([]);
+      }
+    });
+  }, [drawerMode, user]);
 
   // Auto-scroll thread to bottom whenever the active ticket changes / new message arrives
   useEffect(() => {
@@ -3072,87 +3104,147 @@ export default function FindPage() {
           {/* Menu items */}
           {acctView === "menu" ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {/* Account-type toggle (only when user has both) */}
-              {state.hasBothAccounts ? (
-                <button
-                  onClick={() => setAppState(s => ({ ...s, accountType: s.accountType === "padRenter" ? "renter" : "padRenter" }))}
-                  style={{
-                    display: "flex", alignItems: "center", justifyContent: "space-between",
-                    width: "100%", marginBottom: 6, padding: "11px 14px",
-                    background: "rgba(141,214,63,0.10)",
-                    border: "1px solid rgba(141,214,63,0.30)",
-                    borderRadius: 12,
-                    color: "#8DD63F",
-                    fontFamily: '"DM Sans", sans-serif',
-                    cursor: "pointer",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                    {state.accountType === "padRenter" ? (
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-                    ) : (
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 17h14M5 17a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2M7 17v2M17 17v2M5 10l1.5-4.5A2 2 0 0 1 8.4 4h7.2a2 2 0 0 1 1.9 1.5L19 10"/></svg>
-                    )}
-                    <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>
-                      {state.accountType === "padRenter" ? "Host view" : "Renter view"}
-                    </span>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10.5, fontWeight: 600, color: "rgba(141,214,63,0.65)", letterSpacing: 0.3, textTransform: "uppercase" }}>
-                    <span>Switch</span>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M17 1l4 4-4 4M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3"/></svg>
-                  </div>
-                </button>
-              ) : (
-                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
-                  <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.8, textTransform: "uppercase", color: "#8DD63F", background: "rgba(141,214,63,0.12)", border: "1px solid rgba(141,214,63,0.22)", borderRadius: 6, padding: "3px 8px" }}>
-                    {state.accountType === "padRenter" ? "Pad Renter" : "Renter"}
-                  </div>
-                </div>
-              )}
+
+              {/* ── 4 Driver items (always shown) ── */}
               {(() => {
                 const userTickets = supportTickets.filter(t => t.userId === supportUserId.current);
                 const openCount = userTickets.filter(t => t.status === "open").length;
-                const supportItem = {
-                  icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>,
-                  label: "Customer Service",
-                  sub: openCount > 0 ? `${openCount} open conversation${openCount !== 1 ? "s" : ""}` : "Contact us or chat with a rep",
-                  onClick: () => setAcctView("support"),
-                };
-                const items = state.accountType === "padRenter"
-                  ? [
-                      { icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>, label: "My Account", sub: "Photo & personal info", onClick: () => setAcctView("account") },
-                      { icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><circle cx="8" cy="16" r="1" fill="currentColor"/><circle cx="12" cy="16" r="1" fill="currentColor"/><circle cx="16" cy="16" r="1" fill="currentColor"/></svg>, label: "My Pads", sub: "Revenue, calendar & pad management", onClick: () => { setAcctOpen(false); acctOpenRef.current = false; goTo("paddashboard"); } },
-                      { icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>, label: "Saved Spots", sub: `${savedSpots.length} spot${savedSpots.length !== 1 ? "s" : ""} saved`, onClick: (() => setAcctView("saved")) as (() => void) | undefined },
-                      supportItem,
-                    ]
-                  : [
-                      { icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>, label: "My Account", sub: "Photo & personal info", onClick: () => setAcctView("account") },
-                      { icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>, label: "My Bookings", sub: "Past & upcoming", onClick: () => { setAcctOpen(false); acctOpenRef.current = false; goTo("bookings"); } },
-                      { icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>, label: "Saved Spots", sub: `${savedSpots.length} spot${savedSpots.length !== 1 ? "s" : ""} saved`, onClick: () => setAcctView("saved") },
-                      supportItem,
-                    ];
-                return items;
-              })().map(item => (
-                <div key={item.label} onClick={item.onClick} style={{
-                  display: "flex", alignItems: "center", gap: 14,
-                  padding: "14px 16px", borderRadius: 14,
-                  background: "rgba(52,52,58,0.60)",
-                  border: "1px solid rgba(255,255,255,0.07)",
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.28)",
-                  cursor: item.onClick ? "pointer" : "default",
-                }}>
-                  <div style={{ width: 40, height: 40, borderRadius: 12, background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "rgba(255,255,255,0.6)" }}>
-                    {item.icon}
+                const upcoming = state.bookings.filter(b => b.status === "active" && b.endTs > Date.now()).length;
+                const items = [
+                  {
+                    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
+                    label: "My Account",
+                    sub: "Photo & personal info",
+                    onClick: () => setAcctView("account"),
+                  },
+                  {
+                    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>,
+                    label: "My Bookings",
+                    sub: upcoming > 0 ? `${upcoming} upcoming` : "Past & upcoming",
+                    onClick: () => setAcctView("bookings"),
+                  },
+                  {
+                    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>,
+                    label: "Customer Service",
+                    sub: openCount > 0 ? `${openCount} open conversation${openCount !== 1 ? "s" : ""}` : "Contact us or chat with a rep",
+                    onClick: () => setAcctView("support"),
+                  },
+                  {
+                    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
+                    label: "Saved Spots",
+                    sub: `${savedSpots.length} spot${savedSpots.length !== 1 ? "s" : ""} saved`,
+                    onClick: () => setAcctView("saved"),
+                  },
+                ];
+                return items.map(item => (
+                  <div key={item.label} onClick={item.onClick} style={{
+                    display: "flex", alignItems: "center", gap: 14,
+                    padding: "14px 16px", borderRadius: 14,
+                    background: "rgba(52,52,58,0.60)",
+                    border: "1px solid rgba(255,255,255,0.07)",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.28)",
+                    cursor: "pointer",
+                  }}>
+                    <div style={{ width: 40, height: 40, borderRadius: 12, background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "rgba(255,255,255,0.6)" }}>
+                      {item.icon}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: "#fff", letterSpacing: -0.2 }}>{item.label}</div>
+                      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.38)", marginTop: 1 }}>{item.sub}</div>
+                    </div>
+                    <div style={{ marginLeft: "auto", color: "rgba(255,255,255,0.2)" }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="m9 18 6-6-6-6"/></svg>
+                    </div>
                   </div>
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: "#fff", letterSpacing: -0.2 }}>{item.label}</div>
-                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.38)", marginTop: 1 }}>{item.sub}</div>
-                  </div>
-                  <div style={{ marginLeft: "auto", color: "rgba(255,255,255,0.2)" }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="m9 18 6-6-6-6"/></svg>
-                  </div>
+                ));
+              })()}
+
+              {/* ── Driver / Lister toggle ── */}
+              <div style={{ height: 1, background: "rgba(255,255,255,0.07)", margin: "6px 0 2px" }} />
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 2px" }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.38)", textTransform: "uppercase", letterSpacing: 0.7 }}>Mode</span>
+                <div style={{ display: "flex", background: "rgba(255,255,255,0.05)", borderRadius: 20, padding: 3, gap: 2, border: "1px solid rgba(255,255,255,0.09)" }}>
+                  {(["driver", "lister"] as const).map(m => (
+                    <button
+                      key={m}
+                      onClick={() => setDrawerMode(m)}
+                      style={{
+                        background: drawerMode === m ? "#8DD63F" : "transparent",
+                        color: drawerMode === m ? "#0E1F40" : "rgba(255,255,255,0.45)",
+                        border: "none", borderRadius: 16, padding: "6px 18px",
+                        fontSize: 12, fontWeight: 800, cursor: "pointer",
+                        fontFamily: '"DM Sans", sans-serif',
+                        transition: "background 0.18s, color 0.18s",
+                      }}
+                    >{m === "driver" ? "Driver" : "Lister"}</button>
+                  ))}
                 </div>
-              ))}
+              </div>
+
+              {/* ── Lister section (only when lister mode active) ── */}
+              {drawerMode === "lister" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 2 }}>
+                  {myHostSpots.length === 0 ? (
+                    <button
+                      onClick={() => { setAcctOpen(false); acctOpenRef.current = false; goTo("padtype"); }}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 12,
+                        width: "100%", padding: "14px 16px", borderRadius: 14,
+                        background: "rgba(141,214,63,0.08)", border: "1.5px dashed rgba(141,214,63,0.40)",
+                        cursor: "pointer", fontFamily: '"DM Sans", sans-serif', textAlign: "left",
+                      }}
+                    >
+                      <div style={{ width: 40, height: 40, borderRadius: 12, background: "rgba(141,214,63,0.14)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "#8DD63F" }}>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13.5, fontWeight: 700, color: "#8DD63F", letterSpacing: -0.2 }}>List your spot on Lily Pad</div>
+                        <div style={{ fontSize: 11, color: "rgba(141,214,63,0.55)", marginTop: 1 }}>Earn money from your parking space</div>
+                      </div>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8DD63F" strokeWidth="2.2" strokeLinecap="round"><path d="m9 18 6-6-6-6"/></svg>
+                    </button>
+                  ) : (
+                    <>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.38)", letterSpacing: 0.6, textTransform: "uppercase", padding: "0 2px" }}>
+                        Your listed spots · {myHostSpots.length}
+                      </div>
+                      {myHostSpots.map(spot => (
+                        <div
+                          key={spot.id}
+                          onClick={() => { setManagingSpot(spot); setAcctView("manage-spot"); }}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 12,
+                            padding: "12px 14px", borderRadius: 12,
+                            background: "rgba(52,52,58,0.60)", border: "1px solid rgba(255,255,255,0.07)",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(141,214,63,0.14)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "#8DD63F" }}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{spot.addr}</div>
+                            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", marginTop: 1 }}>{spot.price} · {spot.meta.split("·")[0].trim()}</div>
+                          </div>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="2.2" strokeLinecap="round"><path d="m9 18 6-6-6-6"/></svg>
+                        </div>
+                      ))}
+                      <button
+                        onClick={() => { setAcctOpen(false); acctOpenRef.current = false; goTo("padtype"); }}
+                        style={{
+                          display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                          width: "100%", padding: "12px", borderRadius: 12,
+                          background: "transparent", border: "1.5px dashed rgba(141,214,63,0.35)",
+                          cursor: "pointer", fontFamily: '"DM Sans", sans-serif',
+                          fontSize: 13, fontWeight: 700, color: "#8DD63F",
+                        }}
+                      >
+                        + Add new spot
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
 
               {/* Sign out */}
               <button
@@ -3230,6 +3322,49 @@ export default function FindPage() {
               <p style={{ textAlign: "center", fontSize: 10.5, color: "rgba(255,255,255,0.32)", margin: "14px 0 0", letterSpacing: 0.3 }}>
                 Changes save automatically · syncs to both account types
               </p>
+            </div>
+          ) : acctView === "bookings" ? (
+            /* ── My Bookings view ── */
+            <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+                <button onClick={() => setAcctView("menu")} style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.10)", borderRadius: "50%", width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "rgba(255,255,255,0.7)", flexShrink: 0 }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M15 18l-6-6 6-6"/></svg>
+                </button>
+                <span style={{ fontSize: 15, fontWeight: 700, color: "#fff", letterSpacing: -0.2 }}>My Bookings</span>
+                <span style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginLeft: 2 }}>{state.bookings.length} total</span>
+              </div>
+              {state.bookings.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "32px 0", color: "rgba(255,255,255,0.30)", fontSize: 13 }}>
+                  No bookings yet.<br/>
+                  <span style={{ fontSize: 11 }}>Book a spot to see it here.</span>
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {state.bookings.map(b => {
+                    const bspot = spots.find(s => s.id === b.spotId);
+                    const isActive = b.status === "active" && b.endTs > Date.now();
+                    const isPast = b.endTs <= Date.now();
+                    return (
+                      <div key={b.id} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 14px", borderRadius: 12, background: isActive ? "rgba(141,214,63,0.08)" : "rgba(255,255,255,0.04)", border: `1px solid ${isActive ? "rgba(141,214,63,0.22)" : "rgba(255,255,255,0.07)"}` }}>
+                        <div style={{ width: 36, height: 36, borderRadius: 10, background: isActive ? "rgba(141,214,63,0.15)" : "rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: isActive ? "#8DD63F" : "rgba(255,255,255,0.4)" }}>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{bspot ? bspot.addr : String(b.spotId)}</div>
+                          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", marginTop: 2 }}>
+                            {new Date(b.startTs).toLocaleDateString()} · {new Date(b.startTs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          </div>
+                        </div>
+                        <div style={{ flexShrink: 0 }}>
+                          <div style={{ fontSize: 10.5, fontWeight: 700, color: isActive ? "#8DD63F" : isPast ? "rgba(255,255,255,0.30)" : "rgba(255,200,50,0.80)", background: isActive ? "rgba(141,214,63,0.12)" : isPast ? "rgba(255,255,255,0.06)" : "rgba(255,200,50,0.10)", border: `1px solid ${isActive ? "rgba(141,214,63,0.25)" : isPast ? "rgba(255,255,255,0.10)" : "rgba(255,200,50,0.25)"}`, borderRadius: 6, padding: "2px 7px", textTransform: "uppercase", letterSpacing: 0.4 }}>
+                            {isActive ? "Active" : isPast ? "Past" : b.status}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           ) : acctView === "support" ? (
             /* ── Customer Service view ── */
@@ -3377,7 +3512,33 @@ export default function FindPage() {
                 </div>
               );
             })()
-          ) : (
+          ) : acctView === "manage-spot" && managingSpot ? (
+            /* ── Manage Spot view ── */
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                <button onClick={() => { setManagingSpot(null); setAcctView("menu"); }} style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.10)", borderRadius: "50%", width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "rgba(255,255,255,0.7)", flexShrink: 0 }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M15 18l-6-6 6-6"/></svg>
+                </button>
+                <span style={{ fontSize: 15, fontWeight: 700, color: "#fff", letterSpacing: -0.2 }}>Manage Spot</span>
+              </div>
+              <div style={{ padding: "14px 16px", borderRadius: 14, background: "rgba(52,52,58,0.70)", border: "1px solid rgba(255,255,255,0.09)" }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", letterSpacing: -0.2 }}>{managingSpot.addr}</div>
+                <div style={{ fontSize: 11.5, color: "rgba(255,255,255,0.40)", marginTop: 3 }}>{managingSpot.price} · {managingSpot.meta}</div>
+              </div>
+              {[
+                { label: "Edit listing", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>, onClick: () => { setAcctOpen(false); acctOpenRef.current = false; goTo("paddashboard"); } },
+                { label: "View on map", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>, onClick: () => { setAcctOpen(false); acctOpenRef.current = false; setGlobeMode(false); setMapCenter([managingSpot.lat, managingSpot.lng]); setMapZoom(NEIGHBORHOOD_ZOOM); } },
+              ].map(action => (
+                <div key={action.label} onClick={action.onClick} style={{ display: "flex", alignItems: "center", gap: 14, padding: "13px 16px", borderRadius: 12, background: "rgba(52,52,58,0.50)", border: "1px solid rgba(255,255,255,0.07)", cursor: "pointer" }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "rgba(255,255,255,0.55)" }}>
+                    {action.icon}
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: "#fff" }}>{action.label}</div>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="2.2" strokeLinecap="round" style={{ marginLeft: "auto" }}><path d="m9 18 6-6-6-6"/></svg>
+                </div>
+              ))}
+            </div>
+          ) : acctView === "saved" ? (
             /* ── Saved pads view ── */
             <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
               {/* Back header */}
@@ -3426,7 +3587,7 @@ export default function FindPage() {
                 </div>
               )}
             </div>
-          )}
+          ) : null}
         </div>
 
         {/* ── Handle grab area — sits at the bottom of the panel ── */}

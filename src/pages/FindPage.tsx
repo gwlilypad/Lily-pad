@@ -991,7 +991,7 @@ try {
 
 export default function FindPage() {
   const { goTo, state, setState: setAppState } = useApp();
-  const { profile, signOut: authSignOut } = useAuth();
+  const { user, profile, signOut: authSignOut } = useAuth();
   const [spots, setSpots] = useState<SpotRecord[]>([]);
 
   useEffect(() => {

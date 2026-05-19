@@ -436,6 +436,65 @@ app.post('/api/staff/check-whitelist', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Staff/admin forgot password — checks all three tables before sending reset ─
+app.post('/api/staff/forgot-password', async (req, res) => {
+  if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });
+  const { email } = req.body || {};
+  if (!email) return res.status(400).json({ error: 'email required' });
+  const emailLower = email.toLowerCase().trim();
+  try {
+    // 1. Check admin_users (activated accounts)
+    const auRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/admin_users?email=eq.${encodeURIComponent(emailLower)}&select=email,status&limit=1`,
+      { headers: SVC_HEADERS }
+    );
+    const auRows = await auRes.json();
+    if (Array.isArray(auRows) && auRows.length > 0) {
+      if (auRows[0].status === 'suspended') {
+        return res.status(403).json({ error: 'This account is suspended. Contact an admin for access.' });
+      }
+      // Found and active — send reset
+    } else {
+      // 2. Check admin_whitelist
+      const awRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/admin_whitelist?email=eq.${encodeURIComponent(emailLower)}&select=email&limit=1`,
+        { headers: SVC_HEADERS }
+      );
+      const awRows = await awRes.json();
+      const inAdminWl = Array.isArray(awRows) && awRows.length > 0;
+
+      // 3. Check staff_whitelist
+      const swRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/staff_whitelist?email=eq.${encodeURIComponent(emailLower)}&select=email&limit=1`,
+        { headers: SVC_HEADERS }
+      );
+      const swRows = await swRes.json();
+      const inStaffWl = Array.isArray(swRows) && swRows.length > 0;
+
+      if (!inAdminWl && !inStaffWl) {
+        return res.status(404).json({ error: 'No staff or admin account matches that email.' });
+      }
+    }
+
+    // Send Supabase password reset email
+    const redirectTo = process.env.SITE_URL
+      ? `${process.env.SITE_URL.replace(/\/$/, '')}/staff-login`
+      : `https://${req.get('host') || ''}/staff-login`;
+
+    const resetRes = await fetch(`${SUPABASE_URL}/auth/v1/recover`, {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_ANON, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: emailLower, redirect_to: redirectTo }),
+    });
+    if (!resetRes.ok) {
+      const d = await resetRes.json().catch(() => ({}));
+      return res.status(resetRes.status).json({ error: d.error_description || d.message || 'Failed to send reset email.' });
+    }
+    console.log(`[Staff ForgotPassword] Reset link sent to ${emailLower}`);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Staff/admin activation — step 2: record verified activation in admin_users ──
 app.post('/api/staff/record-activation', async (req, res) => {
   if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });

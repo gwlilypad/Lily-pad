@@ -1280,21 +1280,21 @@ export default function AdminPage() {
     setForgotSent(false);
   }
 
-  function handleForgotSubmit() {
+  async function handleForgotSubmit() {
     const e = forgotEmail.trim().toLowerCase();
     if (!e) { setForgotError("Enter your email address."); return; }
-    const match = staffList.find(s => s.email.toLowerCase() === e);
-    if (!match) {
-      setForgotError("No verified staff or admin account matches that email.");
-      return;
-    }
-    if (match.status === "suspended") {
-      setForgotError("This account is suspended. Contact an admin for access.");
-      return;
-    }
     setForgotError("");
-    setForgotSent(true);
-    setToast(`Reset link sent to ${match.email}`);
+    try {
+      const r = await fetch("/api/staff/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: e }),
+      });
+      const d = await r.json();
+      if (!r.ok) { setForgotError(d.error || "Something went wrong. Try again."); return; }
+      setForgotSent(true);
+      setToast(`Reset link sent to ${e}`);
+    } catch { setForgotError("Network error. Try again."); }
   }
 
   function updateUser(id: number, patch: Partial<MockUser>) {

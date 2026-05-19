@@ -1630,13 +1630,6 @@ export default function AdminPage() {
             >
               Forgot password?
             </button>
-            <button
-              type="button"
-              onClick={() => { resetActivation(); setShowActivate(true); }}
-              style={{ background: "none", border: "none", textAlign: "center", fontSize: 12.5, color: GREEN, margin: 0, cursor: "pointer", fontFamily: '"DM Sans", sans-serif', fontWeight: 700, marginTop: 4 }}
-            >
-              New here? Activate your account →
-            </button>
           </div>
         </div>
       ) : view === "dashboard" ? (

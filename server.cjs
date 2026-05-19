@@ -138,6 +138,18 @@ CREATE TABLE IF NOT EXISTS public.admin_users (
   last_login_at TIMESTAMPTZ
 );
 
+CREATE TABLE IF NOT EXISTS public.admin_whitelist (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email      TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.staff_whitelist (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email      TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
@@ -397,6 +409,68 @@ app.post('/api/auth/signup', async (req, res) => {
 
     // No session → confirmation email was sent; client should show "check your email"
     return res.json({ created: true, session: null, confirm_email: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Staff/admin activation — step 1: check whitelist, send OTP ───────────────
+app.post('/api/staff/send-activation', async (req, res) => {
+  if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });
+  const { email, role } = req.body || {};
+  if (!email || !role) return res.status(400).json({ error: 'email and role required' });
+  const emailLower = email.toLowerCase().trim();
+  const table = role === 'admin' ? 'admin_whitelist' : 'staff_whitelist';
+  try {
+    // Verify email is on the appropriate whitelist
+    const checkRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/${table}?email=eq.${encodeURIComponent(emailLower)}&select=id`,
+      { headers: SVC_HEADERS }
+    );
+    const rows = await checkRes.json().catch(() => []);
+    if (!checkRes.ok || !Array.isArray(rows) || !rows.length)
+      return res.status(403).json({ error: `This email is not on the approved ${role} list. Ask a super-admin to add it in Supabase.` });
+
+    // Send OTP via Supabase email
+    const otpRes = await fetch(`${SUPABASE_URL}/auth/v1/otp`, {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_ANON, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, create_user: true }),
+    });
+    if (!otpRes.ok) {
+      const err = await otpRes.json().catch(() => ({}));
+      return res.status(otpRes.status).json({ error: err.msg || err.message || err.error_description || 'Failed to send code. Check Supabase email settings.' });
+    }
+    console.log(`[Activation] OTP sent to ${emailLower} (${role})`);
+    res.json({ sent: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Staff/admin activation — step 2: verify OTP, create account ──────────────
+app.post('/api/staff/verify-activation', async (req, res) => {
+  if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });
+  const { email, token, role } = req.body || {};
+  if (!email || !token || !role) return res.status(400).json({ error: 'email, token and role required' });
+  const emailLower = email.toLowerCase().trim();
+  try {
+    // Verify OTP with Supabase
+    const verifyRes = await fetch(`${SUPABASE_URL}/auth/v1/verify`, {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_ANON, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'email', email, token }),
+    });
+    const verifyData = await verifyRes.json().catch(() => ({}));
+    if (!verifyRes.ok)
+      return res.status(400).json({ error: verifyData.msg || verifyData.message || verifyData.error_description || 'Invalid or expired code.' });
+
+    // Upsert into admin_users with the verified role
+    const userId = verifyData.user?.id || null;
+    await fetch(`${SUPABASE_URL}/rest/v1/admin_users`, {
+      method: 'POST',
+      headers: { ...SVC_HEADERS, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({ email: emailLower, role, auth_user_id: userId, last_login_at: new Date().toISOString() }),
+    }).catch(() => {});
+
+    console.log(`[Activation] ${role} activated: ${emailLower}`);
+    res.json({ created: true, role });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

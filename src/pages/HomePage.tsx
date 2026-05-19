@@ -1,29 +1,7 @@
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/context/AuthContext";
 import { useNavigate } from "react-router-dom";
-
-function AdminSlide({ open }: { open: boolean }) {
-  return (
-    <div style={{
-      position: "absolute", left: "100%", top: 0, width: "100%", height: "100%",
-      background: "#F4F7FA", display: "flex", flexDirection: "column", overflow: "hidden",
-      transform: open ? "translateX(-100%)" : "translateX(0)",
-      transition: "transform 0.42s cubic-bezier(0.32,0.72,0,1)",
-      zIndex: 200,
-    }}>
-      <div style={{ background: "#0E1F40", padding: "48px 24px 28px", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-        <div>
-          <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 10, fontWeight: 600, letterSpacing: "0.18em", textTransform: "uppercase", margin: 0 }}>lily pad</p>
-          <p style={{ color: "#fff", fontSize: 20, fontWeight: 700, margin: 0, letterSpacing: "-0.01em" }}>Admin</p>
-        </div>
-      </div>
-      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <p style={{ fontSize: 14, color: "rgba(14,31,64,0.3)", fontFamily: '"DM Sans", sans-serif' }}>Loading…</p>
-      </div>
-    </div>
-  );
-}
 
 const CarSVG = () => (
   <svg width="135" height="66" viewBox="0 0 90 44" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -55,9 +33,6 @@ const CarSVG = () => (
 );
 
 const SPLIT = 61;
-const PAD_SIZE = 64;
-const PAD_HALF = PAD_SIZE / 2;
-const CONNECT_THRESHOLD = 0.72; // fraction of max drag to trigger on release
 
 export default function HomePage() {
   const { goTo, setState } = useApp();
@@ -67,93 +42,6 @@ export default function HomePage() {
   const [modalSuccess, setModalSuccess] = useState(false);
   const [typeVal, setTypeVal] = useState<"driver" | "host">("driver");
   const [refCode, setRefCode] = useState("");
-  const [adminOpen, setAdminOpen] = useState(false);
-
-  // Horizontal drag state
-  const [padX, setPadX] = useState(0);          // px offset rightward from center (0 = home)
-  const [dragging, setDragging] = useState(false);
-  const [connecting, setConnecting] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const dragStartClientX = useRef(0);
-  const dragStarted = useRef(false);
-  const triggered = useRef(false);
-
-  // Max rightward offset: from center to right edge minus pad radius
-  function maxDrag() {
-    const w = containerRef.current?.offsetWidth ?? window.innerWidth;
-    return w / 2 - PAD_HALF - 8; // 8px margin from edge
-  }
-
-  useEffect(() => {
-    return () => { triggered.current = false; };
-  }, []);
-
-  function triggerConnect() {
-    if (triggered.current) return;
-    triggered.current = true;
-    const mx = maxDrag();
-    setPadX(mx);
-    setDragging(false);
-    setConnecting(true);
-    setTimeout(() => {
-      setAdminOpen(true);
-      setTimeout(() => {
-        setState(s => ({ ...s, adminPreview: true }));
-        goTo("admin");
-      }, 520);
-    }, 280);
-  }
-
-  function openAdmin() {
-    triggered.current = false;
-    setAdminOpen(true);
-    setTimeout(() => {
-      setState(s => ({ ...s, adminPreview: true }));
-      goTo("admin");
-    }, 620);
-  }
-
-  function onPadDown(e: React.PointerEvent) {
-    if (connecting) return;
-    e.currentTarget.setPointerCapture(e.pointerId);
-    dragStartClientX.current = e.clientX;
-    dragStarted.current = true;
-    triggered.current = false;
-    setDragging(true);
-  }
-
-  function onPadMove(e: React.PointerEvent) {
-    if (!dragStarted.current || connecting) return;
-    const dx = Math.max(0, e.clientX - dragStartClientX.current);
-    const mx = maxDrag();
-    const clamped = Math.min(dx, mx);
-    setPadX(clamped);
-    // Auto-trigger when dragged all the way to the edge
-    if (clamped >= mx) {
-      dragStarted.current = false;
-      triggerConnect();
-    }
-  }
-
-  function onPadUp() {
-    if (!dragStarted.current) return;
-    dragStarted.current = false;
-    setDragging(false);
-    const mx = maxDrag();
-    if (padX >= mx * CONNECT_THRESHOLD) {
-      triggerConnect();
-    } else {
-      // Snap back to center
-      setPadX(0);
-      triggered.current = false;
-    }
-  }
-
-  function onPadCancel() {
-    dragStarted.current = false;
-    setDragging(false);
-    if (!connecting) { setPadX(0); triggered.current = false; }
-  }
 
   function applyCode() {
     if (!refCode.trim()) return;
@@ -176,33 +64,15 @@ export default function HomePage() {
     if (user) { goTo("find"); } else { navigate("/signin"); }
   }
 
-  // Computed visual values
-  const mx = maxDrag();
-  const progress = mx > 0 ? Math.min(padX / mx, 1) : 0;
-  const trackOpacity = dragging || padX > 0 ? 1 : 0;
-  const dockGlow = progress > 0.5 ? progress : 0;
-
   return (
-    <div
-      ref={containerRef}
-      style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden", userSelect: "none" }}
-    >
+    <div style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden" }}>
+
       {/* ── NAVY SECTION ── */}
       <div style={{
         position: "absolute", top: 0, left: 0, right: 0, height: `${SPLIT}%`,
         background: "#0E1F40", display: "flex", flexDirection: "column",
         alignItems: "center", padding: "48px 20px 0", boxSizing: "border-box", zIndex: 5,
       }}>
-        <div style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-          {/* Lily pad logo — tap to open admin sign-in */}
-          <button
-            onClick={openAdmin}
-            style={{ display: "flex", alignItems: "center", gap: 8, background: "none", border: "none", cursor: "pointer", padding: 0 }}
-          >
-            <span style={{ color: "rgba(255,255,255,0.55)", fontSize: 11, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase" }}>lily pad</span>
-          </button>
-        </div>
-
         <div style={{ display: "flex", justifyContent: "center", marginTop: 24, flexShrink: 0 }}>
           <div style={{ filter: "drop-shadow(0 6px 20px rgba(0,0,0,0.35))" }}>
             <CarSVG />
@@ -246,97 +116,6 @@ export default function HomePage() {
           Have a referral code?
         </div>
       </div>
-
-      {/* ── HORIZONTAL DRAG TRACK ── */}
-      <div
-        style={{
-          position: "absolute",
-          left: "50%",
-          top: `${SPLIT}%`,
-          transform: "translate(0, -50%)",
-          width: `calc(50% - ${PAD_HALF + 8}px)`,
-          height: 2,
-          zIndex: 8,
-          opacity: trackOpacity,
-          transition: dragging ? "none" : "opacity 0.4s ease",
-          pointerEvents: "none",
-          overflow: "visible",
-        }}
-      >
-        {/* Track background (full length, faint) */}
-        <div style={{
-          position: "absolute", top: 0, left: 0, right: 0, height: "100%",
-          background: "rgba(141,214,63,0.18)",
-          borderRadius: 2,
-        }} />
-        {/* Track fill (progress) */}
-        <div style={{
-          position: "absolute", top: 0, left: 0, height: "100%",
-          width: `${progress * 100}%`,
-          background: `rgba(141,214,63,${0.4 + progress * 0.5})`,
-          borderRadius: 2,
-          transition: dragging ? "none" : "width 0.35s cubic-bezier(0.22,1,0.36,1)",
-          boxShadow: progress > 0.3 ? `0 0 ${6 + progress * 8}px rgba(141,214,63,${0.3 + progress * 0.4})` : "none",
-        }} />
-        {/* Dock circle at right end */}
-        <div style={{
-          position: "absolute", right: -14, top: "50%",
-          transform: "translate(50%, -50%)",
-          width: 28, height: 28, borderRadius: "50%",
-          border: `2px solid rgba(141,214,63,${0.3 + dockGlow * 0.7})`,
-          background: `rgba(141,214,63,${dockGlow * 0.25})`,
-          boxShadow: dockGlow > 0 ? `0 0 ${8 + dockGlow * 16}px rgba(141,214,63,${dockGlow * 0.6})` : "none",
-          transition: dragging ? "none" : "all 0.3s ease",
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-          {/* Lock icon — lights up when near */}
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
-            stroke={`rgba(141,214,63,${0.3 + dockGlow * 0.7})`} strokeWidth="2.5" strokeLinecap="round">
-            <rect x="3" y="11" width="18" height="11" rx="2"/>
-            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-          </svg>
-        </div>
-      </div>
-
-      {/* ── DRAGGABLE LILY PAD (divider) ── */}
-      <div
-        onPointerDown={onPadDown}
-        onPointerMove={onPadMove}
-        onPointerUp={onPadUp}
-        onPointerCancel={onPadCancel}
-        onContextMenu={e => e.preventDefault()}
-        style={{
-          position: "absolute",
-          left: `calc(50% + ${padX}px)`,
-          top: `${SPLIT}%`,
-          transform: "translate(-50%, -50%)",
-          width: PAD_SIZE, height: PAD_SIZE,
-          zIndex: 10,
-          cursor: dragging ? "grabbing" : "grab",
-          touchAction: "none",
-          transition: dragging ? "none" : (connecting ? "left 0.28s cubic-bezier(0.34,1.48,0.64,1)" : "left 0.42s cubic-bezier(0.22,1,0.36,1)"),
-          filter: connecting
-            ? "drop-shadow(0 0 14px rgba(141,214,63,0.9))"
-            : progress > 0.3
-              ? `drop-shadow(0 0 ${4 + progress * 10}px rgba(141,214,63,${0.3 + progress * 0.5}))`
-              : "none",
-        }}
-      >
-      </div>
-
-      {/* Connect flash overlay */}
-      {connecting && (
-        <div style={{
-          position: "absolute", inset: 0, zIndex: 190, pointerEvents: "none",
-          background: "rgba(141,214,63,0.12)",
-          animation: "none",
-          opacity: adminOpen ? 0 : 1,
-          transition: "opacity 0.3s ease",
-        }} />
-      )}
-
-      {/* Admin slide panel */}
-      <AdminSlide open={adminOpen} />
 
       {/* Referral modal */}
       <div className={`modal-overlay${modalOpen ? " show" : ""}`} onClick={closeModal}>

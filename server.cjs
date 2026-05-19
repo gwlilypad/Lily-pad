@@ -498,6 +498,75 @@ app.post('/api/staff/record-activation', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Staff invite — whitelist email + send Resend invitation ──────────────────
+app.post('/api/staff/invite', async (req, res) => {
+  if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });
+  const RESEND_KEY = process.env.RESEND_API_KEY || '';
+  const { email, role } = req.body || {};
+  if (!email || !role) return res.status(400).json({ error: 'email and role required' });
+  const emailLower = email.toLowerCase().trim();
+  if (!emailLower.includes('@')) return res.status(400).json({ error: 'Invalid email address' });
+  if (!['staff', 'admin'].includes(role)) return res.status(400).json({ error: 'role must be staff or admin' });
+  try {
+    // 1. Add to the correct whitelist table
+    const table = role === 'admin' ? 'admin_whitelist' : 'staff_whitelist';
+    const wlRes = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+      method : 'POST',
+      headers: { ...SVC_HEADERS, 'Prefer': 'resolution=ignore-duplicates,return=minimal' },
+      body   : JSON.stringify({ email: emailLower }),
+    });
+    if (!wlRes.ok && wlRes.status !== 409) {
+      const wlErr = await wlRes.json().catch(() => ({}));
+      throw new Error(wlErr.message || `Failed to add to whitelist (${wlRes.status})`);
+    }
+    console.log(`[Invite] ${emailLower} added to ${table} as ${role}`);
+
+    // 2. Send invitation email via Resend (optional — skip gracefully if key missing)
+    if (!RESEND_KEY) {
+      console.warn('[Invite] RESEND_API_KEY not set — skipping email');
+      return res.json({ invited: true, emailSent: false, emailError: 'Email service not configured' });
+    }
+    const appUrl = process.env.REPLIT_DEV_DOMAIN
+      ? `https://${process.env.REPLIT_DEV_DOMAIN}/admin`
+      : 'https://lilypadparking.com/admin';
+    const roleLabel = role === 'admin' ? 'Admin' : 'Staff';
+    const emailRes = await fetch('https://api.resend.com/emails', {
+      method : 'POST',
+      headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
+      body   : JSON.stringify({
+        from   : 'Lily Pad <onboarding@resend.dev>',
+        to     : [emailLower],
+        subject: `You're invited to the Lily Pad ${roleLabel} team`,
+        html   : `
+<div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;background:#0E1F40;border-radius:20px;padding:40px 32px;color:#fff;">
+  <p style="font-size:11px;font-weight:700;letter-spacing:0.18em;color:#8DD63F;text-transform:uppercase;margin:0 0 8px;">Lily Pad Parking</p>
+  <h1 style="font-size:26px;font-weight:800;margin:0 0 16px;letter-spacing:-0.02em;">You're invited!</h1>
+  <p style="font-size:15px;color:rgba(255,255,255,0.78);line-height:1.6;margin:0 0 28px;">
+    You've been added to the Lily Pad <strong style="color:#fff;">${roleLabel}</strong> team.
+    Click the button below to activate your account and set a password.
+  </p>
+  <div style="text-align:center;margin-bottom:28px;">
+    <a href="${appUrl}" style="display:inline-block;background:#8DD63F;color:#0E1F40;font-weight:800;font-size:15px;padding:16px 36px;border-radius:100px;text-decoration:none;">
+      Activate my account →
+    </a>
+  </div>
+  <p style="font-size:12px;color:rgba(255,255,255,0.40);line-height:1.6;margin:0;text-align:center;">
+    On the sign-in page tap <strong style="color:rgba(255,255,255,0.60);">New here? Activate your account</strong> and enter this email address.<br/>
+    If you weren't expecting this, you can safely ignore it.
+  </p>
+</div>`,
+      }),
+    });
+    if (!emailRes.ok) {
+      const emailErr = await emailRes.json().catch(() => ({}));
+      console.warn(`[Invite] Resend failed for ${emailLower}:`, emailErr.message);
+      return res.json({ invited: true, emailSent: false, emailError: emailErr.message || 'Email delivery failed' });
+    }
+    console.log(`[Invite] Invitation email sent to ${emailLower}`);
+    res.json({ invited: true, emailSent: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Staff list — returns all admin_users rows mapped to StaffAccount shape ────
 app.get('/api/staff/list', async (req, res) => {
   if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });

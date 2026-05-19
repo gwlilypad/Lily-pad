@@ -960,6 +960,35 @@ export default function AdminPage() {
   const [inviteAccessToken, setInviteAccessToken] = useState<string | null>(null);
   const [showActivate, setShowActivate] = useState(false);
   function resetActivation() { setInviteStep("email"); setInviteEmail(""); setInviteOtpDigits([]); setInviteError(""); setInviteEmailFocus(false); setInvitePassword(""); setInvitePasswordError(""); setInviteUserId(null); setInviteAccessToken(null); }
+
+  // ── Invite Staff card (dashboard) ──────────────────────────────────────────
+  const [inviteCardOpen, setInviteCardOpen] = useState(false);
+  const [inviteCardEmail, setInviteCardEmail] = useState("");
+  const [inviteCardRole, setInviteCardRole] = useState<"staff" | "admin">("staff");
+  const [inviteCardLoading, setInviteCardLoading] = useState(false);
+  const [inviteCardError, setInviteCardError] = useState("");
+  const [inviteCardSuccess, setInviteCardSuccess] = useState<string | null>(null);
+  const [inviteCardEmailFocus, setInviteCardEmailFocus] = useState(false);
+
+  async function handleSendInvite() {
+    const em = inviteCardEmail.trim().toLowerCase();
+    if (!em || !em.includes("@")) { setInviteCardError("Enter a valid email address."); return; }
+    setInviteCardLoading(true); setInviteCardError(""); setInviteCardSuccess(null);
+    try {
+      const r = await fetch("/api/staff/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: em, role: inviteCardRole }),
+      });
+      const d = await r.json();
+      if (!r.ok) { setInviteCardError(d.error || "Failed to send invite."); return; }
+      const sentNote = d.emailSent ? " An invitation email has been sent." : " They can now activate via the staff login page.";
+      setInviteCardSuccess(`${em} added as ${inviteCardRole}.${sentNote}`);
+      setInviteCardEmail("");
+    } catch { setInviteCardError("Network error. Try again."); }
+    finally { setInviteCardLoading(false); }
+  }
+
   function refreshStaffList() { fetch("/api/staff/list").then(r => r.json()).then(d => { if (Array.isArray(d)) setStaffList(d); }).catch(() => {}); }
   useEffect(() => { refreshStaffList(); }, []);
 
@@ -1708,133 +1737,79 @@ export default function AdminPage() {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.50)" strokeWidth="2.5"><path d="m9 18 6-6-6-6"/></svg>
           </div>
 
-          {/* Email activation — self-serve OTP flow */}
-          <div style={{ background: "#142A52", borderRadius: 18, padding: "16px 18px", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 14px rgba(0,0,0,0.30)", display: "flex", flexDirection: "column", gap: 12 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div>
-                <p style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.12em", textTransform: "uppercase", margin: 0 }}>Email activation</p>
-                <p style={{ fontSize: 14, fontWeight: 700, color: "#fff", margin: "2px 0 0" }}>{inviteStep === "success" ? "Account activated" : inviteStep === "password" ? "Create password" : inviteStep === "otp" ? "Enter your code" : "Activate account"}</p>
+          {/* ── Invite Staff — admin only ── */}
+          {role === "admin" && (
+            <div style={{ background: "#142A52", borderRadius: 18, boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 14px rgba(0,0,0,0.30)", border: `1px solid rgba(141,214,63,0.18)`, overflow: "hidden" }}>
+              {/* Header row — always visible, click to expand */}
+              <div
+                onClick={() => { setInviteCardOpen(o => !o); setInviteCardError(""); setInviteCardSuccess(null); }}
+                style={{ padding: "16px 18px", display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }}
+              >
+                <div style={{ width: 42, height: 42, borderRadius: 12, background: "rgba(141,214,63,0.14)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: 14, fontWeight: 700, color: "#fff", margin: 0 }}>Invite Staff</p>
+                  <p style={{ fontSize: 11.5, color: "rgba(255,255,255,0.62)", margin: "2px 0 0" }}>Add a team member · sends invitation email</p>
+                </div>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.50)" strokeWidth="2.5" style={{ transform: inviteCardOpen ? "rotate(90deg)" : "none", transition: "transform 0.2s" }}><path d="m9 18 6-6-6-6"/></svg>
               </div>
-              <div style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(141,214,63,0.14)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-              </div>
+
+              {/* Expandable form */}
+              {inviteCardOpen && (
+                <div style={{ padding: "0 18px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
+                  {inviteCardSuccess ? (
+                    <>
+                      <div style={{ background: "rgba(141,214,63,0.10)", border: "1px solid rgba(141,214,63,0.30)", borderRadius: 12, padding: "12px 14px", display: "flex", alignItems: "flex-start", gap: 10 }}>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0, marginTop: 1 }}><path d="M20 6L9 17l-5-5"/></svg>
+                        <p style={{ fontSize: 13, color: "rgba(255,255,255,0.85)", margin: 0, lineHeight: 1.5 }}>{inviteCardSuccess}</p>
+                      </div>
+                      <button
+                        onClick={() => { setInviteCardSuccess(null); setInviteCardEmail(""); }}
+                        style={{ width: "100%", padding: "11px", borderRadius: 100, border: "1.5px solid rgba(255,255,255,0.15)", background: "transparent", color: "rgba(255,255,255,0.70)", fontWeight: 700, fontSize: 13, fontFamily: '"DM Sans",sans-serif', cursor: "pointer" }}
+                      >
+                        Invite another
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      {/* Role toggle */}
+                      <div style={{ display: "flex", gap: 6, background: "rgba(255,255,255,0.05)", borderRadius: 10, padding: 4 }}>
+                        {(["staff", "admin"] as const).map(r => (
+                          <button
+                            key={r}
+                            onClick={() => setInviteCardRole(r)}
+                            style={{ flex: 1, padding: "8px", borderRadius: 8, border: "none", background: inviteCardRole === r ? (r === "admin" ? GREEN : "rgba(255,255,255,0.12)") : "transparent", color: inviteCardRole === r ? (r === "admin" ? NAVY : "#fff") : "rgba(255,255,255,0.45)", fontWeight: 700, fontSize: 12, fontFamily: '"DM Sans",sans-serif', cursor: "pointer", transition: "all 0.15s", textTransform: "capitalize" }}
+                          >
+                            {r}
+                          </button>
+                        ))}
+                      </div>
+                      {/* Email input */}
+                      <input
+                        type="email"
+                        placeholder="team@example.com"
+                        value={inviteCardEmail}
+                        onChange={e => { setInviteCardEmail(e.target.value); setInviteCardError(""); }}
+                        onFocus={() => setInviteCardEmailFocus(true)}
+                        onBlur={() => setInviteCardEmailFocus(false)}
+                        onKeyDown={e => { if (e.key === "Enter") handleSendInvite(); }}
+                        style={{ width: "100%", padding: "12px 14px", borderRadius: 12, boxSizing: "border-box", background: "rgba(255,255,255,0.05)", color: "#fff", fontSize: 14, fontFamily: '"DM Sans",sans-serif', outline: "none", border: `1.5px solid ${inviteCardError ? "#ef4444" : inviteCardEmailFocus ? GREEN : "rgba(255,255,255,0.12)"}`, transition: "border-color 0.15s" }}
+                      />
+                      {inviteCardError && <p style={{ color: "#ef4444", fontSize: 11.5, fontWeight: 600, margin: 0 }}>{inviteCardError}</p>}
+                      <button
+                        disabled={inviteCardLoading || !inviteCardEmail.trim()}
+                        onClick={handleSendInvite}
+                        style={{ width: "100%", padding: "12px", borderRadius: 100, border: "none", background: inviteCardLoading || !inviteCardEmail.trim() ? "rgba(141,214,63,0.40)" : GREEN, color: NAVY, fontWeight: 800, fontSize: 14, fontFamily: '"DM Sans",sans-serif', cursor: inviteCardLoading || !inviteCardEmail.trim() ? "default" : "pointer" }}
+                      >
+                        {inviteCardLoading ? "Sending invite…" : "Send invite"}
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
-            {inviteStep === "success" ? (
-              <>
-                <div style={{ background: "rgba(141,214,63,0.10)", border: "1px solid rgba(141,214,63,0.30)", borderRadius: 12, padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth="2.5" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
-                  <div>
-                    <p style={{ fontSize: 13, fontWeight: 700, color: GREEN, margin: 0 }}>Account activated!</p>
-                    <p style={{ fontSize: 11.5, color: "rgba(255,255,255,0.55)", margin: "2px 0 0" }}>{inviteEmail} is now active as {inviteRole}.</p>
-                  </div>
-                </div>
-                <button onClick={resetActivation} style={{ width: "100%", padding: "11px", borderRadius: 100, border: "1.5px solid rgba(255,255,255,0.15)", background: "transparent", color: "rgba(255,255,255,0.70)", fontWeight: 700, fontSize: 13, fontFamily: '"DM Sans",sans-serif', cursor: "pointer" }}>Activate another</button>
-              </>
-            ) : inviteStep === "password" ? (
-              <>
-                <div style={{ background: "rgba(255,255,255,0.05)", borderRadius: 10, padding: "10px 14px" }}>
-                  <p style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.10em", textTransform: "uppercase", margin: 0 }}>Account email</p>
-                  <p style={{ fontSize: 14, fontWeight: 700, color: "#fff", margin: "3px 0 0" }}>{inviteEmail}</p>
-                </div>
-                <input
-                  type="password"
-                  placeholder="Create a password (min. 8 chars)"
-                  value={invitePassword}
-                  onChange={e => { setInvitePassword(e.target.value); setInvitePasswordError(""); }}
-                  onFocus={() => setInvitePasswordFocus(true)}
-                  onBlur={() => setInvitePasswordFocus(false)}
-                  style={{ width: "100%", padding: "14px 16px", borderRadius: 12, boxSizing: "border-box", background: "rgba(255,255,255,0.05)", color: "#fff", fontSize: 15, fontFamily: '"DM Sans",sans-serif', outline: "none", border: `1.5px solid ${invitePasswordError ? "#ef4444" : invitePasswordFocus ? GREEN : "rgba(255,255,255,0.15)"}`, transition: "border-color 0.15s" }}
-                />
-                {invitePasswordError && <p style={{ color: "#ef4444", fontSize: 11.5, fontWeight: 600, margin: 0 }}>{invitePasswordError}</p>}
-                <button
-                  disabled={!invitePassword.trim() || inviteLoading}
-                  onClick={async () => {
-                    if (invitePassword.trim().length < 8) { setInvitePasswordError("Password must be at least 8 characters."); return; }
-                    setInviteLoading(true); setInvitePasswordError("");
-                    try {
-                      if (!inviteAccessToken) { setInvitePasswordError("Session expired. Please go back and verify your code again."); return; }
-                      const pwRes = await fetch("/api/staff/set-password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ access_token: inviteAccessToken, password: invitePassword }) });
-                      const pwData = await pwRes.json();
-                      if (!pwRes.ok) { setInvitePasswordError(pwData.error || "Failed to set password."); return; }
-                      await fetch("/api/staff/record-activation", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: inviteEmail.trim().toLowerCase(), role: inviteRole, userId: inviteUserId }) }).catch(() => {});
-                      refreshStaffList();
-                      setInviteStep("success");
-                    } catch { setInvitePasswordError("Network error. Try again."); }
-                    finally { setInviteLoading(false); }
-                  }}
-                  style={{ width: "100%", padding: "11px", borderRadius: 100, border: "none", background: !invitePassword.trim() || inviteLoading ? "rgba(141,214,63,0.40)" : GREEN, color: NAVY, fontWeight: 800, fontSize: 13, fontFamily: '"DM Sans",sans-serif', cursor: !invitePassword.trim() || inviteLoading ? "default" : "pointer" }}
-                >
-                  {inviteLoading ? "Creating account…" : "Create account"}
-                </button>
-              </>
-            ) : inviteStep === "otp" ? (
-              <>
-                <p style={{ fontSize: 13, color: "rgba(255,255,255,0.65)", margin: 0, lineHeight: 1.5 }}>Enter the code sent to <strong style={{ color: "#fff" }}>{inviteEmail}</strong></p>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="Enter code"
-                  value={inviteOtpDigits.join("")}
-                  onChange={e => { setInviteOtpDigits(e.target.value.replace(/\s/g,"").split("")); setInviteError(""); }}
-                  style={{ width: "100%", padding: "14px 16px", borderRadius: 12, boxSizing: "border-box", background: "rgba(255,255,255,0.05)", color: "#fff", fontSize: 20, fontWeight: 700, textAlign: "center", letterSpacing: "0.2em", fontFamily: '"DM Sans",sans-serif', outline: "none", border: `1.5px solid ${inviteError ? "#ef4444" : inviteOtpDigits.length > 0 ? "rgba(141,214,63,0.70)" : "rgba(255,255,255,0.15)"}`, transition: "border-color 0.15s" }}
-                />
-                {inviteError && <p style={{ color: "#ef4444", fontSize: 11.5, fontWeight: 600, margin: 0 }}>{inviteError}</p>}
-                <button
-                  disabled={!inviteOtpDigits.join("").trim() || inviteLoading}
-                  onClick={async () => {
-                    const otp = inviteOtpDigits.join("");
-                    setInviteLoading(true); setInviteError("");
-                    try {
-                      const { data: vData, error: vErr } = await supabase.auth.verifyOtp({ email: inviteEmail.trim().toLowerCase(), token: otp, type: "email" });
-                      if (vErr) { setInviteError(vErr.message || "Invalid or expired code."); return; }
-                      setInviteUserId(vData?.user?.id ?? null);
-                      setInviteAccessToken(vData?.session?.access_token ?? null);
-                      setInviteStep("password");
-                    } catch { setInviteError("Network error. Try again."); }
-                    finally { setInviteLoading(false); }
-                  }}
-                  style={{ width: "100%", padding: "11px", borderRadius: 100, border: "none", background: !inviteOtpDigits.join("").trim() || inviteLoading ? "rgba(141,214,63,0.40)" : GREEN, color: NAVY, fontWeight: 800, fontSize: 13, fontFamily: '"DM Sans",sans-serif', cursor: !inviteOtpDigits.join("").trim() || inviteLoading ? "default" : "pointer" }}
-                >
-                  {inviteLoading ? "Verifying…" : "Activate account"}
-                </button>
-                <button onClick={resetActivation} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.45)", fontSize: 12, cursor: "pointer", fontFamily: '"DM Sans",sans-serif', padding: 0, textAlign: "left" }}>← Change email</button>
-              </>
-            ) : (
-              <>
-                <input
-                  type="email"
-                  placeholder="your@email.com"
-                  value={inviteEmail}
-                  onChange={e => { setInviteEmail(e.target.value); setInviteError(""); }}
-                  onFocus={() => setInviteEmailFocus(true)}
-                  onBlur={() => setInviteEmailFocus(false)}
-                  style={{ width: "100%", padding: "10px 14px", borderRadius: 10, boxSizing: "border-box", background: "rgba(255,255,255,0.05)", color: "#fff", fontSize: 13, fontFamily: '"DM Sans",sans-serif', outline: "none", border: `1.5px solid ${inviteError ? "#ef4444" : inviteEmailFocus ? GREEN : "rgba(255,255,255,0.10)"}`, transition: "border-color 0.15s" }}
-                />
-                {inviteError && <p style={{ color: "#ef4444", fontSize: 11.5, fontWeight: 600, margin: 0 }}>{inviteError}</p>}
-                <button
-                  disabled={inviteLoading}
-                  onClick={async () => {
-                    const em = inviteEmail.trim().toLowerCase();
-                    if (!em || !em.includes("@")) { setInviteError("Enter a valid email address."); return; }
-                    setInviteLoading(true); setInviteError("");
-                    try {
-                      const chk = await fetch("/api/staff/check-whitelist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: em }) });
-                      const chkData = await chk.json();
-                      if (!chk.ok) { setInviteError(chkData.error || "Email not on the approved list."); return; }
-                      setInviteRole(chkData.role);
-                      const { error: otpErr } = await supabase.auth.signInWithOtp({ email: em, options: { shouldCreateUser: true } });
-                      if (otpErr) { setInviteError(otpErr.message || "Failed to send code."); return; }
-                      setInviteStep("otp");
-                    } catch { setInviteError("Network error. Try again."); }
-                    finally { setInviteLoading(false); }
-                  }}
-                  style={{ width: "100%", padding: "11px", borderRadius: 100, border: "none", background: inviteLoading ? "rgba(141,214,63,0.50)" : GREEN, color: NAVY, fontWeight: 800, fontSize: 13, fontFamily: '"DM Sans",sans-serif', cursor: inviteLoading ? "not-allowed" : "pointer" }}
-                >
-                  {inviteLoading ? "Sending…" : "Send code"}
-                </button>
-              </>
-            )}
-          </div>
+          )}
 
           {/* Revenue & Payouts — admin only */}
           {role === "admin" && (

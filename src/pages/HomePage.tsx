@@ -234,27 +234,8 @@ export default function HomePage() {
       {/* ── WHITE SECTION ── */}
       <div style={{
         position: "absolute", bottom: 0, left: 0, right: 0, height: `${100 - SPLIT}%`,
-        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end",
-        padding: "0 20px 28px", zIndex: 5, boxSizing: "border-box", gap: 12,
-      }}>
-        <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: "0.18em", color: "rgba(14,31,64,0.38)", textTransform: "uppercase", textAlign: "center" }}>For Pad Renters</p>
-        <p style={{ margin: 0, fontSize: 17, fontWeight: 600, color: "#0E1F40", textAlign: "center", letterSpacing: "-0.01em" }}>Rent your pad. Earn money.</p>
-        <button
-          onClick={handleListMyPad}
-          style={{ width: "100%", background: "transparent", border: "2px solid #0E1F40", borderRadius: 50, padding: "14px", fontSize: 15, fontWeight: 700, color: "#0E1F40", cursor: "pointer", letterSpacing: "-0.01em" }}
-        >
-          List my lily pad
-        </button>
-        <button
-          onClick={handleSignIn}
-          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "rgba(14,31,64,0.45)", fontFamily: "inherit", textDecoration: "underline", textDecorationColor: "rgba(14,31,64,0.2)", padding: "4px 0" }}
-        >
-          Sign in
-        </button>
-        <div onClick={() => setModalOpen(true)} style={{ fontSize: 12, color: "rgba(14,31,64,0.38)", cursor: "pointer", textDecoration: "underline", textDecorationColor: "rgba(14,31,64,0.2)" }}>
-          Have a referral code?
-        </div>
-      </div>
+        zIndex: 5,
+      }} />
 
       {/* ── HORIZONTAL DRAG TRACK ── */}
       <div

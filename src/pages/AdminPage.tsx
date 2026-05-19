@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useApp } from "@/context/AppContext";
+import { supabase } from "@/lib/supabase";
 import { PadSVG } from "@/components/PadSVG";
 import {
   loadTickets, mutateTickets, subscribeTickets, makeId, formatSupportTime, ticketLastPreview,
@@ -1604,10 +1605,10 @@ export default function AdminPage() {
                     const otp = inviteOtpDigits.join("");
                     setInviteLoading(true); setInviteError("");
                     try {
-                      const r = await fetch("/api/staff/verify-activation", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: inviteEmail.trim().toLowerCase(), token: otp, role: inviteRole }) });
-                      const data = await r.json();
-                      if (!r.ok) { setInviteError(data.error || "Invalid code. Try again."); }
-                      else { setInviteStep("success"); }
+                      const { data: vData, error: vErr } = await supabase.auth.verifyOtp({ email: inviteEmail.trim().toLowerCase(), token: otp, type: "email" });
+                      if (vErr) { setInviteError(vErr.message || "Invalid or expired code."); return; }
+                      await fetch("/api/staff/record-activation", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: inviteEmail.trim().toLowerCase(), role: inviteRole, userId: vData?.user?.id }) }).catch(() => {});
+                      setInviteStep("success");
                     } catch { setInviteError("Network error. Try again."); }
                     finally { setInviteLoading(false); }
                   }}
@@ -1636,10 +1637,13 @@ export default function AdminPage() {
                     if (!em || !em.includes("@")) { setInviteError("Enter a valid email address."); return; }
                     setInviteLoading(true); setInviteError("");
                     try {
-                      const r = await fetch("/api/staff/send-activation", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: em }) });
-                      const data = await r.json();
-                      if (!r.ok) { setInviteError(data.error || "Failed to send code."); }
-                      else { if (data.role) setInviteRole(data.role); setInviteStep("otp"); }
+                      const chk = await fetch("/api/staff/check-whitelist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: em }) });
+                      const chkData = await chk.json();
+                      if (!chk.ok) { setInviteError(chkData.error || "Email not on the approved list."); return; }
+                      setInviteRole(chkData.role);
+                      const { error: otpErr } = await supabase.auth.signInWithOtp({ email: em, options: { shouldCreateUser: false } });
+                      if (otpErr) { setInviteError(otpErr.message || "Failed to send code."); return; }
+                      setInviteStep("otp");
                     } catch { setInviteError("Network error. Try again."); }
                     finally { setInviteLoading(false); }
                   }}
@@ -1854,10 +1858,10 @@ export default function AdminPage() {
                     const otp = inviteOtpDigits.join("");
                     setInviteLoading(true); setInviteError("");
                     try {
-                      const r = await fetch("/api/staff/verify-activation", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: inviteEmail.trim().toLowerCase(), token: otp, role: inviteRole }) });
-                      const data = await r.json();
-                      if (!r.ok) { setInviteError(data.error || "Invalid code. Try again."); }
-                      else { setInviteStep("success"); }
+                      const { data: vData, error: vErr } = await supabase.auth.verifyOtp({ email: inviteEmail.trim().toLowerCase(), token: otp, type: "email" });
+                      if (vErr) { setInviteError(vErr.message || "Invalid or expired code."); return; }
+                      await fetch("/api/staff/record-activation", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: inviteEmail.trim().toLowerCase(), role: inviteRole, userId: vData?.user?.id }) }).catch(() => {});
+                      setInviteStep("success");
                     } catch { setInviteError("Network error. Try again."); }
                     finally { setInviteLoading(false); }
                   }}
@@ -1886,10 +1890,13 @@ export default function AdminPage() {
                     if (!em || !em.includes("@")) { setInviteError("Enter a valid email address."); return; }
                     setInviteLoading(true); setInviteError("");
                     try {
-                      const r = await fetch("/api/staff/send-activation", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: em }) });
-                      const data = await r.json();
-                      if (!r.ok) { setInviteError(data.error || "Failed to send code."); }
-                      else { if (data.role) setInviteRole(data.role); setInviteStep("otp"); }
+                      const chk = await fetch("/api/staff/check-whitelist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: em }) });
+                      const chkData = await chk.json();
+                      if (!chk.ok) { setInviteError(chkData.error || "Email not on the approved list."); return; }
+                      setInviteRole(chkData.role);
+                      const { error: otpErr } = await supabase.auth.signInWithOtp({ email: em, options: { shouldCreateUser: false } });
+                      if (otpErr) { setInviteError(otpErr.message || "Failed to send code."); return; }
+                      setInviteStep("otp");
                     } catch { setInviteError("Network error. Try again."); }
                     finally { setInviteLoading(false); }
                   }}

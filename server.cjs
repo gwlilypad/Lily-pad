@@ -412,8 +412,8 @@ app.post('/api/auth/signup', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── Staff/admin activation — step 1: check whitelists (auto-detect role), send OTP ──
-app.post('/api/staff/send-activation', async (req, res) => {
+// ── Staff/admin activation — step 1: whitelist check only (OTP sent by client via Supabase JS) ──
+app.post('/api/staff/check-whitelist', async (req, res) => {
   if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });
   const { email } = req.body || {};
   if (!email) return res.status(400).json({ error: 'email required' });
@@ -431,19 +431,25 @@ app.post('/api/staff/send-activation', async (req, res) => {
     }
     if (!detectedRole)
       return res.status(403).json({ error: 'This email is not on the approved team list. Contact your admin.' });
+    console.log(`[Activation] Whitelist check passed for ${emailLower} (${detectedRole})`);
+    res.json({ ok: true, role: detectedRole });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
-    // Send OTP via Supabase
-    const otpRes = await fetch(`${SUPABASE_URL}/auth/v1/otp`, {
+// ── Staff/admin activation — step 2: record verified activation in admin_users ──
+app.post('/api/staff/record-activation', async (req, res) => {
+  if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });
+  const { email, role, userId } = req.body || {};
+  if (!email || !role) return res.status(400).json({ error: 'email and role required' });
+  const emailLower = email.toLowerCase().trim();
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/admin_users`, {
       method: 'POST',
-      headers: { 'apikey': SUPABASE_ANON, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: emailLower, create_user: true }),
+      headers: { ...SVC_HEADERS, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({ email: emailLower, role, auth_user_id: userId || null, last_login_at: new Date().toISOString() }),
     });
-    if (!otpRes.ok) {
-      const err = await otpRes.json().catch(() => ({}));
-      return res.status(otpRes.status).json({ error: err.msg || err.message || err.error_description || 'Failed to send OTP. Check Supabase email settings.' });
-    }
-    console.log(`[Activation] OTP sent to ${emailLower} (${detectedRole})`);
-    res.json({ sent: true, role: detectedRole });
+    console.log(`[Activation] Recorded activation for ${emailLower} (${role})`);
+    res.json({ recorded: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

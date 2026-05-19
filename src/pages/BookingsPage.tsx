@@ -102,9 +102,9 @@ export default function BookingsPage() {
     <div className="page active" style={{ background:"#0E1F40", display:"flex", flexDirection:"column", fontFamily:"'DM Sans',sans-serif" }}>
       <div style={{ flexShrink:0, padding:"52px 20px 0", background:"#0E1F40" }}>
         <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:20 }}>
-          <div style={{ width:36,height:36,borderRadius:"50%",background:"rgba(255,255,255,0.10)",border:"1px solid rgba(255,255,255,0.12)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
+          <button onClick={() => goTo("find")} style={{ width:36,height:36,borderRadius:"50%",background:"rgba(255,255,255,0.10)",border:"1px solid rgba(255,255,255,0.12)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer" }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
-          </div>
+          </button>
           <div>
             <div style={{ fontSize:20, fontWeight:800, color:"#fff", letterSpacing:-0.5 }}>My Bookings</div>
             <div style={{ fontSize:12, color:"rgba(255,255,255,0.38)", marginTop:2 }}>Your reserved spots</div>

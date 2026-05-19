@@ -21,6 +21,8 @@ import DriverAccountPage from "@/pages/DriverAccountPage";
 import PadDashboardPage from "@/pages/PadDashboardPage";
 import BookingsPage from "@/pages/BookingsPage";
 import AdminPage from "@/pages/AdminPage";
+import CustomerServicePage from "@/pages/CustomerServicePage";
+import SavedSpotsPage from "@/pages/SavedSpotsPage";
 import SignInPage from "@/pages/SignInPage";
 import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
 import EmailVerifyPage from "@/pages/EmailVerifyPage";
@@ -45,6 +47,8 @@ const PAGE_ROUTES: Record<PageId, string> = {
   paddashboard: "/paddashboard",
   bookings: "/bookings",
   admin: "/admin",
+  savedspots: "/savedspots",
+  customerservice: "/customerservice",
 };
 
 function AppInner() {
@@ -106,6 +110,8 @@ function AppInner() {
           <Route path="/driveraccount" element={<AuthGuard><DriverAccountPage /></AuthGuard>} />
           <Route path="/paddashboard" element={<AuthGuard><PadDashboardPage /></AuthGuard>} />
           <Route path="/admin" element={<AdminPage />} />
+          <Route path="/savedspots" element={<AuthGuard><SavedSpotsPage /></AuthGuard>} />
+          <Route path="/customerservice" element={<AuthGuard><CustomerServicePage /></AuthGuard>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>

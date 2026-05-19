@@ -3127,13 +3127,13 @@ export default function FindPage() {
                     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>,
                     label: "Customer Service",
                     sub: openCount > 0 ? `${openCount} open conversation${openCount !== 1 ? "s" : ""}` : "Contact us or chat with a rep",
-                    onClick: () => { setAcctOpen(false); acctOpenRef.current = false; setAcctView("support"); setTimeout(() => setAcctOpen(true), 50); },
+                    onClick: () => { setAcctOpen(false); acctOpenRef.current = false; goTo("customerservice"); },
                   },
                   {
                     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
                     label: "Saved Spots",
                     sub: `${savedSpots.length} spot${savedSpots.length !== 1 ? "s" : ""} saved`,
-                    onClick: () => { setAcctOpen(false); acctOpenRef.current = false; setAcctView("saved"); setTimeout(() => setAcctOpen(true), 50); },
+                    onClick: () => { setAcctOpen(false); acctOpenRef.current = false; goTo("savedspots"); },
                   },
                 ];
                 return items.map(item => (

@@ -1571,36 +1571,18 @@ export default function AdminPage() {
               </>
             ) : inviteStep === "otp" ? (
               <>
-                <p style={{ fontSize: 13, color: "rgba(255,255,255,0.65)", margin: 0, lineHeight: 1.5 }}>Enter the 6-digit code sent to <strong style={{ color: "#fff" }}>{inviteEmail}</strong></p>
-                <div style={{ display: "flex", gap: 7, justifyContent: "center" }}>
-                  {[0,1,2,3,4,5].map(i => (
-                    <input
-                      key={i}
-                      ref={el => { inviteOtpRefs.current[i] = el; }}
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={1}
-                      value={inviteOtpDigits[i]}
-                      onChange={e => {
-                        const d = e.target.value.replace(/\D/g,"").slice(-1);
-                        const next = [...inviteOtpDigits]; next[i] = d; setInviteOtpDigits(next); setInviteError("");
-                        if (d && i < 5) inviteOtpRefs.current[i+1]?.focus();
-                      }}
-                      onKeyDown={e => { if (e.key === "Backspace" && !inviteOtpDigits[i] && i > 0) inviteOtpRefs.current[i-1]?.focus(); }}
-                      onPaste={i === 0 ? e => {
-                        e.preventDefault();
-                        const txt = e.clipboardData.getData("text").replace(/\D/g,"").slice(0,6);
-                        const next = [...inviteOtpDigits]; txt.split("").forEach((c,j) => { next[j]=c; });
-                        setInviteOtpDigits(next); setInviteError("");
-                        inviteOtpRefs.current[Math.min(txt.length,5)]?.focus();
-                      } : undefined}
-                      style={{ width: 42, height: 50, textAlign: "center", fontSize: 15, fontWeight: 700, color: "#fff", borderRadius: 10, outline: "none", border: `2px solid ${inviteOtpDigits[i] ? "rgba(141,214,63,0.70)" : "rgba(255,255,255,0.15)"}`, background: inviteOtpDigits[i] ? "rgba(141,214,63,0.08)" : "rgba(255,255,255,0.04)", fontFamily: '"DM Sans",sans-serif', transition: "border-color 0.15s" }}
-                    />
-                  ))}
-                </div>
+                <p style={{ fontSize: 13, color: "rgba(255,255,255,0.65)", margin: 0, lineHeight: 1.5 }}>Enter the code sent to <strong style={{ color: "#fff" }}>{inviteEmail}</strong></p>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="Enter code"
+                  value={inviteOtpDigits.join("")}
+                  onChange={e => { setInviteOtpDigits(e.target.value.replace(/\s/g,"").split("")); setInviteError(""); }}
+                  style={{ width: "100%", padding: "14px 16px", borderRadius: 12, boxSizing: "border-box", background: "rgba(255,255,255,0.05)", color: "#fff", fontSize: 20, fontWeight: 700, textAlign: "center", letterSpacing: "0.2em", fontFamily: '"DM Sans",sans-serif', outline: "none", border: `1.5px solid ${inviteError ? "#ef4444" : inviteOtpDigits.length > 0 ? "rgba(141,214,63,0.70)" : "rgba(255,255,255,0.15)"}`, transition: "border-color 0.15s" }}
+                />
                 {inviteError && <p style={{ color: "#ef4444", fontSize: 11.5, fontWeight: 600, margin: 0 }}>{inviteError}</p>}
                 <button
-                  disabled={inviteOtpDigits.join("").length < 6 || inviteLoading}
+                  disabled={!inviteOtpDigits.join("").trim() || inviteLoading}
                   onClick={async () => {
                     const otp = inviteOtpDigits.join("");
                     setInviteLoading(true); setInviteError("");
@@ -1612,7 +1594,7 @@ export default function AdminPage() {
                     } catch { setInviteError("Network error. Try again."); }
                     finally { setInviteLoading(false); }
                   }}
-                  style={{ width: "100%", padding: "11px", borderRadius: 100, border: "none", background: inviteOtpDigits.join("").length < 6 || inviteLoading ? "rgba(141,214,63,0.40)" : GREEN, color: NAVY, fontWeight: 800, fontSize: 13, fontFamily: '"DM Sans",sans-serif', cursor: inviteOtpDigits.join("").length < 6 || inviteLoading ? "default" : "pointer" }}
+                  style={{ width: "100%", padding: "11px", borderRadius: 100, border: "none", background: !inviteOtpDigits.join("").trim() || inviteLoading ? "rgba(141,214,63,0.40)" : GREEN, color: NAVY, fontWeight: 800, fontSize: 13, fontFamily: '"DM Sans",sans-serif', cursor: !inviteOtpDigits.join("").trim() || inviteLoading ? "default" : "pointer" }}
                 >
                   {inviteLoading ? "Verifying…" : "Activate account"}
                 </button>
@@ -1824,36 +1806,18 @@ export default function AdminPage() {
               </>
             ) : inviteStep === "otp" ? (
               <>
-                <p style={{ fontSize: 13, color: "rgba(255,255,255,0.65)", margin: 0, lineHeight: 1.5 }}>Enter the 6-digit code sent to <strong style={{ color: "#fff" }}>{inviteEmail}</strong></p>
-                <div style={{ display: "flex", gap: 7, justifyContent: "center" }}>
-                  {[0,1,2,3,4,5].map(i => (
-                    <input
-                      key={i}
-                      ref={el => { inviteOtpRefs.current[i] = el; }}
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={1}
-                      value={inviteOtpDigits[i]}
-                      onChange={e => {
-                        const d = e.target.value.replace(/\D/g,"").slice(-1);
-                        const next = [...inviteOtpDigits]; next[i] = d; setInviteOtpDigits(next); setInviteError("");
-                        if (d && i < 5) inviteOtpRefs.current[i+1]?.focus();
-                      }}
-                      onKeyDown={e => { if (e.key === "Backspace" && !inviteOtpDigits[i] && i > 0) inviteOtpRefs.current[i-1]?.focus(); }}
-                      onPaste={i === 0 ? e => {
-                        e.preventDefault();
-                        const txt = e.clipboardData.getData("text").replace(/\D/g,"").slice(0,6);
-                        const next = [...inviteOtpDigits]; txt.split("").forEach((c,j) => { next[j]=c; });
-                        setInviteOtpDigits(next); setInviteError("");
-                        inviteOtpRefs.current[Math.min(txt.length,5)]?.focus();
-                      } : undefined}
-                      style={{ width: 42, height: 50, textAlign: "center", fontSize: 15, fontWeight: 700, color: "#fff", borderRadius: 10, outline: "none", border: `2px solid ${inviteOtpDigits[i] ? "rgba(141,214,63,0.70)" : "rgba(255,255,255,0.15)"}`, background: inviteOtpDigits[i] ? "rgba(141,214,63,0.08)" : "rgba(255,255,255,0.04)", fontFamily: '"DM Sans",sans-serif', transition: "border-color 0.15s" }}
-                    />
-                  ))}
-                </div>
+                <p style={{ fontSize: 13, color: "rgba(255,255,255,0.65)", margin: 0, lineHeight: 1.5 }}>Enter the code sent to <strong style={{ color: "#fff" }}>{inviteEmail}</strong></p>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="Enter code"
+                  value={inviteOtpDigits.join("")}
+                  onChange={e => { setInviteOtpDigits(e.target.value.replace(/\s/g,"").split("")); setInviteError(""); }}
+                  style={{ width: "100%", padding: "14px 16px", borderRadius: 12, boxSizing: "border-box", background: "rgba(255,255,255,0.05)", color: "#fff", fontSize: 20, fontWeight: 700, textAlign: "center", letterSpacing: "0.2em", fontFamily: '"DM Sans",sans-serif', outline: "none", border: `1.5px solid ${inviteError ? "#ef4444" : inviteOtpDigits.length > 0 ? "rgba(141,214,63,0.70)" : "rgba(255,255,255,0.15)"}`, transition: "border-color 0.15s" }}
+                />
                 {inviteError && <p style={{ color: "#ef4444", fontSize: 11.5, fontWeight: 600, margin: 0 }}>{inviteError}</p>}
                 <button
-                  disabled={inviteOtpDigits.join("").length < 6 || inviteLoading}
+                  disabled={!inviteOtpDigits.join("").trim() || inviteLoading}
                   onClick={async () => {
                     const otp = inviteOtpDigits.join("");
                     setInviteLoading(true); setInviteError("");
@@ -1865,7 +1829,7 @@ export default function AdminPage() {
                     } catch { setInviteError("Network error. Try again."); }
                     finally { setInviteLoading(false); }
                   }}
-                  style={{ width: "100%", padding: "11px", borderRadius: 100, border: "none", background: inviteOtpDigits.join("").length < 6 || inviteLoading ? "rgba(141,214,63,0.40)" : GREEN, color: NAVY, fontWeight: 800, fontSize: 13, fontFamily: '"DM Sans",sans-serif', cursor: inviteOtpDigits.join("").length < 6 || inviteLoading ? "default" : "pointer" }}
+                  style={{ width: "100%", padding: "11px", borderRadius: 100, border: "none", background: !inviteOtpDigits.join("").trim() || inviteLoading ? "rgba(141,214,63,0.40)" : GREEN, color: NAVY, fontWeight: 800, fontSize: 13, fontFamily: '"DM Sans",sans-serif', cursor: !inviteOtpDigits.join("").trim() || inviteLoading ? "default" : "pointer" }}
                 >
                   {inviteLoading ? "Verifying…" : "Activate account"}
                 </button>
@@ -2601,7 +2565,7 @@ export default function AdminPage() {
                     </div>
                     {inviteError && <p style={{ color: "#ef4444", fontSize: 11.5, fontWeight: 600, margin: 0 }}>{inviteError}</p>}
                     <button
-                      disabled={inviteOtpDigits.join("").length < 6 || inviteLoading}
+                      disabled={!inviteOtpDigits.join("").trim() || inviteLoading}
                       onClick={async () => {
                         const otp = inviteOtpDigits.join("");
                         setInviteLoading(true); setInviteError("");
@@ -2613,7 +2577,7 @@ export default function AdminPage() {
                         } catch { setInviteError("Network error. Try again."); }
                         finally { setInviteLoading(false); }
                       }}
-                      style={{ width: "100%", padding: "11px", borderRadius: 100, border: "none", background: inviteOtpDigits.join("").length < 6 || inviteLoading ? "rgba(141,214,63,0.40)" : GREEN, color: NAVY, fontWeight: 800, fontSize: 13, fontFamily: '"DM Sans",sans-serif', cursor: inviteOtpDigits.join("").length < 6 || inviteLoading ? "default" : "pointer" }}
+                      style={{ width: "100%", padding: "11px", borderRadius: 100, border: "none", background: !inviteOtpDigits.join("").trim() || inviteLoading ? "rgba(141,214,63,0.40)" : GREEN, color: NAVY, fontWeight: 800, fontSize: 13, fontFamily: '"DM Sans",sans-serif', cursor: !inviteOtpDigits.join("").trim() || inviteLoading ? "default" : "pointer" }}
                     >
                       {inviteLoading ? "Verifying…" : "Activate account"}
                     </button>

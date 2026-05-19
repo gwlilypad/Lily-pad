@@ -1537,7 +1537,7 @@ export default function AdminPage() {
       </div>
 
       {/* ── Content ── */}
-      {!loggedIn && !role ? (
+      {!loggedIn && !role && view !== "activate" ? (
         /* ── ROLE CHOOSER ── */
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "28px 24px" }}>
           <div style={{ width: "100%", background: "#142A52", borderRadius: 28, padding: "40px 28px 32px", boxShadow: "0 12px 40px rgba(0,0,0,0.55)", display: "flex", flexDirection: "column", gap: 22 }}>
@@ -1562,7 +1562,7 @@ export default function AdminPage() {
               }}>
                 Admin
               </button>
-              <button onClick={() => { resetActivation(); setRole("staff"); setView("activate"); }} style={{
+              <button onClick={() => { resetActivation(); setView("activate"); }} style={{
                 background: "none", border: "none", padding: "8px", cursor: "pointer",
                 color: GREEN, fontFamily: '"DM Sans",sans-serif', fontSize: 13, fontWeight: 700, textAlign: "center",
               }}>
@@ -1571,7 +1571,7 @@ export default function AdminPage() {
             </div>
           </div>
         </div>
-      ) : !loggedIn && role ? (
+      ) : !loggedIn && role && view !== "activate" ? (
         /* ── ROLE-AWARE SIGN IN ── */
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "28px 24px" }}>
           <div style={{
@@ -1639,7 +1639,7 @@ export default function AdminPage() {
         /* ── PRE-LOGIN ACCOUNT ACTIVATION ── */
         <div style={{ flex: 1, overflowY: "auto", padding: "24px 20px 32px", display: "flex", flexDirection: "column", gap: 20 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <button onClick={() => { resetActivation(); setView("login"); }} style={{ background: "rgba(255,255,255,0.08)", border: "none", borderRadius: "50%", width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#fff", flexShrink: 0 }}>
+            <button onClick={() => { resetActivation(); setRole(null); setView("dashboard"); }} style={{ background: "rgba(255,255,255,0.08)", border: "none", borderRadius: "50%", width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#fff", flexShrink: 0 }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
             </button>
             <div>
@@ -1669,7 +1669,7 @@ export default function AdminPage() {
                     <p style={{ fontSize: 11.5, color: "rgba(255,255,255,0.55)", margin: "2px 0 0" }}>{inviteEmail} is now active as {inviteRole}. You can now sign in.</p>
                   </div>
                 </div>
-                <button onClick={() => { resetActivation(); setView("login"); }} style={{ width: "100%", padding: "11px", borderRadius: 100, border: "none", background: GREEN, color: NAVY, fontWeight: 800, fontSize: 13, fontFamily: '"DM Sans",sans-serif', cursor: "pointer" }}>Sign in now →</button>
+                <button onClick={() => { resetActivation(); setRole(inviteRole); setView("dashboard"); }} style={{ width: "100%", padding: "11px", borderRadius: 100, border: "none", background: GREEN, color: NAVY, fontWeight: 800, fontSize: 13, fontFamily: '"DM Sans",sans-serif', cursor: "pointer" }}>Sign in now →</button>
               </>
             ) : inviteStep === "otp" ? (
               <>

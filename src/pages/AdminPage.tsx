@@ -1594,7 +1594,7 @@ export default function AdminPage() {
                         setInviteOtpDigits(next); setInviteError("");
                         inviteOtpRefs.current[Math.min(txt.length,5)]?.focus();
                       } : undefined}
-                      style={{ width: 38, height: 46, textAlign: "center", fontSize: 20, fontWeight: 700, color: "#fff", borderRadius: 10, outline: "none", border: `2px solid ${inviteOtpDigits[i] ? "rgba(141,214,63,0.70)" : "rgba(255,255,255,0.15)"}`, background: inviteOtpDigits[i] ? "rgba(141,214,63,0.08)" : "rgba(255,255,255,0.04)", fontFamily: '"DM Sans",sans-serif', transition: "border-color 0.15s" }}
+                      style={{ width: 42, height: 50, textAlign: "center", fontSize: 15, fontWeight: 700, color: "#fff", borderRadius: 10, outline: "none", border: `2px solid ${inviteOtpDigits[i] ? "rgba(141,214,63,0.70)" : "rgba(255,255,255,0.15)"}`, background: inviteOtpDigits[i] ? "rgba(141,214,63,0.08)" : "rgba(255,255,255,0.04)", fontFamily: '"DM Sans",sans-serif', transition: "border-color 0.15s" }}
                     />
                   ))}
                 </div>
@@ -1847,7 +1847,7 @@ export default function AdminPage() {
                         setInviteOtpDigits(next); setInviteError("");
                         inviteOtpRefs.current[Math.min(txt.length,5)]?.focus();
                       } : undefined}
-                      style={{ width: 38, height: 46, textAlign: "center", fontSize: 20, fontWeight: 700, color: "#fff", borderRadius: 10, outline: "none", border: `2px solid ${inviteOtpDigits[i] ? "rgba(141,214,63,0.70)" : "rgba(255,255,255,0.15)"}`, background: inviteOtpDigits[i] ? "rgba(141,214,63,0.08)" : "rgba(255,255,255,0.04)", fontFamily: '"DM Sans",sans-serif', transition: "border-color 0.15s" }}
+                      style={{ width: 42, height: 50, textAlign: "center", fontSize: 15, fontWeight: 700, color: "#fff", borderRadius: 10, outline: "none", border: `2px solid ${inviteOtpDigits[i] ? "rgba(141,214,63,0.70)" : "rgba(255,255,255,0.15)"}`, background: inviteOtpDigits[i] ? "rgba(141,214,63,0.08)" : "rgba(255,255,255,0.04)", fontFamily: '"DM Sans",sans-serif', transition: "border-color 0.15s" }}
                     />
                   ))}
                 </div>
@@ -2595,7 +2595,7 @@ export default function AdminPage() {
                             setInviteOtpDigits(next); setInviteError("");
                             inviteOtpRefs.current[Math.min(txt.length,5)]?.focus();
                           } : undefined}
-                          style={{ width: 38, height: 46, textAlign: "center", fontSize: 20, fontWeight: 700, color: "#fff", borderRadius: 10, outline: "none", border: `2px solid ${inviteOtpDigits[i] ? "rgba(141,214,63,0.70)" : "rgba(255,255,255,0.15)"}`, background: inviteOtpDigits[i] ? "rgba(141,214,63,0.08)" : "rgba(255,255,255,0.04)", fontFamily: '"DM Sans",sans-serif', transition: "border-color 0.15s" }}
+                          style={{ width: 42, height: 50, textAlign: "center", fontSize: 15, fontWeight: 700, color: "#fff", borderRadius: 10, outline: "none", border: `2px solid ${inviteOtpDigits[i] ? "rgba(141,214,63,0.70)" : "rgba(255,255,255,0.15)"}`, background: inviteOtpDigits[i] ? "rgba(141,214,63,0.08)" : "rgba(255,255,255,0.04)", fontFamily: '"DM Sans",sans-serif', transition: "border-color 0.15s" }}
                         />
                       ))}
                     </div>

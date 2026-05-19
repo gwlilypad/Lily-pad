@@ -636,17 +636,31 @@ app.post('/api/staff/invite', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Generic update-password — takes an access_token from verifyOtp + new password ─
+app.post('/api/auth/update-password', async (req, res) => {
+  const { access_token, password } = req.body || {};
+  if (!access_token || !password) return res.status(400).json({ error: 'access_token and password required' });
+  if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+  try {
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      method : 'PUT',
+      headers: { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${access_token}`, 'Content-Type': 'application/json' },
+      body   : JSON.stringify({ password }),
+    });
+    const user = await r.json();
+    if (!r.ok) return res.status(r.status).json({ error: user.message || user.error_description || 'Failed to set password.' });
+    console.log(`[Auth] Password updated for ${user.email || 'unknown'}`);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Staff/admin set-password — called after clicking invite link ───────────────
 // The invite link lands on /staff-login with access_token in the URL hash.
 // The client sends that token here; we set the password and return the user.
 app.post('/api/staff/set-password', async (req, res) => {
   const { access_token, password } = req.body || {};
   if (!access_token || !password) return res.status(400).json({ error: 'access_token and password required' });
-  if (password.length < 8)            return res.status(400).json({ error: 'Password must be at least 8 characters.' });
-  if (!/[A-Z]/.test(password))        return res.status(400).json({ error: 'Password must include at least one uppercase letter.' });
-  if (!/[a-z]/.test(password))        return res.status(400).json({ error: 'Password must include at least one lowercase letter.' });
-  if (!/[0-9]/.test(password))        return res.status(400).json({ error: 'Password must include at least one number.' });
-  if (!/[^A-Za-z0-9]/.test(password)) return res.status(400).json({ error: 'Password must include at least one special character.' });
+  if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
   try {
     // Set the new password using the invite session token
     const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {

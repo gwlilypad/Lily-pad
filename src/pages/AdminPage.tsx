@@ -949,8 +949,9 @@ export default function AdminPage() {
   const [invitePasswordFocus, setInvitePasswordFocus] = useState(false);
   const [invitePasswordError, setInvitePasswordError] = useState("");
   const [inviteUserId, setInviteUserId] = useState<string | null>(null);
+  const [inviteAccessToken, setInviteAccessToken] = useState<string | null>(null);
   const [showActivate, setShowActivate] = useState(false);
-  function resetActivation() { setInviteStep("email"); setInviteEmail(""); setInviteOtpDigits([]); setInviteError(""); setInviteEmailFocus(false); setInvitePassword(""); setInvitePasswordError(""); setInviteUserId(null); }
+  function resetActivation() { setInviteStep("email"); setInviteEmail(""); setInviteOtpDigits([]); setInviteError(""); setInviteEmailFocus(false); setInvitePassword(""); setInvitePasswordError(""); setInviteUserId(null); setInviteAccessToken(null); }
   function refreshStaffList() { fetch("/api/staff/list").then(r => r.json()).then(d => { if (Array.isArray(d)) setStaffList(d); }).catch(() => {}); }
   useEffect(() => { refreshStaffList(); }, []);
 
@@ -1189,7 +1190,8 @@ export default function AdminPage() {
   const [forgotNewPasswordError, setForgotNewPasswordError] = useState("");
   const [forgotNewPasswordFocus, setForgotNewPasswordFocus] = useState(false);
   const [forgotLoading, setForgotLoading] = useState(false);
-  function closeForgot() { setForgotOpen(false); setForgotStep("email"); setForgotEmail(""); setForgotError(""); setForgotOtp(""); setForgotOtpError(""); setForgotNewPassword(""); setForgotNewPasswordError(""); setForgotLoading(false); }
+  const [forgotAccessToken, setForgotAccessToken] = useState<string | null>(null);
+  function closeForgot() { setForgotOpen(false); setForgotStep("email"); setForgotEmail(""); setForgotError(""); setForgotOtp(""); setForgotOtpError(""); setForgotNewPassword(""); setForgotNewPasswordError(""); setForgotLoading(false); setForgotAccessToken(null); }
 
   // Persist admin users + login flag.
   useEffect(() => {
@@ -1296,7 +1298,7 @@ export default function AdminPage() {
       });
       const d = await r.json();
       if (!r.ok) { setForgotError(d.error || "Something went wrong. Try again."); return; }
-      const { error: otpErr } = await supabase.auth.signInWithOtp({ email: e, options: { shouldCreateUser: false } });
+      const { error: otpErr } = await supabase.auth.signInWithOtp({ email: e, options: { shouldCreateUser: true } });
       if (otpErr) { setForgotError(otpErr.message || "Failed to send code. Try again."); return; }
       setForgotStep("otp");
     } catch { setForgotError("Network error. Try again."); }
@@ -1466,8 +1468,10 @@ export default function AdminPage() {
                     if (invitePassword.trim().length < 8) { setInvitePasswordError("Password must be at least 8 characters."); return; }
                     setInviteLoading(true); setInvitePasswordError("");
                     try {
-                      const { error: pwErr } = await supabase.auth.updateUser({ password: invitePassword });
-                      if (pwErr) { setInvitePasswordError(pwErr.message || "Failed to set password."); return; }
+                      if (!inviteAccessToken) { setInvitePasswordError("Session expired. Please go back and verify your code again."); return; }
+                      const pwRes = await fetch("/api/staff/set-password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ access_token: inviteAccessToken, password: invitePassword }) });
+                      const pwData = await pwRes.json();
+                      if (!pwRes.ok) { setInvitePasswordError(pwData.error || "Failed to set password."); return; }
                       await fetch("/api/staff/record-activation", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: inviteEmail.trim().toLowerCase(), role: inviteRole, userId: inviteUserId }) }).catch(() => {});
                       refreshStaffList();
                       setInviteStep("success");
@@ -1500,6 +1504,7 @@ export default function AdminPage() {
                       const { data: vData, error: vErr } = await supabase.auth.verifyOtp({ email: inviteEmail.trim().toLowerCase(), token: otp, type: "email" });
                       if (vErr) { setInviteError(vErr.message || "Invalid or expired code."); return; }
                       setInviteUserId(vData?.user?.id ?? null);
+                      setInviteAccessToken(vData?.session?.access_token ?? null);
                       setInviteStep("password");
                     } catch { setInviteError("Network error. Try again."); }
                     finally { setInviteLoading(false); }
@@ -1533,7 +1538,7 @@ export default function AdminPage() {
                       const chkData = await chk.json();
                       if (!chk.ok) { setInviteError(chkData.error || "Email not on the approved list."); return; }
                       setInviteRole(chkData.role);
-                      const { error: otpErr } = await supabase.auth.signInWithOtp({ email: em, options: { shouldCreateUser: false } });
+                      const { error: otpErr } = await supabase.auth.signInWithOtp({ email: em, options: { shouldCreateUser: true } });
                       if (otpErr) { setInviteError(otpErr.message || "Failed to send code."); return; }
                       setInviteStep("otp");
                     } catch { setInviteError("Network error. Try again."); }
@@ -1729,8 +1734,10 @@ export default function AdminPage() {
                     if (invitePassword.trim().length < 8) { setInvitePasswordError("Password must be at least 8 characters."); return; }
                     setInviteLoading(true); setInvitePasswordError("");
                     try {
-                      const { error: pwErr } = await supabase.auth.updateUser({ password: invitePassword });
-                      if (pwErr) { setInvitePasswordError(pwErr.message || "Failed to set password."); return; }
+                      if (!inviteAccessToken) { setInvitePasswordError("Session expired. Please go back and verify your code again."); return; }
+                      const pwRes = await fetch("/api/staff/set-password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ access_token: inviteAccessToken, password: invitePassword }) });
+                      const pwData = await pwRes.json();
+                      if (!pwRes.ok) { setInvitePasswordError(pwData.error || "Failed to set password."); return; }
                       await fetch("/api/staff/record-activation", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: inviteEmail.trim().toLowerCase(), role: inviteRole, userId: inviteUserId }) }).catch(() => {});
                       refreshStaffList();
                       setInviteStep("success");
@@ -1763,6 +1770,7 @@ export default function AdminPage() {
                       const { data: vData, error: vErr } = await supabase.auth.verifyOtp({ email: inviteEmail.trim().toLowerCase(), token: otp, type: "email" });
                       if (vErr) { setInviteError(vErr.message || "Invalid or expired code."); return; }
                       setInviteUserId(vData?.user?.id ?? null);
+                      setInviteAccessToken(vData?.session?.access_token ?? null);
                       setInviteStep("password");
                     } catch { setInviteError("Network error. Try again."); }
                     finally { setInviteLoading(false); }
@@ -1796,7 +1804,7 @@ export default function AdminPage() {
                       const chkData = await chk.json();
                       if (!chk.ok) { setInviteError(chkData.error || "Email not on the approved list."); return; }
                       setInviteRole(chkData.role);
-                      const { error: otpErr } = await supabase.auth.signInWithOtp({ email: em, options: { shouldCreateUser: false } });
+                      const { error: otpErr } = await supabase.auth.signInWithOtp({ email: em, options: { shouldCreateUser: true } });
                       if (otpErr) { setInviteError(otpErr.message || "Failed to send code."); return; }
                       setInviteStep("otp");
                     } catch { setInviteError("Network error. Try again."); }
@@ -2494,8 +2502,10 @@ export default function AdminPage() {
                     if (invitePassword.trim().length < 8) { setInvitePasswordError("Password must be at least 8 characters."); return; }
                     setInviteLoading(true); setInvitePasswordError("");
                     try {
-                      const { error: pwErr } = await supabase.auth.updateUser({ password: invitePassword });
-                      if (pwErr) { setInvitePasswordError(pwErr.message || "Failed to set password."); return; }
+                      if (!inviteAccessToken) { setInvitePasswordError("Session expired. Please go back and verify your code again."); return; }
+                      const pwRes = await fetch("/api/staff/set-password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ access_token: inviteAccessToken, password: invitePassword }) });
+                      const pwData = await pwRes.json();
+                      if (!pwRes.ok) { setInvitePasswordError(pwData.error || "Failed to set password."); return; }
                       await fetch("/api/staff/record-activation", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: inviteEmail.trim().toLowerCase(), role: inviteRole, userId: inviteUserId }) }).catch(() => {});
                       refreshStaffList();
                       setInviteStep("success");
@@ -2528,6 +2538,7 @@ export default function AdminPage() {
                       const { data: vData, error: vErr } = await supabase.auth.verifyOtp({ email: inviteEmail.trim().toLowerCase(), token: otp, type: "email" });
                       if (vErr) { setInviteError(vErr.message || "Invalid or expired code."); return; }
                       setInviteUserId(vData?.user?.id ?? null);
+                      setInviteAccessToken(vData?.session?.access_token ?? null);
                       setInviteStep("password");
                     } catch { setInviteError("Network error. Try again."); }
                     finally { setInviteLoading(false); }
@@ -2562,10 +2573,13 @@ export default function AdminPage() {
                         if (!em || !em.includes("@")) { setInviteError("Enter a valid email address."); return; }
                         setInviteLoading(true); setInviteError("");
                         try {
-                          const r = await fetch("/api/staff/send-activation", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: em, role: inviteRole }) });
-                          const data = await r.json();
-                          if (!r.ok) { setInviteError(data.error || "Failed to send code."); }
-                          else { setInviteStep("otp"); }
+                          const chk = await fetch("/api/staff/check-whitelist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: em }) });
+                          const chkData = await chk.json();
+                          if (!chk.ok) { setInviteError(chkData.error || "Email not on the approved list."); return; }
+                          setInviteRole(chkData.role);
+                          const { error: otpErr } = await supabase.auth.signInWithOtp({ email: em, options: { shouldCreateUser: true } });
+                          if (otpErr) { setInviteError(otpErr.message || "Failed to send code."); return; }
+                          setInviteStep("otp");
                         } catch { setInviteError("Network error. Try again."); }
                         finally { setInviteLoading(false); }
                       }}
@@ -3159,8 +3173,10 @@ export default function AdminPage() {
                       if (forgotNewPassword.trim().length < 8) { setForgotNewPasswordError("Password must be at least 8 characters."); return; }
                       setForgotLoading(true); setForgotNewPasswordError("");
                       try {
-                        const { error: pwErr } = await supabase.auth.updateUser({ password: forgotNewPassword });
-                        if (pwErr) { setForgotNewPasswordError(pwErr.message || "Failed to update password."); return; }
+                        if (!forgotAccessToken) { setForgotNewPasswordError("Session expired. Please go back and verify your code again."); return; }
+                        const pwRes = await fetch("/api/staff/set-password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ access_token: forgotAccessToken, password: forgotNewPassword }) });
+                        const pwData = await pwRes.json();
+                        if (!pwRes.ok) { setForgotNewPasswordError(pwData.error || "Failed to update password."); return; }
                         setForgotStep("done");
                       } catch { setForgotNewPasswordError("Network error. Try again."); }
                       finally { setForgotLoading(false); }
@@ -3189,8 +3205,9 @@ export default function AdminPage() {
                     onClick={async () => {
                       setForgotLoading(true); setForgotOtpError("");
                       try {
-                        const { error: vErr } = await supabase.auth.verifyOtp({ email: forgotEmail.trim().toLowerCase(), token: forgotOtp, type: "email" });
+                        const { data: fvData, error: vErr } = await supabase.auth.verifyOtp({ email: forgotEmail.trim().toLowerCase(), token: forgotOtp, type: "email" });
                         if (vErr) { setForgotOtpError(vErr.message || "Invalid or expired code."); return; }
+                        setForgotAccessToken(fvData?.session?.access_token ?? null);
                         setForgotStep("password");
                       } catch { setForgotOtpError("Network error. Try again."); }
                       finally { setForgotLoading(false); }

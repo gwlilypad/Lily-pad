@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { useAuth } from "@/context/AuthContext";
-import { PadSVG } from "@/components/PadSVG";
 import { supabase } from "@/lib/supabase";
+import { PadSVG } from "@/components/PadSVG";
 
 const GREEN = "#8DD63F";
 const NAVY = "#0E1F40";
@@ -10,7 +9,6 @@ const NAVY = "#0E1F40";
 type Step = "email" | "otp" | "password" | "done";
 
 export default function ForgotPasswordPage() {
-  const { forgotPassword } = useAuth();
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
@@ -18,6 +16,7 @@ export default function ForgotPasswordPage() {
   const [passwordFocus, setPasswordFocus] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
 
   async function handleSendCode(e: React.FormEvent) {
     e.preventDefault();
@@ -37,8 +36,9 @@ export default function ForgotPasswordPage() {
     if (!otp.trim()) { setError("Enter the code from your email."); return; }
     setError(""); setLoading(true);
     try {
-      const { error: vErr } = await supabase.auth.verifyOtp({ email: email.trim().toLowerCase(), token: otp.trim(), type: "email" });
+      const { data, error: vErr } = await supabase.auth.verifyOtp({ email: email.trim().toLowerCase(), token: otp.trim(), type: "email" });
       if (vErr) { setError(vErr.message || "Invalid or expired code."); return; }
+      setAccessToken(data?.session?.access_token ?? null);
       setStep("password");
     } catch { setError("Network error. Try again."); }
     finally { setLoading(false); }
@@ -47,10 +47,16 @@ export default function ForgotPasswordPage() {
   async function handleSetPassword(e: React.FormEvent) {
     e.preventDefault();
     if (password.trim().length < 8) { setError("Password must be at least 8 characters."); return; }
+    if (!accessToken) { setError("Session expired. Please go back and request a new code."); return; }
     setError(""); setLoading(true);
     try {
-      const { error: pwErr } = await supabase.auth.updateUser({ password });
-      if (pwErr) { setError(pwErr.message || "Failed to update password."); return; }
+      const r = await fetch("/api/auth/update-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ access_token: accessToken, password }),
+      });
+      const data = await r.json();
+      if (!r.ok) { setError(data.error || "Failed to update password."); return; }
       setStep("done");
     } catch { setError("Network error. Try again."); }
     finally { setLoading(false); }

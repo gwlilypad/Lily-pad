@@ -423,7 +423,7 @@ app.post('/api/staff/check-whitelist', async (req, res) => {
     let detectedRole = null;
     for (const [table, r] of [['admin_whitelist', 'admin'], ['staff_whitelist', 'staff']]) {
       const chk = await fetch(
-        `${SUPABASE_URL}/rest/v1/${table}?email=eq.${encodeURIComponent(emailLower)}&select=id`,
+        `${SUPABASE_URL}/rest/v1/${table}?email=eq.${encodeURIComponent(emailLower)}&select=email`,
         { headers: SVC_HEADERS }
       );
       const rows = await chk.json().catch(() => []);

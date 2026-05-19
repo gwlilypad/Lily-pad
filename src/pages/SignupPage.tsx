@@ -25,6 +25,7 @@ export default function SignupPage() {
   const [editIdx, setEditIdx] = useState<number | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const [checkEmail, setCheckEmail] = useState(false);
+  const [signupError, setSignupError] = useState("");
   const [otpDigits, setOtpDigits] = useState(["","","","","",""]);
   const [otpError, setOtpError]   = useState("");
   const [otpLoading, setOtpLoading] = useState(false);
@@ -251,9 +252,14 @@ export default function SignupPage() {
               </div>
               <div className="cta-area">
                 <p className="cta-nudge">Let's set up your lily pad.</p>
+                {signupError && (
+                  <p style={{ fontSize: 12.5, color: "#ef4444", fontWeight: 600, textAlign: "center", margin: "0 0 10px", lineHeight: 1.4 }}>{signupError}</p>
+                )}
                 <button className="cta-btn" onClick={async () => {
                   setLocked(true);
+                  setSignupError("");
                   const result = await signUp(ans[2] || "", ans[4] || "", `${ans[0] || ""} ${ans[1] || ""}`.trim(), "host");
+                  if (result.error) { setSignupError(result.error); setLocked(false); return; }
                   if (result.confirmEmail) { setCheckEmail(true); return; }
                   goTo("addpad");
                 }}>Continue</button>

@@ -25,6 +25,7 @@ export default function DriverSignupPage() {
   const [locked, setLocked] = useState(false);
   const [done, setDone] = useState(false);
   const [checkEmail, setCheckEmail] = useState(false);
+  const [signupError, setSignupError] = useState("");
   const [otpDigits, setOtpDigits] = useState(["","","","","",""]);
   const [otpError, setOtpError]   = useState("");
   const [otpLoading, setOtpLoading] = useState(false);
@@ -188,9 +189,14 @@ export default function DriverSignupPage() {
               </div>
               <div className="cta-area">
                 <p className="cta-nudge">Ready to park?</p>
+                {signupError && (
+                  <p style={{ fontSize: 12.5, color: "#ef4444", fontWeight: 600, textAlign: "center", margin: "0 0 10px", lineHeight: 1.4 }}>{signupError}</p>
+                )}
                 <button className="cta-btn" style={{ background: "#8DD63F", color: "#0E1F40", boxShadow: "0 2px 12px rgba(141,214,63,0.3)" }} onClick={async () => {
                   setLocked(true);
+                  setSignupError("");
                   const result = await signUp(ans[2] || "", ans[5] || "", `${ans[0] || ""} ${ans[1] || ""}`.trim(), "driver");
+                  if (result.error) { setSignupError(result.error); setLocked(false); return; }
                   if (result.confirmEmail) { setCheckEmail(true); return; }
                   goTo("find");
                 }}>Find a spot</button>

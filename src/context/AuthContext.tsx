@@ -105,6 +105,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       options: { emailRedirectTo: `${window.location.origin}/verify` },
     });
     if (error) return { error: error.message };
+    // Supabase silently "succeeds" for existing emails to prevent enumeration,
+    // but returns an empty identities array — treat that as a duplicate.
+    if (data.user && (!data.user.identities || data.user.identities.length === 0)) {
+      return { error: "An account with this email already exists" };
+    }
     if (data.user) {
       await fetch("/api/profile", {
         method: "POST",

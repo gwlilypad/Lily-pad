@@ -29,6 +29,8 @@ export interface AppState {
   apNumPads: number;
   apLogoUrl: string;
   apSpotId: string;
+  apLat: number;
+  apLng: number;
   accountType: "renter" | "padRenter";
   hasBothAccounts: boolean;
   profilePhotoUrl: string;
@@ -42,7 +44,7 @@ export interface AppState {
 
 export const DEFAULT_STATE: AppState = {
   suAns: {}, apAns: {}, drAns: {}, bizAns: {},
-  bizPhotoCount: 0, apNumPads: 1, apLogoUrl: "", apSpotId: "",
+  bizPhotoCount: 0, apNumPads: 1, apLogoUrl: "", apSpotId: "", apLat: 0, apLng: 0,
   accountType: "renter", hasBothAccounts: true,
   profilePhotoUrl: "", addingExtraPad: false, openAcctOnFind: false, apPhotoUrl: "",
   bookings: [], adminPreview: false, adminPreviewRole: null,

@@ -534,6 +534,8 @@ export default function PhotoPage() {
                         price_per_hr: parseFloat(state.apAns[4] || "4"),
                         description:  state.apAns[5] || "",
                         photo_url:    state.apPhotoUrl || "",
+                        lat:          state.apLat || 0,
+                        lng:          state.apLng || 0,
                       }),
                     });
                     if (res.ok) {

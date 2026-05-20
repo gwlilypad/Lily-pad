@@ -16,8 +16,6 @@ interface Question {
   optional?: boolean;
 }
 
-// Personal pad setup. The business-logo step lives in the business
-// signup flow (BizSignupPage), not here.
 const AP_QUESTIONS: Question[] = [
   { label: "Address", text: "What's the address?", type: "text", placeholder: "123 Main St, City, State", hint: "Include city and state" },
   { label: "Spot type", text: "What kind of spot is it?", type: "choice", choices: ["Driveway", "Garage", "Street (permitted)", "Alley"] },
@@ -40,6 +38,8 @@ export default function AddPadPage() {
   const [locked, setLocked] = useState(false);
   const [done, setDone] = useState(false);
   const [foundMsg, setFoundMsg] = useState("");
+  const [addrError, setAddrError] = useState("");
+  const [addrValidating, setAddrValidating] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const cityRef = useRef<HTMLInputElement>(null);
 
@@ -52,16 +52,36 @@ export default function AddPadPage() {
     if (q?.type === "text" || q?.type === "price") setTimeout(() => inputRef.current?.focus(), 100);
   }, [cur]);
 
-  useEffect(() => {
-    if (cur === 0 && ans[0]) {
-      setTimeout(() => setFoundMsg("We found you!"), 800);
-      setTimeout(() => setFoundMsg(""), 3000);
-    }
-  }, [ans[0]]);
-
   function buildFullAddress() {
     const parts = [inputVal.trim(), addrCity.trim(), [addrState.trim(), addrZip.trim()].filter(Boolean).join(" ")].filter(Boolean);
     return parts.join(", ");
+  }
+
+  async function validateAndAdvanceAddress() {
+    const fullAddr = buildFullAddress();
+    if (!fullAddr) return;
+    setAddrError("");
+    setAddrValidating(true);
+    try {
+      const r = await fetch(`/api/geocode?address=${encodeURIComponent(fullAddr)}`);
+      const data = await r.json();
+      if (!r.ok) {
+        setAddrError(data.error || "Address not found — please enter a valid street address.");
+        setAddrValidating(false);
+        return;
+      }
+      // Store validated lat/lng in AppContext
+      setAppState(prev => ({ ...prev, apLat: data.lat, apLng: data.lng }));
+      // Use the Google-formatted address as the canonical value
+      const canonical = data.formatted_address || fullAddr;
+      setFoundMsg("Address verified!");
+      setTimeout(() => setFoundMsg(""), 3000);
+      advance(canonical);
+    } catch {
+      setAddrError("Address not found — please enter a valid street address.");
+    } finally {
+      setAddrValidating(false);
+    }
   }
 
   function advance(val?: string) {
@@ -82,6 +102,8 @@ export default function AddPadPage() {
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === "Enter") advance();
   }
+
+  const addrFilled = inputVal.trim() && addrCity.trim() && addrState.trim();
 
   return (
     <div className="page active">
@@ -115,7 +137,7 @@ export default function AddPadPage() {
                       className="pill-input"
                       placeholder="Street address"
                       value={inputVal}
-                      onChange={e => setInputVal(e.target.value)}
+                      onChange={e => { setInputVal(e.target.value); setAddrError(""); }}
                       onKeyDown={e => { if (e.key === "Enter") cityRef.current?.focus(); }}
                     />
                   </div>
@@ -125,7 +147,7 @@ export default function AddPadPage() {
                       className="pill-input"
                       placeholder="City"
                       value={addrCity}
-                      onChange={e => setAddrCity(e.target.value)}
+                      onChange={e => { setAddrCity(e.target.value); setAddrError(""); }}
                       onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }}
                     />
                   </div>
@@ -135,7 +157,7 @@ export default function AddPadPage() {
                         className="pill-input"
                         placeholder="State"
                         value={addrState}
-                        onChange={e => setAddrState(e.target.value)}
+                        onChange={e => { setAddrState(e.target.value); setAddrError(""); }}
                         onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }}
                         style={{ textTransform: "uppercase" }}
                         maxLength={2}
@@ -146,16 +168,31 @@ export default function AddPadPage() {
                         className="pill-input"
                         placeholder="ZIP"
                         value={addrZip}
-                        onChange={e => setAddrZip(e.target.value.replace(/\D/g, ""))}
+                        onChange={e => { setAddrZip(e.target.value.replace(/\D/g, "")); setAddrError(""); }}
                         onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }}
                         inputMode="numeric"
                         maxLength={5}
                       />
                     </div>
                   </div>
-                  {inputVal.trim() && addrCity.trim() && addrState.trim() && (
+
+                  {addrError && (
+                    <p style={{
+                      marginTop: 10, color: "#E53E3E", fontSize: 13, fontWeight: 600,
+                      textAlign: "center", lineHeight: 1.4,
+                    }}>{addrError}</p>
+                  )}
+
+                  {addrFilled && (
                     <div className="cta-area" style={{ marginTop: 16 }}>
-                      <button className="cta-btn" onClick={() => advance(buildFullAddress())}>Continue</button>
+                      <button
+                        className="cta-btn"
+                        onClick={validateAndAdvanceAddress}
+                        disabled={addrValidating}
+                        style={{ opacity: addrValidating ? 0.7 : 1 }}
+                      >
+                        {addrValidating ? "Checking address…" : "Continue"}
+                      </button>
                     </div>
                   )}
                 </div>
@@ -284,9 +321,6 @@ export default function AddPadPage() {
                 <p className="cta-nudge">Next — photos and highlights.</p>
                 <button className="cta-btn" onClick={() => {
                   setLocked(true);
-                  // Spot is saved to Supabase at the END of the photo step,
-                  // once we have a photo_url to include in the INSERT.
-                  // Clear any previous spot ID so PhotoPage knows to create a new one.
                   setAppState(s => ({ ...s, apSpotId: "" }));
                   goTo("photointro");
                 }}>Continue</button>

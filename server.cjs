@@ -972,24 +972,59 @@ app.post('/api/upload-photo', express.raw({ type: 'image/*', limit: '10mb' }), a
   }
 });
 
+// ── Geocode: validate address via Google Maps and return lat/lng ───────────────
+app.get('/api/geocode', async (req, res) => {
+  const { address } = req.query;
+  if (!address) return res.status(400).json({ error: 'address required' });
+  const GMAPS_KEY = process.env.GOOGLE_MAPS_API_KEY;
+  if (!GMAPS_KEY) return res.status(500).json({ error: 'Geocoding not configured' });
+  try {
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${GMAPS_KEY}`;
+    const r = await fetch(url);
+    const data = await r.json();
+    if (data.status !== 'OK' || !data.results || data.results.length === 0) {
+      return res.status(404).json({ error: 'Address not found — please enter a valid street address.' });
+    }
+    const result = data.results[0];
+    // Require a street-level result (must have street_number to be a specific address)
+    const types = result.types || [];
+    const hasStreetNumber = result.address_components?.some(c => c.types.includes('street_number'));
+    const isVague = types.includes('country') || types.includes('administrative_area_level_1') || types.includes('locality');
+    if (isVague || !hasStreetNumber) {
+      return res.status(422).json({ error: 'Address not found — please enter a valid street address.' });
+    }
+    const { lat, lng } = result.geometry.location;
+    const formatted = result.formatted_address;
+    res.json({ lat, lng, formatted_address: formatted });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Spots: create a new pad listing ───────────────────────────────────────────
 app.post('/api/spots', async (req, res) => {
   const { host_user_id, address, pad_type, surface, num_pads, price_per_hr, description, photo_url } = req.body || {};
   if (!host_user_id || !address) return res.status(400).json({ error: 'host_user_id and address required' });
 
-  // Geocode the address using Nominatim
-  let lat = 29.7604, lng = -95.3698;
-  try {
-    const geo = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(address)}`,
-      { headers: { 'User-Agent': 'LilyPadApp/1.0' } }
-    );
-    const geoData = await geo.json();
-    if (Array.isArray(geoData) && geoData.length > 0) {
-      lat = parseFloat(geoData[0].lat);
-      lng = parseFloat(geoData[0].lon);
-    }
-  } catch { /* use city center as fallback */ }
+  // Use pre-validated lat/lng from client if provided, otherwise geocode with Google Maps
+  let lat = parseFloat(req.body.lat) || 0;
+  let lng = parseFloat(req.body.lng) || 0;
+  if (!lat || !lng) {
+    const GMAPS_KEY = process.env.GOOGLE_MAPS_API_KEY;
+    try {
+      if (GMAPS_KEY) {
+        const geoR = await fetch(
+          `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${GMAPS_KEY}`
+        );
+        const geoData = await geoR.json();
+        if (geoData.status === 'OK' && geoData.results?.[0]) {
+          lat = geoData.results[0].geometry.location.lat;
+          lng = geoData.results[0].geometry.location.lng;
+        }
+      }
+    } catch { /* fall through to Houston city center */ }
+    if (!lat || !lng) { lat = 29.7604; lng = -95.3698; }
+  }
 
   try {
     // photo_url is encoded inside description as JSON since spots table has no photo_url column

@@ -192,7 +192,7 @@ export default function AvailabilityPage() {
       <div className="s-divider" />
       <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
         <div style={{ flexShrink: 0, padding: "14px 16px 0" }}>
-          <NavBar onBack={() => goTo("find")} onHome={() => goTo("home")} dots={[0,1,2,3,4,5]} currentDot={3} />
+          <NavBar onBack={() => goTo("photo")} onHome={() => goTo("home")} dots={[0,1,2,3,4,5]} currentDot={3} />
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: "24px 16px 32px", display: "flex", flexDirection: "column", gap: 0 }}>

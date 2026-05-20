@@ -37,6 +37,7 @@ export default function BookingsPage() {
   const [confirmCancel, setConfirmCancel] = useState<BookingRec | null>(null);
   const [apiBookings, setApiBookings] = useState<BookingRec[] | null>(null);
   const [loadingBookings, setLoadingBookings] = useState(true);
+  const [cancellingId, setCancellingId] = useState<string | number | null>(null);
 
   useEffect(() => {
     if (!user?.id) { setLoadingBookings(false); return; }
@@ -50,6 +51,7 @@ export default function BookingsPage() {
             const rawStatus = String(b.status || "confirmed");
             return {
               id:         numId,
+              uuid:       idStr,
               spotId:     String(b.spot_id    || ""),
               addr:       String(b.addr       || b.address || "Unknown address"),
               city:       String(b.city       || "Houston, TX"),
@@ -97,14 +99,36 @@ export default function BookingsPage() {
       Math.max(x.startTs, b.startTs) < Math.min(x.endTs, newEnd)
     );
   }
-  function applyExtend(b: BookingRec, addMs: number) {
-    if (extendCollides(b, addMs)) { alert("That extension overlaps another booking."); return; }
-    setState(s => ({ ...s, bookings: s.bookings.map(x => x.id === b.id ? { ...x, endTs: x.endTs + addMs } : x) }));
-    setExtendFor(null);
-  }
-  function doCancel(b: BookingRec) {
+  async function doCancel(b: BookingRec) {
+    const targetId = b.uuid || String(b.id);
+    setCancellingId(targetId);
+    try {
+      if (b.uuid) {
+        await fetch(`/api/bookings/${b.uuid}/cancel`, { method: "PATCH" });
+      }
+    } catch { /* non-blocking — still update local state */ }
+    // Update both apiBookings and persistent state
+    setApiBookings(prev => prev ? prev.map(x => (x.uuid === b.uuid && x.id === b.id) ? { ...x, status: "cancelled" as const } : x) : prev);
     setState(s => ({ ...s, bookings: s.bookings.map(x => x.id === b.id ? { ...x, status: "cancelled" as const } : x) }));
+    setCancellingId(null);
     setConfirmCancel(null);
+  }
+
+  async function doExtendApi(b: BookingRec, addMs: number) {
+    const newEnd = b.endTs + addMs;
+    if (extendCollides(b, addMs)) { alert("That extension overlaps another booking."); return; }
+    try {
+      if (b.uuid) {
+        await fetch(`/api/bookings/${b.uuid}/extend`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ new_end_ts: new Date(newEnd).toISOString() }),
+        });
+      }
+    } catch { /* non-blocking */ }
+    setApiBookings(prev => prev ? prev.map(x => (x.uuid === b.uuid && x.id === b.id) ? { ...x, endTs: newEnd } : x) : prev);
+    setState(s => ({ ...s, bookings: s.bookings.map(x => x.id === b.id ? { ...x, endTs: newEnd } : x) }));
+    setExtendFor(null);
   }
 
   return (
@@ -231,7 +255,7 @@ export default function BookingsPage() {
             <div style={{ fontSize:13,color:"rgba(255,255,255,0.55)",marginBottom:18 }}>Currently ends {fmtTime(extendFor.endTs)} on {fmtDate(extendFor.endTs)}</div>
             <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
               {[{label:"+30 minutes",ms:30*60*1000},{label:"+1 hour",ms:60*60*1000},{label:"+2 hours",ms:2*60*60*1000},{label:"+4 hours",ms:4*60*60*1000}].map(opt => (
-                <button key={opt.label} onClick={() => applyExtend(extendFor,opt.ms)} style={{ width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 16px",borderRadius:14,background:"rgba(141,214,63,0.10)",border:"1px solid rgba(141,214,63,0.22)",color:"#fff",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:14,fontWeight:700 }}>
+                <button key={opt.label} onClick={() => doExtendApi(extendFor,opt.ms)} style={{ width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 16px",borderRadius:14,background:"rgba(141,214,63,0.10)",border:"1px solid rgba(141,214,63,0.22)",color:"#fff",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:14,fontWeight:700 }}>
                   <span>{opt.label}</span>
                   <span style={{ fontSize:12,color:"rgba(255,255,255,0.55)",fontWeight:600 }}>+${(Math.round(extendFor.pricePerHr*(opt.ms/3600000)*100)/100).toFixed(2)}</span>
                 </button>
@@ -247,7 +271,11 @@ export default function BookingsPage() {
             <div style={{ width:36,height:4,background:"rgba(255,255,255,0.18)",borderRadius:2,margin:"0 auto 16px" }} />
             <div style={{ fontSize:18,fontWeight:800,marginBottom:6 }}>Cancel this booking?</div>
             <div style={{ fontSize:13,color:"rgba(255,255,255,0.55)",marginBottom:18 }}>{confirmCancel.addr} · {fmtDate(confirmCancel.startTs)} {fmtTime(confirmCancel.startTs)}</div>
-            <button onClick={() => doCancel(confirmCancel)} style={{ width:"100%",padding:"14px 0",borderRadius:100,background:"#ef4444",border:"none",color:"#fff",fontFamily:"'DM Sans',sans-serif",fontSize:14,fontWeight:700,cursor:"pointer",marginBottom:10 }}>Cancel booking</button>
+            <button
+              disabled={cancellingId !== null}
+              onClick={() => doCancel(confirmCancel)}
+              style={{ width:"100%",padding:"14px 0",borderRadius:100,background:"#ef4444",border:"none",color:"#fff",fontFamily:"'DM Sans',sans-serif",fontSize:14,fontWeight:700,cursor:cancellingId !== null ? "wait" : "pointer",marginBottom:10,opacity:cancellingId !== null ? 0.7 : 1 }}
+            >{cancellingId !== null ? "Cancelling…" : "Cancel booking"}</button>
             <button onClick={() => setConfirmCancel(null)} style={{ width:"100%",padding:"12px 0",borderRadius:100,background:"transparent",border:"1px solid rgba(255,255,255,0.18)",color:"#fff",fontFamily:"'DM Sans',sans-serif",fontSize:13,fontWeight:700,cursor:"pointer" }}>Keep it</button>
           </div>
         </div>

@@ -1310,6 +1310,40 @@ app.post('/api/bookings', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Bookings: cancel ───────────────────────────────────────────────────────────
+app.patch('/api/bookings/:id/cancel', async (req, res) => {
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/bookings?id=eq.${req.params.id}`,
+      { method: 'PATCH', headers: { ...SVC_HEADERS, 'Prefer': 'return=minimal' }, body: JSON.stringify({ status: 'cancelled' }) }
+    );
+    if (!r.ok) { const e = await r.json(); return res.status(r.status).json({ error: e }); }
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Bookings: extend (update end_ts inside booking_data JSONB) ─────────────────
+app.patch('/api/bookings/:id/extend', async (req, res) => {
+  const { new_end_ts } = req.body || {};
+  if (!new_end_ts) return res.status(400).json({ error: 'new_end_ts required' });
+  try {
+    // Fetch current booking_data then merge
+    const getR = await fetch(
+      `${SUPABASE_URL}/rest/v1/bookings?id=eq.${req.params.id}&select=booking_data`,
+      { headers: SVC_HEADERS }
+    );
+    const rows = await getR.json();
+    if (!getR.ok || !Array.isArray(rows) || !rows[0]) return res.status(404).json({ error: 'Not found' });
+    const merged = { ...(rows[0].booking_data || {}), end_ts: new_end_ts };
+    const patchR = await fetch(
+      `${SUPABASE_URL}/rest/v1/bookings?id=eq.${req.params.id}`,
+      { method: 'PATCH', headers: { ...SVC_HEADERS, 'Prefer': 'return=minimal' }, body: JSON.stringify({ booking_data: merged }) }
+    );
+    if (!patchR.ok) { const e = await patchR.json(); return res.status(patchR.status).json({ error: e }); }
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Saved spots: list ──────────────────────────────────────────────────────────
 app.get('/api/saved-spots/:userId', async (req, res) => {
   try {

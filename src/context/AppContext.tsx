@@ -9,6 +9,7 @@ export type PageId =
 
 export interface BookingRec {
   id: number;
+  uuid?: string;
   spotId: string;
   addr: string;
   city: string;

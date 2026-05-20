@@ -3057,6 +3057,7 @@ export default function FindPage() {
                     const durHrs = Math.max(1, Math.round(durMs / (60 * 60 * 1000)));
                     const totalPrice = Math.round(priceNum * durHrs * 100) / 100;
                     let confNum = `LP-${Date.now().toString(36).toUpperCase().slice(-6)}`;
+                    let bookingUuid: string | undefined;
                     if (user) {
                       try {
                         const r = await fetch("/api/bookings", {
@@ -3074,14 +3075,18 @@ export default function FindPage() {
                         });
                         if (r.ok) {
                           const data = await r.json();
-                          if (data?.id) confNum = `LP-${String(data.id).slice(0, 8).toUpperCase()}`;
+                          if (data?.id) {
+                            bookingUuid = String(data.id);
+                            confNum = `LP-${bookingUuid.slice(0, 8).toUpperCase()}`;
+                          }
                         }
                       } catch { /* non-blocking */ }
                     }
                     setAppState(s => {
                       const newId = s.bookings.reduce((m, b) => Math.max(m, Number(b.id)), 0) + 1;
                       const rec = {
-                        id: newId, spotId: spot.id, addr: spot.addr, city: "Houston, TX", padType,
+                        id: newId, uuid: bookingUuid,
+                        spotId: spot.id, addr: spot.addr, city: "Houston, TX", padType,
                         startTs: bookStartTs, endTs: bookEndTs, pricePerHr: priceNum,
                         hostName, hostPhone, status: "active" as const,
                       };

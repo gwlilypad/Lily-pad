@@ -33,11 +33,15 @@ export default function AddPadPage() {
   const [cur, setCur] = useState(0);
   const [ans, setAns] = useState<Record<number, string>>({});
   const [inputVal, setInputVal] = useState("");
+  const [addrCity, setAddrCity] = useState("");
+  const [addrState, setAddrState] = useState("");
+  const [addrZip, setAddrZip] = useState("");
   const [numVal, setNumVal] = useState(1);
   const [locked, setLocked] = useState(false);
   const [done, setDone] = useState(false);
   const [foundMsg, setFoundMsg] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const cityRef = useRef<HTMLInputElement>(null);
 
   const q = AP_QUESTIONS[cur];
   const progress = Math.round((Math.min(cur, AP_QUESTIONS.length) / AP_QUESTIONS.length) * 100) + 16;
@@ -54,6 +58,11 @@ export default function AddPadPage() {
       setTimeout(() => setFoundMsg(""), 3000);
     }
   }, [ans[0]]);
+
+  function buildFullAddress() {
+    const parts = [inputVal.trim(), addrCity.trim(), [addrState.trim(), addrZip.trim()].filter(Boolean).join(" ")].filter(Boolean);
+    return parts.join(", ");
+  }
 
   function advance(val?: string) {
     const v = val !== undefined ? val : inputVal.trim();
@@ -98,7 +107,61 @@ export default function AddPadPage() {
               <p className="q-step-lbl">{`${cur + 1} of ${AP_QUESTIONS.length}`}</p>
               <p className="q-text">{q.text}</p>
 
-              {q.type === "text" && (
+              {q.type === "text" && cur === 0 && (
+                <div style={{ width: "100%" }}>
+                  <div className="pill-wrap">
+                    <input
+                      ref={inputRef}
+                      className="pill-input"
+                      placeholder="Street address"
+                      value={inputVal}
+                      onChange={e => setInputVal(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter") cityRef.current?.focus(); }}
+                    />
+                  </div>
+                  <div className="pill-wrap" style={{ marginTop: 10 }}>
+                    <input
+                      ref={cityRef}
+                      className="pill-input"
+                      placeholder="City"
+                      value={addrCity}
+                      onChange={e => setAddrCity(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }}
+                    />
+                  </div>
+                  <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
+                    <div className="pill-wrap" style={{ flex: 1 }}>
+                      <input
+                        className="pill-input"
+                        placeholder="State"
+                        value={addrState}
+                        onChange={e => setAddrState(e.target.value)}
+                        onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }}
+                        style={{ textTransform: "uppercase" }}
+                        maxLength={2}
+                      />
+                    </div>
+                    <div className="pill-wrap" style={{ flex: 1 }}>
+                      <input
+                        className="pill-input"
+                        placeholder="ZIP"
+                        value={addrZip}
+                        onChange={e => setAddrZip(e.target.value.replace(/\D/g, ""))}
+                        onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }}
+                        inputMode="numeric"
+                        maxLength={5}
+                      />
+                    </div>
+                  </div>
+                  {inputVal.trim() && addrCity.trim() && addrState.trim() && (
+                    <div className="cta-area" style={{ marginTop: 16 }}>
+                      <button className="cta-btn" onClick={() => advance(buildFullAddress())}>Continue</button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {q.type === "text" && cur !== 0 && (
                 <div style={{ width: "100%" }}>
                   <div className="pill-wrap">
                     <input

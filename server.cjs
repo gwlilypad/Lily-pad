@@ -957,7 +957,7 @@ app.post('/api/spots', async (req, res) => {
   let lat = 29.7604, lng = -95.3698;
   try {
     const geo = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(address + ', Houston, TX')}`,
+      `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(address)}`,
       { headers: { 'User-Agent': 'LilyPadApp/1.0' } }
     );
     const geoData = await geo.json();

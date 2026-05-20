@@ -9,12 +9,23 @@ const PAD_NAMES = ["Pad 1", "Pad 2", "Pad 3"];
 
 const HANDLE_R = 22;
 const HANDLE_ARM = 52;
+const CORNER_R = 9;
 
 interface Box {
   cx: number; cy: number;
   w: number; h: number;
   angle: number;
   pad: number;
+}
+
+function getCorners(b: Box): { x: number; y: number }[] {
+  const cos = Math.cos(b.angle), sin = Math.sin(b.angle);
+  return (
+    [[-b.w / 2, -b.h / 2], [b.w / 2, -b.h / 2], [-b.w / 2, b.h / 2], [b.w / 2, b.h / 2]] as [number, number][]
+  ).map(([lx, ly]) => ({
+    x: b.cx + lx * cos - ly * sin,
+    y: b.cy + lx * sin + ly * cos,
+  }));
 }
 
 async function compressAndUpload(dataUrl: string, userId: string): Promise<string> {
@@ -64,6 +75,7 @@ export default function PhotoPage() {
   const [cx, setCx] = useState(0);
   const [cy, setCy] = useState(0);
   const [rotatingIdx, setRotatingIdx] = useState<number | null>(null);
+  const [draggingCorner, setDraggingCorner] = useState<{ boxIdx: number; ci: number } | null>(null);
 
   // Fullscreen state
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
@@ -126,6 +138,20 @@ export default function PhotoPage() {
     ctx.restore();
 
     if (!showHandle) return;
+
+    // ── Corner handles (subtle, draggable) ──
+    const corners = getCorners(b);
+    corners.forEach(({ x, y }) => {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x, y, CORNER_R, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(255,255,255,0.82)";
+      ctx.fill();
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.restore();
+    });
 
     const { x: hx, y: hy } = getHandlePos(b);
     const topX = b.cx + (b.h / 2) * Math.sin(b.angle);
@@ -211,6 +237,22 @@ export default function PhotoPage() {
     if (!photos[activePhoto] || activePad === null) return;
     const p = getPos(e);
     const boxes = allBoxes[activePhoto] || [];
+
+    // Check corner handles first (active pad only)
+    for (let i = 0; i < boxes.length; i++) {
+      if (boxes[i].pad !== activePad) continue;
+      const corners = getCorners(boxes[i]);
+      for (let ci = 0; ci < corners.length; ci++) {
+        const { x, y } = corners[ci];
+        if (Math.sqrt((p.x - x) ** 2 + (p.y - y) ** 2) < CORNER_R * 2.8) {
+          setDraggingCorner({ boxIdx: i, ci });
+          if ("preventDefault" in e) e.preventDefault();
+          return;
+        }
+      }
+    }
+
+    // Check rotation handle (active pad only)
     for (let i = 0; i < boxes.length; i++) {
       if (boxes[i].pad !== activePad) continue;
       const { x: hx, y: hy } = getHandlePos(boxes[i]);
@@ -220,12 +262,37 @@ export default function PhotoPage() {
         return;
       }
     }
+
     setSx(p.x); setSy(p.y); setCx(p.x); setCy(p.y);
     setDrawing(true);
   }
 
   function handleMove(e: React.MouseEvent | React.TouchEvent) {
     const p = getPos(e);
+
+    // Corner drag: opposite corner stays fixed, reshape the box
+    if (draggingCorner !== null) {
+      const boxes = allBoxes[activePhoto] || [];
+      const b = boxes[draggingCorner.boxIdx];
+      if (!b) return;
+      const OPPOSITE = [3, 2, 1, 0];
+      const opp = getCorners(b)[OPPOSITE[draggingCorner.ci]];
+      const newCx = (p.x + opp.x) / 2;
+      const newCy = (p.y + opp.y) / 2;
+      const dx = p.x - newCx, dy = p.y - newCy;
+      const cos = Math.cos(b.angle), sin = Math.sin(b.angle);
+      const lx = dx * cos + dy * sin;
+      const ly = -dx * sin + dy * cos;
+      const newW = Math.max(20, 2 * Math.abs(lx));
+      const newH = Math.max(20, 2 * Math.abs(ly));
+      setAllBoxes(prev => {
+        const updated = [...(prev[activePhoto] || [])];
+        updated[draggingCorner.boxIdx] = { ...b, cx: newCx, cy: newCy, w: newW, h: newH };
+        return { ...prev, [activePhoto]: updated };
+      });
+      return;
+    }
+
     if (rotatingIdx !== null) {
       const boxes = allBoxes[activePhoto] || [];
       const b = boxes[rotatingIdx];
@@ -238,11 +305,13 @@ export default function PhotoPage() {
       });
       return;
     }
+
     if (!drawing) return;
     setCx(p.x); setCy(p.y);
   }
 
   function handleUp() {
+    if (draggingCorner !== null) { setDraggingCorner(null); return; }
     if (rotatingIdx !== null) { setRotatingIdx(null); return; }
     if (!drawing || activePad === null) return;
     const pad = activePad;

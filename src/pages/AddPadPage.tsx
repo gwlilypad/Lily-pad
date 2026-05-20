@@ -174,7 +174,10 @@ export default function AddPadPage() {
 
   async function openMapPicker() {
     setShowMapPicker(true);
+    setMapType("roadmap");
     setPinAddr(""); setPinAddrEditable(""); setPinParsed(null); setPinLoading(false);
+    // Destroy any previous map instance so the new one starts fresh
+    if (gmapRef.current) { gmapRef.current = null; }
     if (window.google?.maps) { setTimeout(initGoogleMap, 100); return; }
     if (mapsLoading.current) return;
     mapsLoading.current = true;

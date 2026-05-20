@@ -3226,48 +3226,63 @@ export default function FindPage() {
                     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
                     label: "My Account",
                     sub: "Photo & personal info",
+                    lister: false,
                     onClick: () => { setAcctOpen(false); acctOpenRef.current = false; goTo(state.accountType === "padRenter" ? "account" : "driveraccount"); },
                   },
                   {
                     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>,
                     label: "My Bookings",
                     sub: upcoming > 0 ? `${upcoming} upcoming` : "Past & upcoming",
+                    lister: false,
                     onClick: () => { setAcctOpen(false); acctOpenRef.current = false; goTo("bookings"); },
+                  },
+                  {
+                    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
+                    label: "My Pads",
+                    sub: myHostSpots.length > 0 ? `${myHostSpots.length} listing${myHostSpots.length !== 1 ? "s" : ""}` : "Manage your listings",
+                    lister: true,
+                    accent: true,
+                    onClick: () => { setAcctOpen(false); acctOpenRef.current = false; goTo("paddashboard"); },
                   },
                   {
                     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>,
                     label: "Customer Service",
                     sub: openCount > 0 ? `${openCount} open conversation${openCount !== 1 ? "s" : ""}` : "Contact us or chat with a rep",
+                    lister: false,
                     onClick: () => { setAcctOpen(false); acctOpenRef.current = false; goTo("customerservice"); },
                   },
                   {
                     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
                     label: "Saved Spots",
                     sub: `${savedSpots.length} spot${savedSpots.length !== 1 ? "s" : ""} saved`,
+                    lister: false,
                     onClick: () => { setAcctOpen(false); acctOpenRef.current = false; goTo("savedspots"); },
                   },
-                ];
-                return items.map(item => (
-                  <div key={item.label} onClick={item.onClick} style={{
-                    display: "flex", alignItems: "center", gap: 14,
-                    padding: "14px 16px", borderRadius: 14,
-                    background: "rgba(52,52,58,0.60)",
-                    border: "1px solid rgba(255,255,255,0.07)",
-                    boxShadow: "0 2px 8px rgba(0,0,0,0.28)",
-                    cursor: "pointer",
-                  }}>
-                    <div style={{ width: 40, height: 40, borderRadius: 12, background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "rgba(255,255,255,0.6)" }}>
-                      {item.icon}
+                ].filter(item => !item.lister || drawerMode === "lister");
+                return items.map(item => {
+                  const isAccent = (item as { accent?: boolean }).accent;
+                  return (
+                    <div key={item.label} onClick={item.onClick} style={{
+                      display: "flex", alignItems: "center", gap: 14,
+                      padding: "14px 16px", borderRadius: 14,
+                      background: isAccent ? "rgba(141,214,63,0.09)" : "rgba(52,52,58,0.60)",
+                      border: isAccent ? "1px solid rgba(141,214,63,0.28)" : "1px solid rgba(255,255,255,0.07)",
+                      boxShadow: "0 2px 8px rgba(0,0,0,0.28)",
+                      cursor: "pointer",
+                    }}>
+                      <div style={{ width: 40, height: 40, borderRadius: 12, background: isAccent ? "rgba(141,214,63,0.16)" : "rgba(255,255,255,0.08)", border: isAccent ? "1px solid rgba(141,214,63,0.22)" : "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: isAccent ? "#8DD63F" : "rgba(255,255,255,0.6)" }}>
+                        {item.icon}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: isAccent ? "#8DD63F" : "#fff", letterSpacing: -0.2 }}>{item.label}</div>
+                        <div style={{ fontSize: 11, color: isAccent ? "rgba(141,214,63,0.55)" : "rgba(255,255,255,0.38)", marginTop: 1 }}>{item.sub}</div>
+                      </div>
+                      <div style={{ marginLeft: "auto", color: isAccent ? "rgba(141,214,63,0.4)" : "rgba(255,255,255,0.2)" }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="m9 18 6-6-6-6"/></svg>
+                      </div>
                     </div>
-                    <div>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: "#fff", letterSpacing: -0.2 }}>{item.label}</div>
-                      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.38)", marginTop: 1 }}>{item.sub}</div>
-                    </div>
-                    <div style={{ marginLeft: "auto", color: "rgba(255,255,255,0.2)" }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="m9 18 6-6-6-6"/></svg>
-                    </div>
-                  </div>
-                ));
+                  );
+                });
               })()}
 
               {/* ── Driver / Lister toggle ── */}

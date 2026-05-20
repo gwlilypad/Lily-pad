@@ -3,19 +3,8 @@ import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/context/AuthContext";
 import SharedHeader from "@/components/SharedHeader";
 import NavBar from "@/components/NavBar";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
 
-// Fix Leaflet default marker icons broken by Vite's asset pipeline
-const leafletIcon = L.icon({
-  iconUrl:       "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-  shadowUrl:     "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-  iconSize:    [25, 41],
-  iconAnchor:  [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize:  [41, 41],
-});
+declare global { interface Window { google: any; } }
 
 type InputType = "text" | "choice" | "number" | "price" | "textarea";
 interface Question {
@@ -55,9 +44,11 @@ export default function AddPadPage() {
   const [pinLoading, setPinLoading] = useState(false);
   const [pinLat, setPinLat] = useState(0);
   const [pinLng, setPinLng] = useState(0);
-  const mapDivRef        = useRef<HTMLDivElement>(null);
-  const leafletMapRef    = useRef<L.Map | null>(null);
-  const leafletMarkerRef = useRef<L.Marker | null>(null);
+  const [pinAddrEditable, setPinAddrEditable] = useState("");
+  const mapDivRef   = useRef<HTMLDivElement>(null);
+  const gmapRef     = useRef<any>(null);
+  const markerRef   = useRef<any>(null);
+  const mapsLoading = useRef(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const cityRef  = useRef<HTMLInputElement>(null);
@@ -137,7 +128,9 @@ export default function AddPadPage() {
       const r    = await fetch(`/api/reverse-geocode?lat=${lat}&lng=${lng}`);
       const data = await r.json();
       if (r.ok) {
-        setPinAddr(data.formatted_address || "");
+        const fmt = data.formatted_address || "";
+        setPinAddr(fmt);
+        setPinAddrEditable(fmt);
         setPinParsed({ street: data.street || "", city: data.city || "", state: data.state || "", zip: data.zip || "" });
         setPinLat(lat); setPinLng(lng);
       }
@@ -145,55 +138,69 @@ export default function AddPadPage() {
     finally { setPinLoading(false); }
   }, []);
 
-  const initLeafletMap = useCallback(() => {
-    if (!mapDivRef.current) return;
-    // Tear down any existing Leaflet instance first (avoid "Map container is already initialized")
-    if (leafletMapRef.current) {
-      leafletMapRef.current.remove();
-      leafletMapRef.current    = null;
-      leafletMarkerRef.current = null;
-    }
-
-    const houston: [number, number] = [29.7604, -95.3698];
-    const map = L.map(mapDivRef.current, { zoomControl: true }).setView(houston, 14);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-      maxZoom: 19,
-    }).addTo(map);
-
-    const marker = L.marker(houston, { draggable: true, icon: leafletIcon }).addTo(map);
-    marker.on("dragend", () => {
-      const pos = marker.getLatLng();
-      doReverseGeocode(pos.lat, pos.lng);
+  const initGoogleMap = useCallback(() => {
+    if (!mapDivRef.current || !window.google?.maps) return;
+    const G       = window.google.maps;
+    const houston = { lat: 29.7604, lng: -95.3698 };
+    const map = new G.Map(mapDivRef.current, {
+      center: houston, zoom: 19,
+      mapTypeId: "hybrid",
+      disableDefaultUI: true,
+      zoomControl: true,
+      gestureHandling: "greedy",
     });
-
-    // Try to centre on user's location
+    const marker = new G.Marker({
+      position: houston, map, draggable: true,
+      animation: G.Animation.DROP,
+      title: "Drag to your exact spot",
+    });
+    marker.addListener("dragend", () => {
+      const pos = marker.getPosition();
+      if (pos) doReverseGeocode(pos.lat(), pos.lng());
+    });
+    // Try to centre on user's GPS location
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(pos => {
-        const loc: [number, number] = [pos.coords.latitude, pos.coords.longitude];
-        map.setView(loc, 16);
-        marker.setLatLng(loc);
-        doReverseGeocode(loc[0], loc[1]);
+        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        map.setCenter(loc);
+        marker.setPosition(loc);
+        doReverseGeocode(loc.lat, loc.lng);
       }, () => {});
     }
-
-    leafletMapRef.current    = map;
-    leafletMarkerRef.current = marker;
+    gmapRef.current   = map;
+    markerRef.current = marker;
   }, [doReverseGeocode]);
 
-  function openMapPicker() {
+  async function openMapPicker() {
     setShowMapPicker(true);
-    setPinAddr(""); setPinParsed(null); setPinLoading(false);
-    // Small delay to ensure the modal div is in the DOM before Leaflet mounts
-    setTimeout(initLeafletMap, 120);
+    setPinAddr(""); setPinAddrEditable(""); setPinParsed(null); setPinLoading(false);
+    if (window.google?.maps) { setTimeout(initGoogleMap, 100); return; }
+    if (mapsLoading.current) return;
+    mapsLoading.current = true;
+    try {
+      const keyRes = await fetch("/api/maps-key");
+      const { key } = await keyRes.json();
+      await new Promise<void>((resolve, reject) => {
+        const s = document.createElement("script");
+        s.src = `https://maps.googleapis.com/maps/api/js?key=${key}`;
+        s.async = true;
+        s.onload  = () => resolve();
+        s.onerror = () => reject(new Error("Maps failed to load"));
+        document.head.appendChild(s);
+      });
+      setTimeout(initGoogleMap, 100);
+    } catch { mapsLoading.current = false; }
   }
 
   function handleUseThisLocation() {
-    if (!pinParsed || !pinLat || !pinLng) return;
-    setInputVal(pinParsed.street);
-    setAddrCity(pinParsed.city);
-    setAddrState(pinParsed.state);
-    setAddrZip(pinParsed.zip);
+    if (!pinLat || !pinLng) return;
+    // Use the edited address text — split on first comma to get street portion
+    const edited  = pinAddrEditable.trim();
+    const street  = edited.includes(",") ? edited.split(",")[0].trim() : edited;
+    setInputVal(street || pinParsed?.street || "");
+    setAddrCity(pinParsed?.city   || "");
+    setAddrState(pinParsed?.state || "");
+    setAddrZip(pinParsed?.zip     || "");
     setAddrError("");
     setAppState(prev => ({ ...prev, apLat: pinLat, apLng: pinLng }));
     setShowMapPicker(false);
@@ -510,7 +517,7 @@ export default function AddPadPage() {
 
           {/* Bottom panel */}
           <div style={{
-            padding: "16px 20px 24px",
+            padding: "14px 20px 24px",
             borderTop: "1px solid rgba(14,31,64,0.1)",
             background: "#fff", flexShrink: 0,
           }}>
@@ -523,10 +530,27 @@ export default function AddPadPage() {
                 }} />
                 <span style={{ fontSize: 13, color: "rgba(14,31,64,0.5)", fontWeight: 500 }}>Finding address…</span>
               </div>
-            ) : pinAddr ? (
-              <div style={{ marginBottom: 14 }}>
-                <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: "rgba(14,31,64,0.4)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Selected location</p>
-                <p style={{ margin: "4px 0 0", fontSize: 15, fontWeight: 600, color: "#0E1F40", lineHeight: 1.4 }}>{pinAddr}</p>
+            ) : pinAddrEditable !== "" ? (
+              <div style={{ marginBottom: 12 }}>
+                <p style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 700, color: "rgba(14,31,64,0.4)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                  Confirm or correct address
+                </p>
+                <input
+                  value={pinAddrEditable}
+                  onChange={e => setPinAddrEditable(e.target.value)}
+                  style={{
+                    width: "100%", boxSizing: "border-box",
+                    padding: "12px 14px", borderRadius: 12,
+                    border: "1.5px solid rgba(14,31,64,0.18)",
+                    background: "#F6F8FC", fontSize: 14, fontWeight: 500,
+                    color: "#0E1F40", fontFamily: "'DM Sans',sans-serif",
+                    outline: "none",
+                  }}
+                  placeholder="Street address"
+                />
+                <p style={{ margin: "5px 0 0", fontSize: 11, color: "rgba(14,31,64,0.38)", fontWeight: 500 }}>
+                  Edit if the address is slightly off — the pin coordinates are always saved exactly.
+                </p>
               </div>
             ) : (
               <p style={{ marginBottom: 14, color: "rgba(14,31,64,0.4)", fontSize: 13, fontWeight: 500 }}>Drag the pin to your parking spot</p>
@@ -535,8 +559,8 @@ export default function AddPadPage() {
             <button
               className="cta-btn"
               onClick={handleUseThisLocation}
-              disabled={!pinParsed || pinLoading}
-              style={{ width: "100%", opacity: pinParsed && !pinLoading ? 1 : 0.4 }}
+              disabled={!pinLat || pinLoading}
+              style={{ width: "100%", opacity: pinLat && !pinLoading ? 1 : 0.4 }}
             >
               Use this location
             </button>

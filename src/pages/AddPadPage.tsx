@@ -3,10 +3,19 @@ import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/context/AuthContext";
 import SharedHeader from "@/components/SharedHeader";
 import NavBar from "@/components/NavBar";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 
-declare global {
-  interface Window { google: any; }
-}
+// Fix Leaflet default marker icons broken by Vite's asset pipeline
+const leafletIcon = L.icon({
+  iconUrl:       "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+  shadowUrl:     "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+  iconSize:    [25, 41],
+  iconAnchor:  [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize:  [41, 41],
+});
 
 type InputType = "text" | "choice" | "number" | "price" | "textarea";
 interface Question {
@@ -46,10 +55,9 @@ export default function AddPadPage() {
   const [pinLoading, setPinLoading] = useState(false);
   const [pinLat, setPinLat] = useState(0);
   const [pinLng, setPinLng] = useState(0);
-  const mapDivRef   = useRef<HTMLDivElement>(null);
-  const gmapRef     = useRef<any>(null);
-  const markerRef   = useRef<any>(null);
-  const mapsLoading = useRef(false);
+  const mapDivRef        = useRef<HTMLDivElement>(null);
+  const leafletMapRef    = useRef<L.Map | null>(null);
+  const leafletMarkerRef = useRef<L.Marker | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const cityRef  = useRef<HTMLInputElement>(null);
@@ -137,63 +145,47 @@ export default function AddPadPage() {
     finally { setPinLoading(false); }
   }, []);
 
-  const initGoogleMap = useCallback(() => {
-    if (!mapDivRef.current || !window.google?.maps) return;
-    const G       = window.google.maps;
-    const houston = { lat: 29.7604, lng: -95.3698 };
-    const map     = new G.Map(mapDivRef.current, {
-      center: houston, zoom: 14,
-      disableDefaultUI: true, zoomControl: true, gestureHandling: "greedy",
-    });
-    const marker = new G.Marker({
-      position: houston, map, draggable: true,
-      animation: G.Animation.DROP,
-      title: "Drag to your spot",
-    });
-    marker.addListener("dragend", () => {
-      const pos = marker.getPosition();
-      if (pos) doReverseGeocode(pos.lat(), pos.lng());
+  const initLeafletMap = useCallback(() => {
+    if (!mapDivRef.current) return;
+    // Tear down any existing Leaflet instance first (avoid "Map container is already initialized")
+    if (leafletMapRef.current) {
+      leafletMapRef.current.remove();
+      leafletMapRef.current    = null;
+      leafletMarkerRef.current = null;
+    }
+
+    const houston: [number, number] = [29.7604, -95.3698];
+    const map = L.map(mapDivRef.current, { zoomControl: true }).setView(houston, 14);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      maxZoom: 19,
+    }).addTo(map);
+
+    const marker = L.marker(houston, { draggable: true, icon: leafletIcon }).addTo(map);
+    marker.on("dragend", () => {
+      const pos = marker.getLatLng();
+      doReverseGeocode(pos.lat, pos.lng);
     });
 
     // Try to centre on user's location
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(pos => {
-        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        map.setCenter(loc);
-        marker.setPosition(loc);
-        doReverseGeocode(loc.lat, loc.lng);
+        const loc: [number, number] = [pos.coords.latitude, pos.coords.longitude];
+        map.setView(loc, 16);
+        marker.setLatLng(loc);
+        doReverseGeocode(loc[0], loc[1]);
       }, () => {});
     }
 
-    gmapRef.current  = map;
-    markerRef.current = marker;
+    leafletMapRef.current    = map;
+    leafletMarkerRef.current = marker;
   }, [doReverseGeocode]);
 
-  async function openMapPicker() {
+  function openMapPicker() {
     setShowMapPicker(true);
     setPinAddr(""); setPinParsed(null); setPinLoading(false);
-
-    if (window.google?.maps) {
-      setTimeout(initGoogleMap, 100);
-      return;
-    }
-    if (mapsLoading.current) return;
-    mapsLoading.current = true;
-    try {
-      const keyRes = await fetch("/api/maps-key");
-      const { key } = await keyRes.json();
-      await new Promise<void>((resolve, reject) => {
-        const s  = document.createElement("script");
-        s.src    = `https://maps.googleapis.com/maps/api/js?key=${key}`;
-        s.async  = true;
-        s.onload  = () => resolve();
-        s.onerror = () => reject(new Error("Maps failed to load"));
-        document.head.appendChild(s);
-      });
-      setTimeout(initGoogleMap, 100);
-    } catch {
-      mapsLoading.current = false;
-    }
+    // Small delay to ensure the modal div is in the DOM before Leaflet mounts
+    setTimeout(initLeafletMap, 120);
   }
 
   function handleUseThisLocation() {

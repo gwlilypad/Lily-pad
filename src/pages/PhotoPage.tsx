@@ -17,34 +17,32 @@ interface Box {
   pad: number;
 }
 
-async function compressAndUpload(file: File, userId: string): Promise<string> {
-  // Compress: draw into canvas at max 1200px wide, export as JPEG
+async function compressAndUpload(dataUrl: string, userId: string): Promise<string> {
+  // Load from data URL (already decoded — works with all formats including HEIC-converted-to-JPEG)
   const img = new window.Image();
-  const blobUrl = URL.createObjectURL(file);
   await new Promise<void>((resolve, reject) => {
     img.onload = () => resolve();
-    img.onerror = () => reject(new Error("Image load failed"));
-    img.src = blobUrl;
+    img.onerror = () => reject(new Error("Image failed to decode"));
+    img.src = dataUrl;
   });
   const MAX_W = 1200;
   let w = img.naturalWidth, h = img.naturalHeight;
   if (w > MAX_W) { h = Math.round(h * MAX_W / w); w = MAX_W; }
   const canvas = document.createElement("canvas");
-  canvas.width = w; canvas.height = h;
-  canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
-  URL.revokeObjectURL(blobUrl);
+  canvas.width = w || 1200; canvas.height = h || 900;
+  canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
   const blob = await new Promise<Blob>((resolve, reject) =>
-    canvas.toBlob(b => b ? resolve(b) : reject(new Error("Canvas toBlob failed")), "image/jpeg", 0.82)
+    canvas.toBlob(b => b ? resolve(b) : reject(new Error("Canvas export failed")), "image/jpeg", 0.82)
   );
-  // Upload via server (uses service role key — bypasses RLS)
+  // Upload via server (uses service role key — no storage RLS issues)
   const res = await fetch("/api/upload-photo", {
     method: "POST",
     headers: { "Content-Type": "image/jpeg", "X-User-Id": userId },
     body: blob,
   });
   if (!res.ok) throw new Error(await res.text());
-  const json = await res.json();
-  return json.url as string;
+  const { url } = await res.json();
+  return url as string;
 }
 
 export default function PhotoPage() {
@@ -268,41 +266,46 @@ export default function PhotoPage() {
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const url = URL.createObjectURL(file);
-
-    // Show photo + open fullscreen IMMEDIATELY — don't wait for img.onload
-    setPhotos(prev => ({ ...prev, [activePhoto]: url }));
-    setActivePad(activePhoto < numPads ? activePhoto : 0);
-    setFullscreenOpen(true);
-
-    // Load dimensions in background (used for canvas sizing)
-    const dimImg = new window.Image();
-    dimImg.onload = () => {
-      setNaturalW(dimImg.naturalWidth);
-      setNaturalH(dimImg.naturalHeight);
-    };
-    dimImg.onerror = () => {
-      setNaturalW(1200);
-      setNaturalH(900);
-    };
-    dimImg.src = url;
-
     e.target.value = "";
 
-    // Upload to server in background (server uses service role key → no RLS issues)
-    if (user) {
-      setUploadLoading(true);
-      setUploadError("");
-      compressAndUpload(file, user.id)
-        .then(publicUrl => {
-          setAppState(prev => ({ ...prev, apPhotoUrl: publicUrl }));
-        })
-        .catch(err => {
-          setUploadError("Photo saved locally — will upload when connection is available.");
-          console.error("[Photo] upload error:", err);
-        })
-        .finally(() => setUploadLoading(false));
-    }
+    // Use FileReader → data URL (base64). Works universally on mobile, avoids
+    // blob URL issues and HEIC decode failures on iOS/Android.
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string;
+      if (!dataUrl) return;
+
+      // Show photo + open fullscreen IMMEDIATELY
+      setPhotos(prev => ({ ...prev, [activePhoto]: dataUrl }));
+      setActivePad(activePhoto < numPads ? activePhoto : 0);
+      setFullscreenOpen(true);
+
+      // Get dimensions in background for canvas sizing
+      const dimImg = new window.Image();
+      dimImg.onload = () => {
+        setNaturalW(dimImg.naturalWidth);
+        setNaturalH(dimImg.naturalHeight);
+      };
+      dimImg.onerror = () => { setNaturalW(1200); setNaturalH(900); };
+      dimImg.src = dataUrl;
+
+      // Upload to server in background
+      if (user) {
+        setUploadLoading(true);
+        setUploadError("");
+        compressAndUpload(dataUrl, user.id)
+          .then(publicUrl => {
+            setAppState(prev => ({ ...prev, apPhotoUrl: publicUrl }));
+          })
+          .catch(err => {
+            setUploadError("Photo saved locally — upload failed.");
+            console.error("[Photo] upload error:", err);
+          })
+          .finally(() => setUploadLoading(false));
+      }
+    };
+    reader.onerror = () => setUploadError("Could not read the selected photo.");
+    reader.readAsDataURL(file);
   }
 
   function openFullscreen(photoIdx: number) {
@@ -442,7 +445,7 @@ export default function PhotoPage() {
           )}
         </div>
 
-        <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleFileChange} />
+        <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" style={{ display: "none" }} onChange={handleFileChange} />
       </div>
 
       {/* ── FULLSCREEN DRAWING OVERLAY ── */}

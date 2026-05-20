@@ -282,26 +282,12 @@ export default function AddPadPage() {
               </div>
               <div className="cta-area">
                 <p className="cta-nudge">Next — photos and highlights.</p>
-                <button className="cta-btn" onClick={async () => {
+                <button className="cta-btn" onClick={() => {
                   setLocked(true);
-                  if (user) {
-                    try {
-                      await fetch("/api/spots", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          host_user_id: user.id,
-                          address:      ans[0] || "",
-                          pad_type:     ans[1] || "Driveway",
-                          surface:      ans[2] || "Concrete",
-                          num_pads:     parseInt(ans[3] || "1"),
-                          price_per_hr: parseFloat(ans[4] || "4"),
-                          description:  ans[5] || "",
-                          photo_url:    state.apPhotoUrl || "",
-                        }),
-                      });
-                    } catch { /* non-blocking — user continues regardless */ }
-                  }
+                  // Spot is saved to Supabase at the END of the photo step,
+                  // once we have a photo_url to include in the INSERT.
+                  // Clear any previous spot ID so PhotoPage knows to create a new one.
+                  setAppState(s => ({ ...s, apSpotId: "" }));
                   goTo("photointro");
                 }}>Continue</button>
               </div>

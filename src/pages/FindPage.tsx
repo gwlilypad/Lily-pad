@@ -29,7 +29,7 @@ const NEIGHBORHOOD_ZOOM = 14;
 const GLOBE_CENTER: [number, number] = [20, 0];
 const GLOBE_ZOOM = 2;
 
-type SpotRecord = { id: number; price: string; addr: string; meta: string; lat: number; lng: number; featured: boolean; host_name?: string; photo_url?: string };
+type SpotRecord = { id: string; price: string; addr: string; meta: string; lat: number; lng: number; featured: boolean; host_name?: string; photo_url?: string };
 
 const SPOTS: SpotRecord[] = [];
 
@@ -310,11 +310,16 @@ function photonToNom(f: PhotonFeature, idx: number): NominatimResult {
 }
 
 type SpotStatus = "available" | "booked" | "almost";
-function getSpotStatus(_id: number): SpotStatus {
+function getSpotStatus(_id: string): SpotStatus {
   return "available";
 }
 
-function getSpotHours(_id: number): { openHour: number; closeHour: number } {
+function idHash(id: string): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return h;
+}
+function getSpotHours(_id: string): { openHour: number; closeHour: number } {
   return { openHour: 0, closeHour: 24 };
 }
 
@@ -1000,14 +1005,14 @@ export default function FindPage() {
       .then((data: unknown) => {
         if (Array.isArray(data) && data.length > 0) {
           const mapped = (data as Record<string, unknown>[]).map(s => ({
-            id:        Number(s.id),
+            id:        String(s.id),
             price:     s.price_per_hr ? `$${s.price_per_hr}/hr` : "$4/hr",
             addr:      String(s.address || s.addr || "Houston, TX"),
             meta:      `${s.pad_type || "Driveway"} · nearby`,
             lat:       Number(s.lat),
             lng:       Number(s.lng),
             featured:  Boolean(s.featured),
-            host_name: String(s.host_name || s.host_full_name || ""),
+            host_name: String(s.host_name || ""),
             photo_url: String(s.photo_url || ""),
           }));
           setSpots(mapped);
@@ -1034,7 +1039,7 @@ export default function FindPage() {
   const [locDenied, setLocDenied] = useState(false);
   const [locPromptOpen, setLocPromptOpen] = useState(false);
   const [searchPin, setSearchPin] = useState<{ lat: number; lng: number; type: string; osmClass: string; name: string; domain: string } | null>(null);
-  const [selectedSpot, setSelectedSpot] = useState<number | null>(null);
+  const [selectedSpot, setSelectedSpot] = useState<string | null>(null);
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
   const [bookStartTs, setBookStartTs] = useState<number | null>(null);
   const [bookEndTs, setBookEndTs] = useState<number | null>(null);
@@ -1701,7 +1706,7 @@ export default function FindPage() {
     );
   }
 
-  function selectSpot(id: number) {
+  function selectSpot(id: string) {
     setSelectedSpot(prev => prev === id ? null : id);
   }
 
@@ -2779,7 +2784,7 @@ export default function FindPage() {
             "linear-gradient(145deg,#3a1e2a 0%,#5c2a3d 100%)",
           ];
           const photoCount = 1;
-          const PHOTO_GRADIENTS = [ALL_GRADIENTS[spot.id % ALL_GRADIENTS.length]];
+          const PHOTO_GRADIENTS = [ALL_GRADIENTS[idHash(spot.id) % ALL_GRADIENTS.length]];
           const status = getSpotStatus(spot.id);
           const userBookings = state.bookings.filter(b => b.spotId === spot.id && b.status === "active");
           const nowMs = Date.now();
@@ -3029,10 +3034,32 @@ export default function FindPage() {
                   disabled={isBooked || conflict || bookStartTs == null || bookEndTs == null || bookEndTs <= bookStartTs}
                   onClick={() => {
                     if (bookStartTs == null || bookEndTs == null || isBooked || conflict) return;
-                    const priceNum = Number(spot.price.replace(/[^0-9]/g, "")) || 0;
+                    const priceNum = Number(spot.price.replace(/[^0-9.]/g, "")) || 0;
                     const padType = (spot.meta.split("·")[0] || "Spot").trim();
-                    const phoneDigits = `${1000000 + (spot.id * 7919) % 9000000}`;
-                    const hostPhone = `(512) ${phoneDigits.slice(0,3)}-${phoneDigits.slice(3,7)}`;
+                    // Derive a deterministic phone from UUID digits
+                    const uuidDigits = spot.id.replace(/[^0-9]/g, "").padEnd(10, "5");
+                    const hostPhone = `(${uuidDigits.slice(0,3)}) ${uuidDigits.slice(3,6)}-${uuidDigits.slice(6,10)}`;
+                    const durMs = bookEndTs - bookStartTs;
+                    const durHrs = Math.max(1, Math.round(durMs / (60 * 60 * 1000)));
+                    const totalPrice = Math.round(priceNum * durHrs * 100) / 100;
+                    // Save to Supabase
+                    if (user) {
+                      fetch("/api/bookings", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          user_id: user.id,
+                          spot_id: spot.id,
+                          start_ts: new Date(bookStartTs).toISOString(),
+                          end_ts: new Date(bookEndTs).toISOString(),
+                          price_per_hr: priceNum,
+                          total_price: totalPrice,
+                          booking_data: {
+                            addr: spot.addr, padType, hostName, hostPhone,
+                          },
+                        }),
+                      }).catch(() => { /* non-blocking — local state still saves */ });
+                    }
                     setAppState(s => {
                       const newId = s.bookings.reduce((m, b) => Math.max(m, b.id), 0) + 1;
                       const rec = {
@@ -3694,7 +3721,7 @@ export default function FindPage() {
           "linear-gradient(145deg,#3a1e2a 0%,#5c2a3d 100%)",
         ];
         const photoCount = 1;
-        const grads = [ALL_GRADIENTS[spot.id % ALL_GRADIENTS.length]];
+        const grads = [ALL_GRADIENTS[idHash(spot.id) % ALL_GRADIENTS.length]];
         const idx = Math.max(0, Math.min(lightboxIdx, photoCount - 1));
         return (
           <div

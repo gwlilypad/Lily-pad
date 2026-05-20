@@ -226,8 +226,13 @@ async function checkDB() {
     const spotsRes = await fetch(`${SUPABASE_URL}/rest/v1/spots?limit=1`, { headers: SVC_HEADERS });
     if (spotsRes.ok || spotsRes.status === 406) {
       console.log('[DB] spots table ✓');
-      // Always run safe column additions (idempotent)
-      await runSQL(`ALTER TABLE public.spots ADD COLUMN IF NOT EXISTS photo_url TEXT DEFAULT '';`);
+      // Always run safe column additions (idempotent), then reload PostgREST schema cache
+      const addPhotoUrl = await runSQL(`ALTER TABLE public.spots ADD COLUMN IF NOT EXISTS photo_url TEXT DEFAULT '';`);
+      if (addPhotoUrl.ok) {
+        // Notify PostgREST to reload its schema cache so the new column is accessible via REST
+        await runSQL(`SELECT pg_notify('pgrst', 'reload schema');`);
+        console.log('[DB] photo_url column ready, schema cache reloaded');
+      }
       return;
     }
     console.log('[DB] spots table missing — attempting auto-create…');
@@ -906,16 +911,35 @@ app.patch('/api/profile/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── Spots: list all active pads ───────────────────────────────────────────────
+// ── Spots: list all active pads (with host name from profiles) ────────────────
 app.get('/api/spots', async (req, res) => {
   try {
     const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/spots?status=eq.active&select=*`,
+      `${SUPABASE_URL}/rest/v1/spots?status=eq.active&select=*,host:profiles!host_user_id(full_name)&order=created_at.desc`,
       { headers: SVC_HEADERS }
     );
     const data = await r.json();
     if (!r.ok) return res.status(r.status).json({ error: data });
-    res.json(Array.isArray(data) ? data : []);
+    const rows = Array.isArray(data) ? data : [];
+    // description is stored as JSON: { text, photo_url } — decode it transparently
+    const flat = rows.map(s => {
+      let photo_url = '';
+      let descText = s.description || '';
+      try {
+        const parsed = JSON.parse(s.description || '{}');
+        if (parsed && typeof parsed === 'object') {
+          photo_url = parsed.photo_url || '';
+          descText  = parsed.text || '';
+        }
+      } catch { /* description is plain text (legacy row) — that's fine */ }
+      return {
+        ...s,
+        description: descText,
+        photo_url,
+        host_name: (s.host && s.host.full_name) ? s.host.full_name : '',
+      };
+    });
+    res.json(flat);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -968,6 +992,8 @@ app.post('/api/spots', async (req, res) => {
   } catch { /* use city center as fallback */ }
 
   try {
+    // photo_url is encoded inside description as JSON since spots table has no photo_url column
+    const descPayload = JSON.stringify({ text: description || '', photo_url: photo_url || '' });
     const r = await fetch(`${SUPABASE_URL}/rest/v1/spots`, {
       method : 'POST',
       headers: { ...SVC_HEADERS, 'Prefer': 'return=representation' },
@@ -978,10 +1004,91 @@ app.post('/api/spots', async (req, res) => {
         surface: surface || 'Concrete',
         num_pads: parseInt(num_pads) || 1,
         price_per_hr: parseFloat(price_per_hr) || 4,
-        description: description || '',
-        photo_url: photo_url || '',
+        description: descPayload,
         lat, lng,
         status: 'active',
+      }),
+    });
+    const data = await r.json();
+    if (!r.ok) return res.status(r.status).json({ error: data });
+    const row = Array.isArray(data) ? data[0] : data;
+    // Decode description back for the response
+    if (row) {
+      try {
+        const parsed = JSON.parse(row.description || '{}');
+        row.photo_url   = parsed.photo_url || '';
+        row.description = parsed.text || '';
+      } catch {}
+    }
+    res.json(row);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Spots: update a pad listing ────────────────────────────────────────────────
+app.patch('/api/spots/:id', async (req, res) => {
+  const { id } = req.params;
+  const body = req.body || {};
+
+  // First fetch the current row so we can merge photo_url into description JSON
+  try {
+    const cur = await fetch(
+      `${SUPABASE_URL}/rest/v1/spots?id=eq.${id}&select=description,status,price_per_hr,address,lat,lng`,
+      { headers: SVC_HEADERS }
+    );
+    const curData = await cur.json();
+    const existing = Array.isArray(curData) ? curData[0] : curData;
+
+    // Parse existing description JSON (may be plain text for legacy rows)
+    let descObj = { text: '', photo_url: '' };
+    try { const p = JSON.parse(existing?.description || '{}'); if (p && typeof p === 'object') descObj = { text: p.text || '', photo_url: p.photo_url || '' }; }
+    catch { descObj.text = existing?.description || ''; }
+
+    // Merge changes — photo_url and description.text are stored inside description JSON
+    if ('photo_url'   in body) descObj.photo_url = body.photo_url;
+    if ('description' in body) descObj.text      = body.description;
+
+    const patchFields = { description: JSON.stringify(descObj) };
+    if ('status'       in body) patchFields.status       = body.status;
+    if ('price_per_hr' in body) patchFields.price_per_hr = body.price_per_hr;
+    if ('address'      in body) patchFields.address       = body.address;
+    if ('lat'          in body) patchFields.lat           = body.lat;
+    if ('lng'          in body) patchFields.lng           = body.lng;
+
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/spots?id=eq.${id}`,
+      { method: 'PATCH', headers: { ...SVC_HEADERS, 'Prefer': 'return=representation' }, body: JSON.stringify(patchFields) }
+    );
+    const data = await r.json();
+    if (!r.ok) return res.status(r.status).json({ error: data });
+    const row = Array.isArray(data) ? (data[0] || null) : data;
+    // Decode response
+    if (row) { try { const p = JSON.parse(row.description || '{}'); row.photo_url = p.photo_url || ''; row.description = p.text || ''; } catch {} }
+    res.json(row);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Bookings: create ────────────────────────────────────────────────────────────
+app.post('/api/bookings', async (req, res) => {
+  const { user_id, spot_id, start_ts, end_ts, price_per_hr, total_price, booking_data } = req.body || {};
+  if (!user_id) return res.status(400).json({ error: 'user_id required' });
+  // Store all booking details in the existing booking_data JSONB column (no schema changes needed)
+  const data_payload = {
+    ...(booking_data || {}),
+    spot_id: spot_id || null,
+    start_ts: start_ts || null,
+    end_ts: end_ts || null,
+    price_per_hr: price_per_hr || 0,
+    total_price: total_price || 0,
+  };
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/bookings`, {
+      method : 'POST',
+      headers: { ...SVC_HEADERS, 'Prefer': 'return=representation' },
+      body   : JSON.stringify({
+        user_id,
+        spot_id: String(spot_id || ''),
+        booking_data: data_payload,
+        status: 'confirmed',
       }),
     });
     const data = await r.json();

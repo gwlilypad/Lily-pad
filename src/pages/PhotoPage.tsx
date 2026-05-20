@@ -514,7 +514,39 @@ export default function PhotoPage() {
             {photos[activePhoto] ? "Replace photo" : "Upload photo"}
           </button>
           {allDone && (
-            <button className="ghost-btn" style={{ background: "#0E1F40", color: "#fff", border: "none" }} onClick={() => goTo("availability")}>
+            <button
+              className="ghost-btn"
+              style={{ background: "#0E1F40", color: "#fff", border: "none" }}
+              onClick={async () => {
+                // Create the spot in Supabase now that we have the photo URL.
+                // photo_url is included in the INSERT so no PATCH needed.
+                if (user && !state.apSpotId) {
+                  try {
+                    const res = await fetch("/api/spots", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        host_user_id: user.id,
+                        address:      state.apAns[0] || "",
+                        pad_type:     state.apAns[1] || "Driveway",
+                        surface:      state.apAns[2] || "Concrete",
+                        num_pads:     parseInt(state.apAns[3] || "1"),
+                        price_per_hr: parseFloat(state.apAns[4] || "4"),
+                        description:  state.apAns[5] || "",
+                        photo_url:    state.apPhotoUrl || "",
+                      }),
+                    });
+                    if (res.ok) {
+                      const spot = await res.json();
+                      if (spot?.id) {
+                        setAppState(s => ({ ...s, apSpotId: spot.id }));
+                      }
+                    }
+                  } catch { /* non-blocking */ }
+                }
+                goTo("availability");
+              }}
+            >
               Done — Next step →
             </button>
           )}

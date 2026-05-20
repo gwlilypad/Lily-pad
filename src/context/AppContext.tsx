@@ -8,7 +8,7 @@ export type PageId =
 
 export interface BookingRec {
   id: number;
-  spotId: number;
+  spotId: string;
   addr: string;
   city: string;
   padType: string;
@@ -28,6 +28,7 @@ export interface AppState {
   bizPhotoCount: number;
   apNumPads: number;
   apLogoUrl: string;
+  apSpotId: string;
   accountType: "renter" | "padRenter";
   hasBothAccounts: boolean;
   profilePhotoUrl: string;
@@ -41,7 +42,7 @@ export interface AppState {
 
 export const DEFAULT_STATE: AppState = {
   suAns: {}, apAns: {}, drAns: {}, bizAns: {},
-  bizPhotoCount: 0, apNumPads: 1, apLogoUrl: "",
+  bizPhotoCount: 0, apNumPads: 1, apLogoUrl: "", apSpotId: "",
   accountType: "renter", hasBothAccounts: true,
   profilePhotoUrl: "", addingExtraPad: false, openAcctOnFind: false, apPhotoUrl: "",
   bookings: [], adminPreview: false, adminPreviewRole: null,

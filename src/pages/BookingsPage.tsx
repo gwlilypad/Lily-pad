@@ -44,19 +44,24 @@ export default function BookingsPage() {
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (Array.isArray(data) && data.length > 0) {
-          const mapped: BookingRec[] = data.map((b: Record<string, unknown>) => ({
-            id:         Number(b.id)           || Math.random(),
-            spotId:     Number(b.spot_id)      || 0,
-            addr:       String(b.address       || b.addr  || "Unknown address"),
-            city:       String(b.city          || "Houston"),
-            padType:    String(b.pad_type      || b.padType || "Driveway"),
-            startTs:    b.start_ts ? Number(b.start_ts) * 1000 : Number(b.start_time) || Date.now(),
-            endTs:      b.end_ts   ? Number(b.end_ts)   * 1000 : Number(b.end_time)   || Date.now() + 3600000,
-            pricePerHr: Number(b.price_per_hr  || b.pricePerHr || 4),
-            hostName:   String(b.host_name     || b.hostName   || "Host"),
-            hostPhone:  String(b.host_phone    || b.hostPhone  || "(555) 000-0000"),
-            status:     (b.status as "active" | "cancelled") || "active",
-          }));
+          const mapped: BookingRec[] = data.map((b: Record<string, unknown>) => {
+            const idStr = String(b.id || "");
+            const numId = idStr ? (parseInt(idStr.replace(/-/g, "").slice(0, 8), 16) || Math.round(Math.random() * 1e8)) : Math.round(Math.random() * 1e8);
+            const rawStatus = String(b.status || "confirmed");
+            return {
+              id:         numId,
+              spotId:     String(b.spot_id    || ""),
+              addr:       String(b.addr       || b.address || "Unknown address"),
+              city:       String(b.city       || "Houston, TX"),
+              padType:    String(b.pad_type   || "Driveway"),
+              startTs:    b.start_ts ? new Date(String(b.start_ts)).getTime() : Date.now(),
+              endTs:      b.end_ts   ? new Date(String(b.end_ts)).getTime()   : Date.now() + 3600000,
+              pricePerHr: Number(b.price_per_hr) || 0,
+              hostName:   String(b.host_name  || "Host"),
+              hostPhone:  String(b.host_phone || "(555) 000-0000"),
+              status:     (rawStatus === "cancelled" ? "cancelled" : "active") as "active" | "cancelled",
+            };
+          });
           setApiBookings(mapped);
         } else {
           setApiBookings([]);
@@ -80,6 +85,10 @@ export default function BookingsPage() {
     if (filter === "upcoming") return s === "upcoming" || s === "active";
     return s === "completed" || s === "cancelled";
   });
+  const comingSoon = bookings.filter(b => {
+    const s = deriveStatus(b, now);
+    return (s === "upcoming") && b.startTs > now && b.startTs <= now + 48 * 60 * 60 * 1000;
+  }).sort((a, b) => a.startTs - b.startTs);
 
   function extendCollides(b: BookingRec, addMs: number) {
     const newEnd = b.endTs + addMs;
@@ -124,6 +133,27 @@ export default function BookingsPage() {
       </div>
 
       <div style={{ flex:1, overflowY:"auto", padding:"20px 16px 32px", display:"flex", flexDirection:"column", gap:12 }}>
+        {comingSoon.length > 0 && !loadingBookings && (
+          <div style={{ marginBottom:4 }}>
+            <div style={{ fontSize:11, fontWeight:800, color:"#8DD63F", letterSpacing:0.7, textTransform:"uppercase", marginBottom:10 }}>
+              Coming up soon
+            </div>
+            {comingSoon.map(b => {
+              const hoursAway = Math.round((b.startTs - now) / (60 * 60 * 1000));
+              const minsAway  = Math.round((b.startTs - now) / 60000);
+              const timeLabel = hoursAway < 1 ? `in ${minsAway} min` : hoursAway === 1 ? "in 1 hour" : `in ${hoursAway} hours`;
+              return (
+                <div key={`soon-${b.id}`} style={{ background:"rgba(141,214,63,0.08)", border:"1.5px solid rgba(141,214,63,0.30)", borderRadius:16, padding:"14px 16px", marginBottom:8 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+                    <div style={{ fontSize:14, fontWeight:700, color:"#fff", letterSpacing:-0.2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1, marginRight:10 }}>{b.addr}</div>
+                    <div style={{ fontSize:11, fontWeight:800, color:"#8DD63F", background:"rgba(141,214,63,0.14)", border:"1px solid rgba(141,214,63,0.28)", borderRadius:20, padding:"3px 9px", flexShrink:0 }}>{timeLabel}</div>
+                  </div>
+                  <div style={{ fontSize:12, color:"rgba(255,255,255,0.50)" }}>{fmtDate(b.startTs)} · {fmtTime(b.startTs)} → {fmtTime(b.endTs)} · {b.padType}</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
         {loadingBookings ? (
           <div style={{ textAlign:"center", padding:"60px 0" }}>
             <div style={{ width:28,height:28,border:"3px solid rgba(141,214,63,0.3)",borderTopColor:"#8DD63F",borderRadius:"50%",animation:"lp-spin 0.8s linear infinite",margin:"0 auto" }} />

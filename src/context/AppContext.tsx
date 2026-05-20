@@ -4,7 +4,8 @@ export type PageId =
   | "home" | "padtype" | "bizsignup" | "signup" | "addpad"
   | "photointro" | "photo" | "availability" | "payment" | "account"
   | "find" | "spot" | "booking" | "confirm" | "driversignup" | "driveraccount"
-  | "paddashboard" | "bookings" | "admin" | "savedspots" | "customerservice";
+  | "paddashboard" | "bookings" | "admin" | "savedspots" | "customerservice"
+  | "listingsuccess";
 
 export interface BookingRec {
   id: number;

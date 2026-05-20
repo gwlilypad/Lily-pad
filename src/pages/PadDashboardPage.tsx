@@ -1,11 +1,13 @@
 import { useState, useRef, useEffect } from "react";
 import { useApp } from "@/context/AppContext";
+import { useAuth } from "@/context/AuthContext";
 
 const NAVY = "#0E1F40";
 const GREEN = "#8DD63F";
 
 interface Pad {
   id: number;
+  spotId?: string;       // Supabase UUID
   // Vital — locked (can't be changed; would affect bookings)
   address: string;
   city: string;
@@ -18,7 +20,7 @@ interface Pad {
   services: string[];
   photoUrl: string;
   // Display only
-  status: "active" | "paused";
+  status: "active" | "paused" | "pending";
   pausedUntil?: number | null; // unix ms; null/undefined = indefinite
   since: string;
   bookings: number;
@@ -51,6 +53,19 @@ const MOCK_PADS: Pad[] = [
 ];
 
 function StatusPill({ pad }: { pad: Pad }) {
+  if (pad.status === "pending") {
+    return (
+      <div style={{
+        background: "rgba(251,191,36,0.15)",
+        border: "1px solid rgba(251,191,36,0.35)",
+        borderRadius: 20, padding: "4px 10px",
+        fontSize: 10, fontWeight: 800,
+        color: "#f59e0b", letterSpacing: 0.5, textTransform: "uppercase",
+      }}>
+        ● Pending review
+      </div>
+    );
+  }
   const active = pad.status === "active";
   const tonightLabel = pad.pausedUntil ? "Paused · tonight" : "Paused";
   return (
@@ -107,31 +122,46 @@ function LockedRow({ label, value }: { label: string; value: string }) {
 
 export default function PadDashboardPage() {
   const { goTo, setState } = useApp();
-  const [pads, setPads] = useState<Pad[]>(MOCK_PADS);
+  const { user } = useAuth();
+  const [pads, setPads] = useState<Pad[]>([]);
+  const [loadingPads, setLoadingPads] = useState(true);
+
   function startAddPad() {
     setState(s => ({ ...s, addingExtraPad: true, apAns: {} }));
     goTo("addpad");
   }
-  // Persist pads to local storage so the host's listings survive a refresh.
-  const PADS_KEY = "lilypad.pads.v1";
+
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const raw = window.localStorage.getItem(PADS_KEY);
-      if (raw) {
-        const saved = JSON.parse(raw) as Pad[];
-        if (Array.isArray(saved) && saved.length > 0) setPads(saved);
-      }
-    } catch {}
-    // Run once on mount.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      window.localStorage.setItem(PADS_KEY, JSON.stringify(pads));
-    } catch {}
-  }, [pads]);
+    if (!user?.id) { setLoadingPads(false); return; }
+    fetch(`/api/spots/user/${user.id}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (Array.isArray(data) && data.length > 0) {
+          const loaded: Pad[] = data.map((s: Record<string, unknown>, idx: number) => ({
+            id: idx + 1,
+            spotId: String(s.id || ""),
+            address: String(s.address || ""),
+            city: "Houston, TX",
+            type: String(s.pad_type || "Driveway"),
+            spotCount: Number(s.num_pads) || 1,
+            nickname: String(s.address || "My Pad"),
+            price: Number(s.price_per_hr) || 4,
+            description: String(s.description || ""),
+            services: [],
+            photoUrl: String(s.photo_url || ""),
+            status: s.status === "active" ? "active" : s.status === "paused" ? "paused" : "pending",
+            pausedUntil: null,
+            since: s.created_at ? new Date(String(s.created_at)).toLocaleDateString(undefined, { month: "short", year: "numeric" }) : "—",
+            bookings: 0,
+          }));
+          setPads(loaded);
+        } else {
+          setPads([]);
+        }
+        setLoadingPads(false);
+      })
+      .catch(() => setLoadingPads(false));
+  }, [user?.id]);
 
   const [openPadId, setOpenPadId] = useState<number | null>(null);
   const [pendingPauseId, setPendingPauseId] = useState<number | null>(null);
@@ -140,10 +170,10 @@ export default function PadDashboardPage() {
   const openPad = openPadId == null ? null : pads.find(p => p.id === openPadId) || null;
   const pendingPad = pendingPauseId == null ? null : pads.find(p => p.id === pendingPauseId) || null;
 
-  // Sort: active first, paused last; preserve original order within each group.
+  // Sort: active → pending → paused
   const sortedPads = [...pads].sort((a, b) => {
-    if (a.status === b.status) return 0;
-    return a.status === "paused" ? 1 : -1;
+    const order: Record<string, number> = { active: 0, pending: 1, paused: 2 };
+    return (order[a.status] ?? 1) - (order[b.status] ?? 1);
   });
 
   function updatePad(id: number, patch: Partial<Pad>) {
@@ -239,7 +269,12 @@ export default function PadDashboardPage() {
       {/* Body */}
       <div style={{ flex: 1, overflowY: "auto", padding: "20px 16px 32px" }}>
 
-        {!openPad ? (
+        {loadingPads ? (
+          <div style={{ textAlign: "center", padding: "80px 0" }}>
+            <div style={{ width: 28, height: 28, border: "3px solid rgba(141,214,63,0.3)", borderTopColor: "#8DD63F", borderRadius: "50%", animation: "lp-spin 0.8s linear infinite", margin: "0 auto" }} />
+            <style>{`@keyframes lp-spin{to{transform:rotate(360deg)}}`}</style>
+          </div>
+        ) : !openPad ? (
           /* ── LIST VIEW ── */
           <>
             {(() => {
@@ -371,15 +406,17 @@ export default function PadDashboardPage() {
                   <div style={{ position: "absolute", top: 10, right: 10 }}>
                     <StatusPill pad={pad} />
                   </div>
-                  <div style={{ position: "absolute", top: 10, left: 10, display: "flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.92)", borderRadius: 100, padding: "5px 8px 5px 10px", boxShadow: "0 2px 6px rgba(14,31,64,0.18)" }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: NAVY, letterSpacing: 0.3 }}>
-                      {pad.status === "paused" ? "Closed" : "Open"}
-                    </span>
-                    <PauseSwitch
-                      paused={pad.status === "paused"}
-                      onPress={() => requestPauseToggle(pad.id)}
-                    />
-                  </div>
+                  {pad.status !== "pending" && (
+                    <div style={{ position: "absolute", top: 10, left: 10, display: "flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.92)", borderRadius: 100, padding: "5px 8px 5px 10px", boxShadow: "0 2px 6px rgba(14,31,64,0.18)" }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: NAVY, letterSpacing: 0.3 }}>
+                        {pad.status === "paused" ? "Closed" : "Open"}
+                      </span>
+                      <PauseSwitch
+                        paused={pad.status === "paused"}
+                        onPress={() => requestPauseToggle(pad.id)}
+                      />
+                    </div>
+                  )}
                 </div>
                 <div style={{ padding: "14px 16px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
@@ -551,10 +588,12 @@ export default function PadDashboardPage() {
                     : "New bookings are paused. Existing bookings will still complete."}
                 </div>
               </div>
-              <PauseSwitch
-                paused={openPad.status === "paused"}
-                onPress={() => requestPauseToggle(openPad.id)}
-              />
+              {openPad.status !== "pending" && (
+                <PauseSwitch
+                  paused={openPad.status === "paused"}
+                  onPress={() => requestPauseToggle(openPad.id)}
+                />
+              )}
             </div>
 
             <p style={{ textAlign: "center", fontSize: 10.5, color: "rgba(14,31,64,0.32)", margin: "16px 0 4px" }}>

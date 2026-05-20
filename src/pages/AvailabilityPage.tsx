@@ -357,7 +357,7 @@ export default function AvailabilityPage() {
               setState(s => ({ ...s, addingExtraPad: false }));
               goTo("paddashboard");
             } else {
-              goTo("payment");
+              goTo("listingsuccess");
             }
           }} style={{
             width: "100%", padding: "16px 0", borderRadius: 100,

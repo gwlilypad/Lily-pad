@@ -1344,7 +1344,28 @@ app.get('/api/bookings/:userId', async (req, res) => {
       { headers: SVC_HEADERS }
     );
     const data = await r.json();
-    res.json(r.ok ? data : []);
+    if (!r.ok) return res.json([]);
+    const rows = Array.isArray(data) ? data : [];
+    const mapped = rows.map(b => {
+      const bd = b.booking_data || {};
+      return {
+        id:          b.id,
+        user_id:     b.user_id,
+        spot_id:     bd.spot_id || b.spot_id || '',
+        addr:        bd.addr    || bd.address || '',
+        city:        'Houston, TX',
+        pad_type:    bd.padType || 'Driveway',
+        host_name:   bd.hostName  || '',
+        host_phone:  bd.hostPhone || '',
+        start_ts:    bd.start_ts  || null,
+        end_ts:      bd.end_ts    || null,
+        price_per_hr: Number(bd.price_per_hr) || 0,
+        total_price:  Number(bd.total_price)  || 0,
+        status:      b.status || 'confirmed',
+        created_at:  b.created_at,
+      };
+    });
+    res.json(mapped);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

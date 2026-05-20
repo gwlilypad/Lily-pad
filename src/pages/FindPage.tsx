@@ -1043,6 +1043,9 @@ export default function FindPage() {
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
   const [bookStartTs, setBookStartTs] = useState<number | null>(null);
   const [bookEndTs, setBookEndTs] = useState<number | null>(null);
+  const [bookingConf, setBookingConf] = useState<{
+    addr: string; padType: string; startTs: number; endTs: number; totalPrice: number; confNum: string;
+  } | null>(null);
   const [nearbyMode, setNearbyMode] = useState(false);
   const [mapSearchOrigin, setMapSearchOrigin] = useState<[number, number] | null>(null);
   const [showHotspots, setShowHotspots] = useState(false);
@@ -3032,36 +3035,39 @@ export default function FindPage() {
               <div style={{ padding: "10px 16px 0", paddingBottom: "calc(env(safe-area-inset-bottom) + 18px)", flexShrink: 0, marginTop: "auto" }}>
                 <button
                   disabled={isBooked || conflict || bookStartTs == null || bookEndTs == null || bookEndTs <= bookStartTs}
-                  onClick={() => {
+                  onClick={async () => {
                     if (bookStartTs == null || bookEndTs == null || isBooked || conflict) return;
                     const priceNum = Number(spot.price.replace(/[^0-9.]/g, "")) || 0;
                     const padType = (spot.meta.split("·")[0] || "Spot").trim();
-                    // Derive a deterministic phone from UUID digits
                     const uuidDigits = spot.id.replace(/[^0-9]/g, "").padEnd(10, "5");
                     const hostPhone = `(${uuidDigits.slice(0,3)}) ${uuidDigits.slice(3,6)}-${uuidDigits.slice(6,10)}`;
                     const durMs = bookEndTs - bookStartTs;
                     const durHrs = Math.max(1, Math.round(durMs / (60 * 60 * 1000)));
                     const totalPrice = Math.round(priceNum * durHrs * 100) / 100;
-                    // Save to Supabase
+                    let confNum = `LP-${Date.now().toString(36).toUpperCase().slice(-6)}`;
                     if (user) {
-                      fetch("/api/bookings", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          user_id: user.id,
-                          spot_id: spot.id,
-                          start_ts: new Date(bookStartTs).toISOString(),
-                          end_ts: new Date(bookEndTs).toISOString(),
-                          price_per_hr: priceNum,
-                          total_price: totalPrice,
-                          booking_data: {
-                            addr: spot.addr, padType, hostName, hostPhone,
-                          },
-                        }),
-                      }).catch(() => { /* non-blocking — local state still saves */ });
+                      try {
+                        const r = await fetch("/api/bookings", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            user_id: user.id,
+                            spot_id: spot.id,
+                            start_ts: new Date(bookStartTs).toISOString(),
+                            end_ts: new Date(bookEndTs).toISOString(),
+                            price_per_hr: priceNum,
+                            total_price: totalPrice,
+                            booking_data: { addr: spot.addr, padType, hostName, hostPhone },
+                          }),
+                        });
+                        if (r.ok) {
+                          const data = await r.json();
+                          if (data?.id) confNum = `LP-${String(data.id).slice(0, 8).toUpperCase()}`;
+                        }
+                      } catch { /* non-blocking */ }
                     }
                     setAppState(s => {
-                      const newId = s.bookings.reduce((m, b) => Math.max(m, b.id), 0) + 1;
+                      const newId = s.bookings.reduce((m, b) => Math.max(m, Number(b.id)), 0) + 1;
                       const rec = {
                         id: newId, spotId: spot.id, addr: spot.addr, city: "Houston, TX", padType,
                         startTs: bookStartTs, endTs: bookEndTs, pricePerHr: priceNum,
@@ -3069,8 +3075,7 @@ export default function FindPage() {
                       };
                       return { ...s, bookings: [...s.bookings, rec] };
                     });
-                    setSelectedSpot(null);
-                    goTo("bookings");
+                    setBookingConf({ addr: spot.addr, padType, startTs: bookStartTs, endTs: bookEndTs, totalPrice, confNum });
                   }}
                   style={{ width: "100%", padding: "15px", background: (isBooked || conflict) ? "rgba(239,68,68,0.25)" : "#8DD63F", border: "none", borderRadius: 100, fontSize: 15, fontWeight: 700, color: (isBooked || conflict) ? "#fca5a5" : "#0E1F40", cursor: (isBooked || conflict) ? "not-allowed" : "pointer", fontFamily: "'DM Sans', sans-serif", letterSpacing: -0.2, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, boxShadow: (isBooked || conflict) ? "none" : "0 2px 16px rgba(141,214,63,0.35)" }}
                 >
@@ -3084,6 +3089,69 @@ export default function FindPage() {
           );
         })()}
       </div>
+
+      {/* ── BOOKING CONFIRMATION OVERLAY ── */}
+      {bookingConf && (() => {
+        const fmtD = (ts: number) => new Date(ts).toLocaleDateString(undefined, { weekday:"short", month:"short", day:"numeric" });
+        const fmtT = (ts: number) => new Date(ts).toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit" });
+        const durMs = bookingConf.endTs - bookingConf.startTs;
+        const durHrs = Math.round(durMs / 36e5 * 10) / 10;
+        return (
+          <div style={{
+            position: "absolute", inset: 0, zIndex: 300,
+            background: "#0E1F40",
+            display: "flex", flexDirection: "column",
+            alignItems: "center", justifyContent: "center",
+            padding: "32px 24px",
+            fontFamily: "'DM Sans', sans-serif",
+          }}>
+            <div style={{ width: "100%", maxWidth: 390, display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
+              <div style={{
+                width: 76, height: 76, borderRadius: "50%",
+                background: "rgba(141,214,63,0.15)",
+                border: "2px solid rgba(141,214,63,0.40)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                marginBottom: 22,
+              }}>
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#8DD63F" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 6L9 17l-5-5" />
+                </svg>
+              </div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: "#fff", letterSpacing: -0.5, marginBottom: 6 }}>Booking Confirmed!</div>
+              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", marginBottom: 28 }}>Your spot is reserved and saved to your account.</div>
+
+              <div style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.10)", borderRadius: 18, padding: "18px 20px", marginBottom: 24, textAlign: "left" }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: "#fff", marginBottom: 4, letterSpacing: -0.3 }}>{bookingConf.addr}</div>
+                <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", marginBottom: 18 }}>{bookingConf.padType}</div>
+                {[
+                  { label: "Date",    val: fmtD(bookingConf.startTs) },
+                  { label: "Time",    val: `${fmtT(bookingConf.startTs)} → ${fmtT(bookingConf.endTs)} (${durHrs}h)` },
+                  { label: "Total",   val: `$${bookingConf.totalPrice.toFixed(2)}` },
+                  { label: "Conf #",  val: bookingConf.confNum },
+                ].map(({ label, val }) => (
+                  <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                    <span style={{ fontSize: 12, color: "rgba(255,255,255,0.40)", fontWeight: 600 }}>{label}</span>
+                    <span style={{ fontSize: 13, color: "#fff", fontWeight: 700 }}>{val}</span>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                onClick={() => { setBookingConf(null); goTo("bookings"); }}
+                style={{ width: "100%", padding: "15px 0", borderRadius: 100, background: "#8DD63F", border: "none", cursor: "pointer", fontSize: 15, fontWeight: 700, color: "#0E1F40", fontFamily: "'DM Sans', sans-serif", marginBottom: 12, boxShadow: "0 4px 20px rgba(141,214,63,0.35)" }}
+              >
+                View my bookings
+              </button>
+              <button
+                onClick={() => { setBookingConf(null); setSelectedSpot(null); }}
+                style={{ width: "100%", padding: "13px 0", borderRadius: 100, background: "transparent", border: "1px solid rgba(255,255,255,0.18)", color: "rgba(255,255,255,0.55)", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}
+              >
+                Back to map
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── ACCOUNT PULL-DOWN DRAWER ── */}
       <div

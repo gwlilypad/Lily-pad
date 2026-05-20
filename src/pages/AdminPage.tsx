@@ -2472,8 +2472,8 @@ export default function AdminPage() {
               <div style={{ background: "#142A52", borderRadius: 18, padding: "16px 18px", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 10px rgba(0,0,0,0.22)", display: "flex", flexDirection: "column", gap: 12 }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <div>
-                    <p style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.12em", textTransform: "uppercase", margin: 0 }}>Email activation</p>
-                    <p style={{ fontSize: 14, fontWeight: 700, color: "#fff", margin: "2px 0 0" }}>{inviteStep === "success" ? "Account activated" : inviteStep === "password" ? "Create password" : inviteStep === "otp" ? "Enter your code" : "Activate account"}</p>
+                    <p style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.12em", textTransform: "uppercase", margin: 0 }}>Team invitation</p>
+                    <p style={{ fontSize: 14, fontWeight: 700, color: "#fff", margin: "2px 0 0" }}>{inviteStep === "success" ? "Invite sent!" : "Add team member"}</p>
                   </div>
                   <div style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(141,214,63,0.14)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
@@ -2484,11 +2484,11 @@ export default function AdminPage() {
                     <div style={{ background: "rgba(141,214,63,0.10)", border: "1px solid rgba(141,214,63,0.30)", borderRadius: 12, padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth="2.5" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
                       <div>
-                        <p style={{ fontSize: 13, fontWeight: 700, color: GREEN, margin: 0 }}>Account activated!</p>
-                        <p style={{ fontSize: 11.5, color: "rgba(255,255,255,0.55)", margin: "2px 0 0" }}>{inviteEmail} is now active as {inviteRole}.</p>
+                        <p style={{ fontSize: 13, fontWeight: 700, color: GREEN, margin: 0 }}>Invite sent!</p>
+                        <p style={{ fontSize: 11.5, color: "rgba(255,255,255,0.55)", margin: "2px 0 0" }}>An activation link was emailed to the new {inviteRole}. They'll appear here once they activate.</p>
                       </div>
                     </div>
-                    <button onClick={resetActivation} style={{ width: "100%", padding: "11px", borderRadius: 100, border: "1.5px solid rgba(255,255,255,0.15)", background: "transparent", color: "rgba(255,255,255,0.70)", fontWeight: 700, fontSize: 13, fontFamily: '"DM Sans",sans-serif', cursor: "pointer" }}>Activate another</button>
+                    <button onClick={resetActivation} style={{ width: "100%", padding: "11px", borderRadius: 100, border: "1.5px solid rgba(255,255,255,0.15)", background: "transparent", color: "rgba(255,255,255,0.70)", fontWeight: 700, fontSize: 13, fontFamily: '"DM Sans",sans-serif', cursor: "pointer" }}>Invite another</button>
                   </>
                 ) : inviteStep === "password" ? (
               <>
@@ -2583,21 +2583,23 @@ export default function AdminPage() {
                         if (!em || !em.includes("@")) { setInviteError("Enter a valid email address."); return; }
                         setInviteLoading(true); setInviteError("");
                         try {
-                          const chk = await fetch("/api/staff/check-whitelist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: em }) });
-                          const chkData = await chk.json();
-                          if (!chk.ok) { setInviteError(chkData.error || "Email not on the approved list."); return; }
-                          setInviteRole(chkData.role);
-                          const { error: otpErr } = await supabase.auth.signInWithOtp({ email: em, options: { shouldCreateUser: true } });
-                          if (otpErr) { setInviteError(otpErr.message || "Failed to send code."); return; }
-                          setInviteStep("otp");
+                          const r = await fetch("/api/staff/invite", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ email: em, role: inviteRole }),
+                          });
+                          const data = await r.json();
+                          if (!r.ok) { setInviteError(data.error || "Failed to send invite. Try again."); return; }
+                          setInviteStep("success");
+                          setInviteEmail("");
                         } catch { setInviteError("Network error. Try again."); }
                         finally { setInviteLoading(false); }
                       }}
                       style={{ width: "100%", padding: "12px", borderRadius: 100, border: "none", background: inviteLoading ? "rgba(141,214,63,0.50)" : GREEN, color: NAVY, fontWeight: 800, fontSize: 13, fontFamily: '"DM Sans",sans-serif', cursor: inviteLoading ? "not-allowed" : "pointer", letterSpacing: "0.01em" }}
                     >
-                      {inviteLoading ? "Sending…" : "Send code"}
+                      {inviteLoading ? "Sending invite…" : "Add & send invite"}
                     </button>
-                    <p style={{ fontSize: 11, color: "rgba(255,255,255,0.30)", margin: 0, lineHeight: 1.4 }}>Email must be on the approved {inviteRole} list in Supabase.</p>
+                    <p style={{ fontSize: 11, color: "rgba(255,255,255,0.30)", margin: 0, lineHeight: 1.4 }}>Adds to the team list and emails them an activation link.</p>
                   </>
                 )}
               </div>

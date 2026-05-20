@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/context/AuthContext";
-import { supabase } from "@/lib/supabase";
 import SharedHeader from "@/components/SharedHeader";
 import NavBar from "@/components/NavBar";
 
@@ -19,9 +18,14 @@ interface Box {
 }
 
 async function compressAndUpload(file: File, userId: string): Promise<string> {
+  // Compress: draw into canvas at max 1200px wide, export as JPEG
   const img = new window.Image();
   const blobUrl = URL.createObjectURL(file);
-  await new Promise<void>(resolve => { img.onload = () => resolve(); img.src = blobUrl; });
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => resolve();
+    img.onerror = () => reject(new Error("Image load failed"));
+    img.src = blobUrl;
+  });
   const MAX_W = 1200;
   let w = img.naturalWidth, h = img.naturalHeight;
   if (w > MAX_W) { h = Math.round(h * MAX_W / w); w = MAX_W; }
@@ -29,11 +33,18 @@ async function compressAndUpload(file: File, userId: string): Promise<string> {
   canvas.width = w; canvas.height = h;
   canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
   URL.revokeObjectURL(blobUrl);
-  const blob = await new Promise<Blob>(resolve => canvas.toBlob(b => resolve(b!), "image/jpeg", 0.82));
-  const path = `${userId}/${Date.now()}.jpg`;
-  const { data, error } = await supabase.storage.from("spot-photos").upload(path, blob, { contentType: "image/jpeg", upsert: true });
-  if (error) throw error;
-  return supabase.storage.from("spot-photos").getPublicUrl(data.path).data.publicUrl;
+  const blob = await new Promise<Blob>((resolve, reject) =>
+    canvas.toBlob(b => b ? resolve(b) : reject(new Error("Canvas toBlob failed")), "image/jpeg", 0.82)
+  );
+  // Upload via server (uses service role key — bypasses RLS)
+  const res = await fetch("/api/upload-photo", {
+    method: "POST",
+    headers: { "Content-Type": "image/jpeg", "X-User-Id": userId },
+    body: blob,
+  });
+  if (!res.ok) throw new Error(await res.text());
+  const json = await res.json();
+  return json.url as string;
 }
 
 export default function PhotoPage() {

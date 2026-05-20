@@ -919,6 +919,35 @@ app.get('/api/spots', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Photo upload — server proxies to Supabase Storage with service role key ───
+app.post('/api/upload-photo', express.raw({ type: 'image/*', limit: '10mb' }), async (req, res) => {
+  const userId = req.headers['x-user-id'] || 'anon';
+  const mimeType = req.headers['content-type'] || 'image/jpeg';
+  const ext = mimeType.includes('png') ? 'png' : 'jpg';
+  const path = `${userId}/${Date.now()}.${ext}`;
+
+  try {
+    const r = await fetch(`${SUPABASE_URL}/storage/v1/object/spot-photos/${path}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${SVC_KEY}`,
+        'apikey': SVC_KEY,
+        'Content-Type': mimeType,
+        'Cache-Control': '3600',
+      },
+      body: req.body,
+    });
+    if (!r.ok) {
+      const err = await r.text();
+      return res.status(r.status).json({ error: err });
+    }
+    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/spot-photos/${path}`;
+    res.json({ url: publicUrl });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Spots: create a new pad listing ───────────────────────────────────────────
 app.post('/api/spots', async (req, res) => {
   const { host_user_id, address, pad_type, surface, num_pads, price_per_hr, description, photo_url } = req.body || {};

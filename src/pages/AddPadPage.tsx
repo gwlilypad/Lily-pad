@@ -86,7 +86,7 @@ export default function AddPadPage() {
       <div className="s-divider" />
       <div className="s-body">
         <NavBar
-          onBack={() => cur > 0 ? setCur(cur - 1) : goTo(state.addingExtraPad ? "paddashboard" : "signup")}
+          onBack={() => cur > 0 ? setCur(cur - 1) : goTo(state.addingExtraPad ? "paddashboard" : (user ? "padtype" : "signup"))}
           onHome={() => goTo("home")}
           dots={AP_QUESTIONS.map((_, i) => i)}
           currentDot={cur}

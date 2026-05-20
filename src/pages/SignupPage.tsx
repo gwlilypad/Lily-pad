@@ -17,7 +17,7 @@ const PW_IDX = 4;
 
 export default function SignupPage() {
   const { goTo, setState: setAppState } = useApp();
-  const { signUp, verifyOtp } = useAuth();
+  const { signUp, verifyOtp, user } = useAuth();
   const [cur, setCur] = useState(0);
   const [ans, setAns] = useState<Record<number, string>>({});
   const [inputVal, setInputVal] = useState("");
@@ -34,6 +34,11 @@ export default function SignupPage() {
 
   const q = SU_QUESTIONS[cur];
   const progress = Math.round((cur / SU_QUESTIONS.length) * 100);
+
+  // If already signed in, skip account creation and go straight to adding a pad
+  useEffect(() => {
+    if (user) goTo("addpad");
+  }, [user]);
 
   useEffect(() => {
     if (editIdx !== null) {

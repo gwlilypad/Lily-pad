@@ -185,6 +185,24 @@ async function runSQL(sql) {
   } catch (e) { return { ok: false, error: e.message }; }
 }
 
+// ── Ensure Supabase Storage bucket exists ─────────────────────────────────────
+async function ensureStorageBucket() {
+  if (!SVC_KEY) return;
+  try {
+    const check = await fetch(`${SUPABASE_URL}/storage/v1/bucket/spot-photos`, {
+      headers: { 'Authorization': `Bearer ${SVC_KEY}`, 'apikey': SVC_KEY },
+    });
+    if (check.ok) { console.log('[Storage] spot-photos bucket ✓'); return; }
+    const create = await fetch(`${SUPABASE_URL}/storage/v1/bucket`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${SVC_KEY}`, 'apikey': SVC_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: 'spot-photos', name: 'spot-photos', public: true }),
+    });
+    if (create.ok) console.log('[Storage] spot-photos bucket created ✓');
+    else console.warn('[Storage] bucket create failed:', await create.text());
+  } catch (e) { console.warn('[Storage] bucket check failed:', e.message); }
+}
+
 // ── Check DB schema on startup ────────────────────────────────────────────────
 async function checkDB() {
   if (!SVC_KEY) { console.warn('[DB] SUPABASE_SERVICE_ROLE_KEY missing'); return; }
@@ -208,6 +226,8 @@ async function checkDB() {
     const spotsRes = await fetch(`${SUPABASE_URL}/rest/v1/spots?limit=1`, { headers: SVC_HEADERS });
     if (spotsRes.ok || spotsRes.status === 406) {
       console.log('[DB] spots table ✓');
+      // Always run safe column additions (idempotent)
+      await runSQL(`ALTER TABLE public.spots ADD COLUMN IF NOT EXISTS photo_url TEXT DEFAULT '';`);
       return;
     }
     console.log('[DB] spots table missing — attempting auto-create…');
@@ -901,7 +921,7 @@ app.get('/api/spots', async (req, res) => {
 
 // ── Spots: create a new pad listing ───────────────────────────────────────────
 app.post('/api/spots', async (req, res) => {
-  const { host_user_id, address, pad_type, surface, num_pads, price_per_hr, description } = req.body || {};
+  const { host_user_id, address, pad_type, surface, num_pads, price_per_hr, description, photo_url } = req.body || {};
   if (!host_user_id || !address) return res.status(400).json({ error: 'host_user_id and address required' });
 
   // Geocode the address using Nominatim
@@ -930,6 +950,7 @@ app.post('/api/spots', async (req, res) => {
         num_pads: parseInt(num_pads) || 1,
         price_per_hr: parseFloat(price_per_hr) || 4,
         description: description || '',
+        photo_url: photo_url || '',
         lat, lng,
         status: 'active',
       }),
@@ -1165,4 +1186,5 @@ app.get('*', (req, res) => {
 app.listen(PORT, '0.0.0.0', async () => {
   console.log(`[LP] Lily Pad server v2 running on port ${PORT}`);
   await checkDB();
+  await ensureStorageBucket();
 });

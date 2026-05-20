@@ -29,7 +29,7 @@ const NEIGHBORHOOD_ZOOM = 14;
 const GLOBE_CENTER: [number, number] = [20, 0];
 const GLOBE_ZOOM = 2;
 
-type SpotRecord = { id: number; price: string; addr: string; meta: string; lat: number; lng: number; featured: boolean; host_name?: string };
+type SpotRecord = { id: number; price: string; addr: string; meta: string; lat: number; lng: number; featured: boolean; host_name?: string; photo_url?: string };
 
 const SPOTS: SpotRecord[] = [];
 
@@ -1008,6 +1008,7 @@ export default function FindPage() {
             lng:       Number(s.lng),
             featured:  Boolean(s.featured),
             host_name: String(s.host_name || s.host_full_name || ""),
+            photo_url: String(s.photo_url || ""),
           }));
           setSpots(mapped);
         }
@@ -2793,6 +2794,9 @@ export default function FindPage() {
               <div style={{ display: "flex", gap: 8, padding: "4px 16px 14px", overflowX: "auto", flexShrink: 0, scrollbarWidth: "none" } as React.CSSProperties}>
                 {PHOTO_GRADIENTS.map((grad, i) => (
                   <div key={i} onClick={() => setLightboxIdx(i)} style={{ flexShrink: 0, width: 160, height: 110, borderRadius: 14, background: grad, border: "1px solid rgba(255,255,255,0.1)", position: "relative", overflow: "hidden", cursor: "pointer" }}>
+                    {i === 0 && spot.photo_url && (
+                      <img src={spot.photo_url} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+                    )}
                     {i === 0 && spot.featured && (
                       <div style={{ position: "absolute", top: 8, left: 10, fontSize: 9, fontWeight: 700, color: "#8DD63F", letterSpacing: 0.8, textTransform: "uppercase", background: "rgba(0,0,0,0.4)", borderRadius: 6, padding: "2px 6px" }}>✦ Featured</div>
                     )}
@@ -3704,7 +3708,11 @@ export default function FindPage() {
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
             </button>
-            <div style={{ width: "100%", maxWidth: 520, aspectRatio: "4/3", borderRadius: 18, background: grads[idx], border: "1px solid rgba(255,255,255,0.12)", boxShadow: "0 18px 60px rgba(0,0,0,0.55)" }} />
+            <div style={{ width: "100%", maxWidth: 520, aspectRatio: "4/3", borderRadius: 18, background: grads[idx], border: "1px solid rgba(255,255,255,0.12)", boxShadow: "0 18px 60px rgba(0,0,0,0.55)", overflow: "hidden", position: "relative" }}>
+              {spot.photo_url && idx === 0 && (
+                <img src={spot.photo_url} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+              )}
+            </div>
             <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 18 }}>
               <button
                 onClick={e => { e.stopPropagation(); setLightboxIdx((idx - 1 + photoCount) % photoCount); }}

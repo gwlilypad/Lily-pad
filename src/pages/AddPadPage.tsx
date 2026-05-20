@@ -234,6 +234,7 @@ export default function AddPadPage() {
                           num_pads:     parseInt(ans[3] || "1"),
                           price_per_hr: parseFloat(ans[4] || "4"),
                           description:  ans[5] || "",
+                          photo_url:    state.apPhotoUrl || "",
                         }),
                       });
                     } catch { /* non-blocking — user continues regardless */ }

@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useApp } from "@/context/AppContext";
+import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/lib/supabase";
 import SharedHeader from "@/components/SharedHeader";
 import NavBar from "@/components/NavBar";
 
@@ -16,14 +18,35 @@ interface Box {
   pad: number;
 }
 
+async function compressAndUpload(file: File, userId: string): Promise<string> {
+  const img = new window.Image();
+  const blobUrl = URL.createObjectURL(file);
+  await new Promise<void>(resolve => { img.onload = () => resolve(); img.src = blobUrl; });
+  const MAX_W = 1200;
+  let w = img.naturalWidth, h = img.naturalHeight;
+  if (w > MAX_W) { h = Math.round(h * MAX_W / w); w = MAX_W; }
+  const canvas = document.createElement("canvas");
+  canvas.width = w; canvas.height = h;
+  canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
+  URL.revokeObjectURL(blobUrl);
+  const blob = await new Promise<Blob>(resolve => canvas.toBlob(b => resolve(b!), "image/jpeg", 0.82));
+  const path = `${userId}/${Date.now()}.jpg`;
+  const { data, error } = await supabase.storage.from("spot-photos").upload(path, blob, { contentType: "image/jpeg", upsert: true });
+  if (error) throw error;
+  return supabase.storage.from("spot-photos").getPublicUrl(data.path).data.publicUrl;
+}
+
 export default function PhotoPage() {
-  const { goTo, state } = useApp();
+  const { goTo, state, setState: setAppState } = useApp();
+  const { user } = useAuth();
   const numPads = state.apNumPads || 1;
 
   const [photos, setPhotos] = useState<Record<number, string>>({});
   const [activePhoto, setActivePhoto] = useState(0);
   const [activePad, setActivePad] = useState<number | null>(0);
   const [allBoxes, setAllBoxes] = useState<Record<number, Box[]>>({});
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
 
   // Drawing state
   const [drawing, setDrawing] = useState(false);
@@ -245,6 +268,21 @@ export default function PhotoPage() {
     };
     img.src = url;
     e.target.value = "";
+
+    // Upload to Supabase Storage in background
+    if (user) {
+      setUploadLoading(true);
+      setUploadError("");
+      compressAndUpload(file, user.id)
+        .then(publicUrl => {
+          setAppState(prev => ({ ...prev, apPhotoUrl: publicUrl }));
+        })
+        .catch(err => {
+          setUploadError("Photo upload failed — listing will save without image.");
+          console.error("[Photo] upload error:", err);
+        })
+        .finally(() => setUploadLoading(false));
+    }
   }
 
   function openFullscreen(photoIdx: number) {
@@ -354,6 +392,22 @@ export default function PhotoPage() {
             <div className="guide-row"><div className="guide-num">1</div><p className="guide-txt">Add a photo of your parking spot from the street</p></div>
             <div className="guide-row"><div className="guide-num">2</div><p className="guide-txt">Select a pad color and drag to draw a box over the spot</p></div>
             <div className="guide-row"><div className="guide-num">3</div><p className="guide-txt">Drag the ↻ handle to rotate the box and fit angled spots</p></div>
+          </div>
+        )}
+
+        {uploadLoading && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 4px", color: "#0E1F40", fontSize: 13, fontWeight: 600 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8DD63F" strokeWidth="2.5" strokeLinecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+            Saving photo…
+          </div>
+        )}
+        {uploadError && (
+          <p style={{ fontSize: 12, color: "#ef4444", fontWeight: 600, padding: "0 4px", margin: 0 }}>{uploadError}</p>
+        )}
+        {state.apPhotoUrl && !uploadLoading && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 4px", color: "#8DD63F", fontSize: 12, fontWeight: 700 }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8DD63F" strokeWidth="2.5" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
+            Photo saved
           </div>
         )}
 

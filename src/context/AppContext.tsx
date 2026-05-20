@@ -33,6 +33,7 @@ export interface AppState {
   profilePhotoUrl: string;
   addingExtraPad: boolean;
   openAcctOnFind: boolean;
+  apPhotoUrl: string;
   bookings: BookingRec[];
   adminPreview: boolean;
   adminPreviewRole: "admin" | "staff" | null;
@@ -42,7 +43,7 @@ export const DEFAULT_STATE: AppState = {
   suAns: {}, apAns: {}, drAns: {}, bizAns: {},
   bizPhotoCount: 0, apNumPads: 1, apLogoUrl: "",
   accountType: "renter", hasBothAccounts: true,
-  profilePhotoUrl: "", addingExtraPad: false, openAcctOnFind: false,
+  profilePhotoUrl: "", addingExtraPad: false, openAcctOnFind: false, apPhotoUrl: "",
   bookings: [], adminPreview: false, adminPreviewRole: null,
 };
 

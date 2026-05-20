@@ -29,7 +29,7 @@ const NEIGHBORHOOD_ZOOM = 14;
 const GLOBE_CENTER: [number, number] = [20, 0];
 const GLOBE_ZOOM = 2;
 
-type SpotRecord = { id: string; price: string; addr: string; meta: string; lat: number; lng: number; featured: boolean; host_name?: string; photo_url?: string };
+type SpotRecord = { id: string; price: string; addr: string; meta: string; lat: number; lng: number; featured: boolean; host_name?: string; photo_url?: string; photo_urls?: string[] };
 
 const SPOTS: SpotRecord[] = [];
 
@@ -1013,7 +1013,9 @@ export default function FindPage() {
             lng:       Number(s.lng),
             featured:  Boolean(s.featured),
             host_name: String(s.host_name || ""),
-            photo_url: String(s.photo_url || ""),
+            photo_url:  String(s.photo_url || ""),
+            photo_urls: Array.isArray(s.photo_urls) ? s.photo_urls as string[]
+                        : (s.photo_url ? [String(s.photo_url)] : []),
           }));
           setSpots(mapped);
         }
@@ -2786,8 +2788,13 @@ export default function FindPage() {
             "linear-gradient(145deg,#1e2a3a 0%,#2a3d5c 100%)",
             "linear-gradient(145deg,#3a1e2a 0%,#5c2a3d 100%)",
           ];
-          const photoCount = 1;
-          const PHOTO_GRADIENTS = [ALL_GRADIENTS[idHash(spot.id) % ALL_GRADIENTS.length]];
+          const spotPhotos = spot.photo_urls && spot.photo_urls.length > 0
+            ? spot.photo_urls
+            : (spot.photo_url ? [spot.photo_url] : []);
+          const photoCount = Math.max(spotPhotos.length, 1);
+          const PHOTO_GRADIENTS = Array.from({ length: photoCount }, (_, i) =>
+            ALL_GRADIENTS[(idHash(spot.id) + i) % ALL_GRADIENTS.length]
+          );
           const status = getSpotStatus(spot.id);
           const userBookings = state.bookings.filter(b => b.spotId === spot.id && b.status === "active");
           const nowMs = Date.now();
@@ -2801,12 +2808,17 @@ export default function FindPage() {
               {/* Photo strip */}
               <div style={{ display: "flex", gap: 8, padding: "4px 16px 14px", overflowX: "auto", flexShrink: 0, scrollbarWidth: "none" } as React.CSSProperties}>
                 {PHOTO_GRADIENTS.map((grad, i) => (
-                  <div key={i} onClick={() => setLightboxIdx(i)} style={{ flexShrink: 0, width: 160, height: 110, borderRadius: 14, background: grad, border: "1px solid rgba(255,255,255,0.1)", position: "relative", overflow: "hidden", cursor: "pointer" }}>
-                    {i === 0 && spot.photo_url && (
-                      <img src={spot.photo_url} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+                  <div key={i} onClick={() => setLightboxIdx(i)} style={{ flexShrink: 0, width: spotPhotos.length === 1 ? "calc(100% - 0px)" : 200, height: 130, borderRadius: 14, background: grad, border: "1px solid rgba(255,255,255,0.1)", position: "relative", overflow: "hidden", cursor: "pointer" }}>
+                    {spotPhotos[i] && (
+                      <img src={spotPhotos[i]} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
                     )}
                     {i === 0 && spot.featured && (
                       <div style={{ position: "absolute", top: 8, left: 10, fontSize: 9, fontWeight: 700, color: "#8DD63F", letterSpacing: 0.8, textTransform: "uppercase", background: "rgba(0,0,0,0.4)", borderRadius: 6, padding: "2px 6px" }}>✦ Featured</div>
+                    )}
+                    {spotPhotos.length > 1 && (
+                      <div style={{ position: "absolute", bottom: 7, right: 8, fontSize: 10, fontWeight: 700, color: "#fff", background: "rgba(0,0,0,0.45)", borderRadius: 6, padding: "2px 6px" }}>
+                        {i + 1}/{spotPhotos.length}
+                      </div>
                     )}
                   </div>
                 ))}
@@ -3788,8 +3800,13 @@ export default function FindPage() {
           "linear-gradient(145deg,#1e2a3a 0%,#2a3d5c 100%)",
           "linear-gradient(145deg,#3a1e2a 0%,#5c2a3d 100%)",
         ];
-        const photoCount = 1;
-        const grads = [ALL_GRADIENTS[idHash(spot.id) % ALL_GRADIENTS.length]];
+        const lbPhotos = spot.photo_urls && spot.photo_urls.length > 0
+          ? spot.photo_urls
+          : (spot.photo_url ? [spot.photo_url] : []);
+        const photoCount = Math.max(lbPhotos.length, 1);
+        const grads = Array.from({ length: photoCount }, (_, i) =>
+          ALL_GRADIENTS[(idHash(spot.id) + i) % ALL_GRADIENTS.length]
+        );
         const idx = Math.max(0, Math.min(lightboxIdx, photoCount - 1));
         return (
           <div
@@ -3804,8 +3821,13 @@ export default function FindPage() {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
             </button>
             <div style={{ width: "100%", maxWidth: 520, aspectRatio: "4/3", borderRadius: 18, background: grads[idx], border: "1px solid rgba(255,255,255,0.12)", boxShadow: "0 18px 60px rgba(0,0,0,0.55)", overflow: "hidden", position: "relative" }}>
-              {spot.photo_url && idx === 0 && (
-                <img src={spot.photo_url} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+              {lbPhotos[idx] && (
+                <img src={lbPhotos[idx]} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain" }} />
+              )}
+              {photoCount > 1 && (
+                <div style={{ position: "absolute", bottom: 10, right: 12, fontSize: 12, fontWeight: 700, color: "#fff", background: "rgba(0,0,0,0.5)", borderRadius: 8, padding: "3px 8px" }}>
+                  {idx + 1} / {photoCount}
+                </div>
               )}
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 18 }}>

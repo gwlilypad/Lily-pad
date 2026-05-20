@@ -28,6 +28,39 @@ function getCorners(b: Box): { x: number; y: number }[] {
   }));
 }
 
+async function annotatePhoto(photoDataUrl: string, boxes: Box[]): Promise<string> {
+  const img = new window.Image();
+  await new Promise<void>((resolve, reject) => {
+    img.onload  = () => resolve();
+    img.onerror = () => reject(new Error("Image decode failed"));
+    img.src = photoDataUrl;
+  });
+  const CW = 750;
+  const CH = img.naturalWidth > 0 ? Math.round(CW * img.naturalHeight / img.naturalWidth) : 500;
+  const canvas = document.createElement("canvas");
+  canvas.width = CW; canvas.height = CH;
+  const ctx = canvas.getContext("2d")!;
+  ctx.drawImage(img, 0, 0, CW, CH);
+  for (const b of boxes) {
+    const col = PAD_COLORS[b.pad] || "#8DD63F";
+    const rv = parseInt(col.slice(1,3),16), gv = parseInt(col.slice(3,5),16), bv = parseInt(col.slice(5,7),16);
+    ctx.save();
+    ctx.translate(b.cx, b.cy);
+    ctx.rotate(b.angle);
+    ctx.fillStyle   = `rgba(${rv},${gv},${bv},0.22)`;
+    ctx.strokeStyle = col;
+    ctx.lineWidth   = 3;
+    ctx.beginPath();
+    if ((ctx as CanvasRenderingContext2D & { roundRect?: (...a: unknown[]) => void }).roundRect)
+      (ctx as any).roundRect(-b.w/2, -b.h/2, b.w, b.h, 6);
+    else
+      ctx.rect(-b.w/2, -b.h/2, b.w, b.h);
+    ctx.fill(); ctx.stroke();
+    ctx.restore();
+  }
+  return canvas.toDataURL("image/jpeg", 0.85);
+}
+
 async function compressAndUpload(dataUrl: string, userId: string): Promise<string> {
   // Load from data URL (already decoded — works with all formats including HEIC-converted-to-JPEG)
   const img = new window.Image();
@@ -518,9 +551,24 @@ export default function PhotoPage() {
               className="ghost-btn"
               style={{ background: "#0E1F40", color: "#fff", border: "none" }}
               onClick={async () => {
-                // Create the spot in Supabase now that we have the photo URL.
-                // photo_url is included in the INSERT so no PATCH needed.
-                if (user && !state.apSpotId) {
+                if (!user) { goTo("availability"); return; }
+
+                // Build annotated versions of every photo uploaded
+                const uploadedUrls: string[] = [];
+                for (let i = 0; i < numPads; i++) {
+                  const rawPhoto = photos[i];
+                  if (!rawPhoto) continue;
+                  try {
+                    const annotated = await annotatePhoto(rawPhoto, allBoxes[i] || []);
+                    const url = await compressAndUpload(annotated, `${user.id}-pad${i}`);
+                    uploadedUrls.push(url);
+                  } catch {
+                    // Fallback: raw photo without annotation
+                    if (i === 0 && state.apPhotoUrl) uploadedUrls.push(state.apPhotoUrl);
+                  }
+                }
+
+                if (!state.apSpotId) {
                   try {
                     const res = await fetch("/api/spots", {
                       method: "POST",
@@ -533,16 +581,15 @@ export default function PhotoPage() {
                         num_pads:     parseInt(state.apAns[3] || "1"),
                         price_per_hr: parseFloat(state.apAns[4] || "4"),
                         description:  state.apAns[5] || "",
-                        photo_url:    state.apPhotoUrl || "",
+                        photo_url:    uploadedUrls[0] || state.apPhotoUrl || "",
+                        photo_urls:   uploadedUrls.length > 0 ? uploadedUrls : undefined,
                         lat:          state.apLat || 0,
                         lng:          state.apLng || 0,
                       }),
                     });
                     if (res.ok) {
                       const spot = await res.json();
-                      if (spot?.id) {
-                        setAppState(s => ({ ...s, apSpotId: spot.id }));
-                      }
+                      if (spot?.id) setAppState(s => ({ ...s, apSpotId: spot.id }));
                     }
                   } catch { /* non-blocking */ }
                 }

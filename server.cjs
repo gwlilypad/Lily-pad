@@ -923,19 +923,23 @@ app.get('/api/spots', async (req, res) => {
     const rows = Array.isArray(data) ? data : [];
     // description is stored as JSON: { text, photo_url } — decode it transparently
     const flat = rows.map(s => {
-      let photo_url = '';
-      let descText = s.description || '';
+      let photo_url = '', descText = s.description || '';
+      let photo_urls = [];
       try {
         const parsed = JSON.parse(s.description || '{}');
         if (parsed && typeof parsed === 'object') {
-          photo_url = parsed.photo_url || '';
-          descText  = parsed.text || '';
+          photo_url  = parsed.photo_url  || '';
+          descText   = parsed.text       || '';
+          photo_urls = Array.isArray(parsed.photo_urls) ? parsed.photo_urls
+                       : (photo_url ? [photo_url] : []);
         }
-      } catch { /* description is plain text (legacy row) — that's fine */ }
+      } catch { /* plain-text description — legacy row */ }
+      if (!photo_urls.length && photo_url) photo_urls = [photo_url];
       return {
         ...s,
         description: descText,
         photo_url,
+        photo_urls,
         host_name: (s.host && s.host.full_name) ? s.host.full_name : '',
       };
     });
@@ -1042,7 +1046,7 @@ app.get('/api/geocode', async (req, res) => {
 
 // ── Spots: create a new pad listing ───────────────────────────────────────────
 app.post('/api/spots', async (req, res) => {
-  const { host_user_id, address, pad_type, surface, num_pads, price_per_hr, description, photo_url } = req.body || {};
+  const { host_user_id, address, pad_type, surface, num_pads, price_per_hr, description, photo_url, photo_urls } = req.body || {};
   if (!host_user_id || !address) return res.status(400).json({ error: 'host_user_id and address required' });
 
   // Use pre-validated lat/lng from client if provided, otherwise geocode with Google Maps
@@ -1066,8 +1070,9 @@ app.post('/api/spots', async (req, res) => {
   }
 
   try {
-    // photo_url is encoded inside description as JSON since spots table has no photo_url column
-    const descPayload = JSON.stringify({ text: description || '', photo_url: photo_url || '' });
+    // photo_url(s) encoded inside description JSON — no separate column needed
+    const allUrls = Array.isArray(photo_urls) && photo_urls.length ? photo_urls : (photo_url ? [photo_url] : []);
+    const descPayload = JSON.stringify({ text: description || '', photo_url: allUrls[0] || '', photo_urls: allUrls });
     const r = await fetch(`${SUPABASE_URL}/rest/v1/spots`, {
       method : 'POST',
       headers: { ...SVC_HEADERS, 'Prefer': 'return=representation' },
@@ -1153,9 +1158,17 @@ app.get('/api/spots/user/:userId', async (req, res) => {
     if (!r.ok) return res.status(r.status).json({ error: data });
     const rows = Array.isArray(data) ? data : [];
     const flat = rows.map(s => {
-      let photo_url = '', descText = s.description || '';
-      try { const p = JSON.parse(s.description || '{}'); if (p && typeof p === 'object') { photo_url = p.photo_url || ''; descText = p.text || ''; } } catch {}
-      return { ...s, description: descText, photo_url };
+      let photo_url = '', descText = s.description || '', photo_urls = [];
+      try {
+        const p = JSON.parse(s.description || '{}');
+        if (p && typeof p === 'object') {
+          photo_url  = p.photo_url  || '';
+          descText   = p.text       || '';
+          photo_urls = Array.isArray(p.photo_urls) ? p.photo_urls : (photo_url ? [photo_url] : []);
+        }
+      } catch {}
+      if (!photo_urls.length && photo_url) photo_urls = [photo_url];
+      return { ...s, description: descText, photo_url, photo_urls };
     });
     res.json(flat);
   } catch (e) { res.status(500).json({ error: e.message }); }

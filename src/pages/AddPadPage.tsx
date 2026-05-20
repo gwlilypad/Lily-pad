@@ -45,6 +45,7 @@ export default function AddPadPage() {
   const [pinLat, setPinLat] = useState(0);
   const [pinLng, setPinLng] = useState(0);
   const [pinAddrEditable, setPinAddrEditable] = useState("");
+  const [mapType, setMapType] = useState<"roadmap" | "satellite">("roadmap");
   const mapDivRef   = useRef<HTMLDivElement>(null);
   const gmapRef     = useRef<any>(null);
   const markerRef   = useRef<any>(null);
@@ -143,8 +144,8 @@ export default function AddPadPage() {
     const G       = window.google.maps;
     const houston = { lat: 29.7604, lng: -95.3698 };
     const map = new G.Map(mapDivRef.current, {
-      center: houston, zoom: 19,
-      mapTypeId: "hybrid",
+      center: houston, zoom: 18,
+      mapTypeId: "roadmap",
       disableDefaultUI: true,
       zoomControl: true,
       gestureHandling: "greedy",
@@ -512,8 +513,37 @@ export default function AddPadPage() {
             >✕</button>
           </div>
 
-          {/* Map */}
-          <div ref={mapDivRef} style={{ flex: 1, minHeight: 0 }} />
+          {/* Map + overlay toggle */}
+          <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
+            <div ref={mapDivRef} style={{ width: "100%", height: "100%" }} />
+            {/* Map type toggle */}
+            <div style={{
+              position: "absolute", top: 12, right: 12, zIndex: 10,
+              display: "flex", borderRadius: 8, overflow: "hidden",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.28)",
+            }}>
+              {(["roadmap", "satellite"] as const).map(type => (
+                <button
+                  key={type}
+                  onClick={() => {
+                    setMapType(type);
+                    if (gmapRef.current) gmapRef.current.setMapTypeId(type);
+                  }}
+                  style={{
+                    padding: "7px 13px",
+                    fontSize: 12, fontWeight: 700,
+                    fontFamily: "'DM Sans',sans-serif",
+                    border: "none", cursor: "pointer",
+                    background: mapType === type ? "#0E1F40" : "rgba(255,255,255,0.92)",
+                    color: mapType === type ? "#fff" : "#0E1F40",
+                    transition: "background 0.15s, color 0.15s",
+                  }}
+                >
+                  {type === "roadmap" ? "Map" : "Satellite"}
+                </button>
+              ))}
+            </div>
+          </div>
 
           {/* Bottom panel */}
           <div style={{

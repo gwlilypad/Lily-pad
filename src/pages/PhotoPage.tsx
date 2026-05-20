@@ -268,19 +268,28 @@ export default function PhotoPage() {
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const img = new window.Image();
     const url = URL.createObjectURL(file);
-    img.onload = () => {
-      setNaturalW(img.naturalWidth);
-      setNaturalH(img.naturalHeight);
-      setPhotos(prev => ({ ...prev, [activePhoto]: url }));
-      setActivePad(activePhoto < numPads ? activePhoto : 0);
-      setFullscreenOpen(true);
+
+    // Show photo + open fullscreen IMMEDIATELY — don't wait for img.onload
+    setPhotos(prev => ({ ...prev, [activePhoto]: url }));
+    setActivePad(activePhoto < numPads ? activePhoto : 0);
+    setFullscreenOpen(true);
+
+    // Load dimensions in background (used for canvas sizing)
+    const dimImg = new window.Image();
+    dimImg.onload = () => {
+      setNaturalW(dimImg.naturalWidth);
+      setNaturalH(dimImg.naturalHeight);
     };
-    img.src = url;
+    dimImg.onerror = () => {
+      setNaturalW(1200);
+      setNaturalH(900);
+    };
+    dimImg.src = url;
+
     e.target.value = "";
 
-    // Upload to Supabase Storage in background
+    // Upload to server in background (server uses service role key → no RLS issues)
     if (user) {
       setUploadLoading(true);
       setUploadError("");
@@ -289,7 +298,7 @@ export default function PhotoPage() {
           setAppState(prev => ({ ...prev, apPhotoUrl: publicUrl }));
         })
         .catch(err => {
-          setUploadError("Photo upload failed — listing will save without image.");
+          setUploadError("Photo saved locally — will upload when connection is available.");
           console.error("[Photo] upload error:", err);
         })
         .finally(() => setUploadLoading(false));

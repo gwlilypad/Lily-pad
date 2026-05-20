@@ -112,7 +112,9 @@ export default function AddPadPage() {
       setAppState(prev => ({ ...prev, apLat: data.lat, apLng: data.lng }));
       setFoundMsg("Address verified!");
       setTimeout(() => setFoundMsg(""), 3000);
-      advance(data.formatted_address || fullAddr);
+      // Always commit exactly what the user typed — never let Google's normalized
+      // version silently rename streets (e.g. "Frst" → "First", "Frst Ln" → "Forest Ln")
+      advance(fullAddr);
     } catch {
       setAddrError("Address not found — please enter a valid street address.");
     } finally {

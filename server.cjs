@@ -972,7 +972,41 @@ app.post('/api/upload-photo', express.raw({ type: 'image/*', limit: '10mb' }), a
   }
 });
 
-// ── Geocode: validate address via Google Maps and return lat/lng ───────────────
+// ── Maps key (safe to expose — restrict by HTTP referrer in Google Console) ────
+app.get('/api/maps-key', (req, res) => {
+  const key = process.env.GOOGLE_MAPS_API_KEY;
+  if (!key) return res.status(500).json({ error: 'Maps not configured' });
+  res.json({ key });
+});
+
+// ── Reverse geocode: lat/lng → structured address ──────────────────────────────
+app.get('/api/reverse-geocode', async (req, res) => {
+  const { lat, lng } = req.query;
+  if (!lat || !lng) return res.status(400).json({ error: 'lat and lng required' });
+  const GMAPS_KEY = process.env.GOOGLE_MAPS_API_KEY;
+  if (!GMAPS_KEY) return res.status(500).json({ error: 'Maps not configured' });
+  try {
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${GMAPS_KEY}`;
+    const r = await fetch(url);
+    const data = await r.json();
+    if (data.status !== 'OK' || !data.results?.[0]) {
+      return res.status(404).json({ error: 'Location not found' });
+    }
+    const result = data.results[0];
+    const comps = result.address_components || [];
+    const get  = (type) => comps.find(c => c.types.includes(type))?.long_name  || '';
+    const getS = (type) => comps.find(c => c.types.includes(type))?.short_name || '';
+    const street = [get('street_number'), get('route')].filter(Boolean).join(' ');
+    const city   = get('locality') || get('sublocality_level_1') || get('administrative_area_level_3');
+    const state  = getS('administrative_area_level_1');
+    const zip    = get('postal_code');
+    res.json({ street, city, state, zip, formatted_address: result.formatted_address });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Geocode: validate address via Google Maps and return lat/lng + city/state ──
 app.get('/api/geocode', async (req, res) => {
   const { address } = req.query;
   if (!address) return res.status(400).json({ error: 'address required' });
@@ -986,16 +1020,21 @@ app.get('/api/geocode', async (req, res) => {
       return res.status(404).json({ error: 'Address not found — please enter a valid street address.' });
     }
     const result = data.results[0];
-    // Require a street-level result (must have street_number to be a specific address)
     const types = result.types || [];
-    const hasStreetNumber = result.address_components?.some(c => c.types.includes('street_number'));
+    const comps = result.address_components || [];
+    const get  = (type) => comps.find(c => c.types.includes(type))?.long_name  || '';
+    const getS = (type) => comps.find(c => c.types.includes(type))?.short_name || '';
+    // Must be a street-level result
+    const hasStreetNumber = comps.some(c => c.types.includes('street_number'));
     const isVague = types.includes('country') || types.includes('administrative_area_level_1') || types.includes('locality');
     if (isVague || !hasStreetNumber) {
       return res.status(422).json({ error: 'Address not found — please enter a valid street address.' });
     }
     const { lat, lng } = result.geometry.location;
-    const formatted = result.formatted_address;
-    res.json({ lat, lng, formatted_address: formatted });
+    const city  = get('locality') || get('sublocality_level_1') || get('administrative_area_level_3');
+    const state = getS('administrative_area_level_1');
+    const zip   = get('postal_code');
+    res.json({ lat, lng, formatted_address: result.formatted_address, city, state, zip });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

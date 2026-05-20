@@ -1,19 +1,17 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/context/AuthContext";
 import SharedHeader from "@/components/SharedHeader";
 import NavBar from "@/components/NavBar";
 
-type InputType = "text" | "choice" | "number" | "price" | "textarea";
+declare global {
+  interface Window { google: any; }
+}
 
+type InputType = "text" | "choice" | "number" | "price" | "textarea";
 interface Question {
-  label: string;
-  text: string;
-  type: InputType;
-  placeholder?: string;
-  hint?: string;
-  choices?: string[];
-  optional?: boolean;
+  label: string; text: string; type: InputType;
+  placeholder?: string; hint?: string; choices?: string[]; optional?: boolean;
 }
 
 const AP_QUESTIONS: Question[] = [
@@ -30,20 +28,33 @@ export default function AddPadPage() {
   const { user } = useAuth();
   const [cur, setCur] = useState(0);
   const [ans, setAns] = useState<Record<number, string>>({});
-  const [inputVal, setInputVal] = useState("");
-  const [addrCity, setAddrCity] = useState("");
+  const [inputVal, setInputVal]   = useState("");
+  const [addrCity, setAddrCity]   = useState("");
   const [addrState, setAddrState] = useState("");
-  const [addrZip, setAddrZip] = useState("");
-  const [numVal, setNumVal] = useState(1);
-  const [locked, setLocked] = useState(false);
-  const [done, setDone] = useState(false);
-  const [foundMsg, setFoundMsg] = useState("");
-  const [addrError, setAddrError] = useState("");
+  const [addrZip, setAddrZip]     = useState("");
+  const [numVal, setNumVal]       = useState(1);
+  const [locked, setLocked]       = useState(false);
+  const [done, setDone]           = useState(false);
+  const [foundMsg, setFoundMsg]   = useState("");
+  const [addrError, setAddrError]         = useState("");
   const [addrValidating, setAddrValidating] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const cityRef = useRef<HTMLInputElement>(null);
 
-  const q = AP_QUESTIONS[cur];
+  // Map-pin picker state
+  const [showMapPicker, setShowMapPicker] = useState(false);
+  const [pinAddr, setPinAddr]   = useState("");
+  const [pinParsed, setPinParsed] = useState<{ street: string; city: string; state: string; zip: string } | null>(null);
+  const [pinLoading, setPinLoading] = useState(false);
+  const [pinLat, setPinLat] = useState(0);
+  const [pinLng, setPinLng] = useState(0);
+  const mapDivRef   = useRef<HTMLDivElement>(null);
+  const gmapRef     = useRef<any>(null);
+  const markerRef   = useRef<any>(null);
+  const mapsLoading = useRef(false);
+
+  const inputRef = useRef<HTMLInputElement>(null);
+  const cityRef  = useRef<HTMLInputElement>(null);
+
+  const q        = AP_QUESTIONS[cur];
   const progress = Math.round((Math.min(cur, AP_QUESTIONS.length) / AP_QUESTIONS.length) * 100) + 16;
 
   useEffect(() => {
@@ -57,26 +68,51 @@ export default function AddPadPage() {
     return parts.join(", ");
   }
 
+  function clearPinCoords() {
+    setPinLat(0); setPinLng(0);
+    setAppState(prev => ({ ...prev, apLat: 0, apLng: 0 }));
+  }
+
+  // ── Geocoding validation ────────────────────────────────────────────────────
   async function validateAndAdvanceAddress() {
     const fullAddr = buildFullAddress();
     if (!fullAddr) return;
     setAddrError("");
+
+    // If we already have pin-validated coords, skip re-geocoding
+    if (state.apLat && state.apLng) {
+      advance(fullAddr);
+      return;
+    }
+
     setAddrValidating(true);
     try {
-      const r = await fetch(`/api/geocode?address=${encodeURIComponent(fullAddr)}`);
+      const r    = await fetch(`/api/geocode?address=${encodeURIComponent(fullAddr)}`);
       const data = await r.json();
+
       if (!r.ok) {
         setAddrError(data.error || "Address not found — please enter a valid street address.");
-        setAddrValidating(false);
         return;
       }
-      // Store validated lat/lng in AppContext
+
+      // Cross-check: returned city/state must match what the user typed
+      const enteredCity    = addrCity.trim().toLowerCase();
+      const returnedCity   = (data.city  || "").toLowerCase();
+      const enteredState   = addrState.trim().toUpperCase();
+      const returnedState  = (data.state || "").toUpperCase();
+
+      const cityOk  = returnedCity.includes(enteredCity) || enteredCity.includes(returnedCity);
+      const stateOk = !enteredState || enteredState === returnedState;
+
+      if (!cityOk || !stateOk) {
+        setAddrError("Address not found — please enter a valid street address.");
+        return;
+      }
+
       setAppState(prev => ({ ...prev, apLat: data.lat, apLng: data.lng }));
-      // Use the Google-formatted address as the canonical value
-      const canonical = data.formatted_address || fullAddr;
       setFoundMsg("Address verified!");
       setTimeout(() => setFoundMsg(""), 3000);
-      advance(canonical);
+      advance(data.formatted_address || fullAddr);
     } catch {
       setAddrError("Address not found — please enter a valid street address.");
     } finally {
@@ -84,8 +120,98 @@ export default function AddPadPage() {
     }
   }
 
+  // ── Map-pin picker ──────────────────────────────────────────────────────────
+  const doReverseGeocode = useCallback(async (lat: number, lng: number) => {
+    setPinLoading(true);
+    setPinAddr("");
+    setPinParsed(null);
+    try {
+      const r    = await fetch(`/api/reverse-geocode?lat=${lat}&lng=${lng}`);
+      const data = await r.json();
+      if (r.ok) {
+        setPinAddr(data.formatted_address || "");
+        setPinParsed({ street: data.street || "", city: data.city || "", state: data.state || "", zip: data.zip || "" });
+        setPinLat(lat); setPinLng(lng);
+      }
+    } catch {}
+    finally { setPinLoading(false); }
+  }, []);
+
+  const initGoogleMap = useCallback(() => {
+    if (!mapDivRef.current || !window.google?.maps) return;
+    const G       = window.google.maps;
+    const houston = { lat: 29.7604, lng: -95.3698 };
+    const map     = new G.Map(mapDivRef.current, {
+      center: houston, zoom: 14,
+      disableDefaultUI: true, zoomControl: true, gestureHandling: "greedy",
+    });
+    const marker = new G.Marker({
+      position: houston, map, draggable: true,
+      animation: G.Animation.DROP,
+      title: "Drag to your spot",
+    });
+    marker.addListener("dragend", () => {
+      const pos = marker.getPosition();
+      if (pos) doReverseGeocode(pos.lat(), pos.lng());
+    });
+
+    // Try to centre on user's location
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(pos => {
+        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        map.setCenter(loc);
+        marker.setPosition(loc);
+        doReverseGeocode(loc.lat, loc.lng);
+      }, () => {});
+    }
+
+    gmapRef.current  = map;
+    markerRef.current = marker;
+  }, [doReverseGeocode]);
+
+  async function openMapPicker() {
+    setShowMapPicker(true);
+    setPinAddr(""); setPinParsed(null); setPinLoading(false);
+
+    if (window.google?.maps) {
+      setTimeout(initGoogleMap, 100);
+      return;
+    }
+    if (mapsLoading.current) return;
+    mapsLoading.current = true;
+    try {
+      const keyRes = await fetch("/api/maps-key");
+      const { key } = await keyRes.json();
+      await new Promise<void>((resolve, reject) => {
+        const s  = document.createElement("script");
+        s.src    = `https://maps.googleapis.com/maps/api/js?key=${key}`;
+        s.async  = true;
+        s.onload  = () => resolve();
+        s.onerror = () => reject(new Error("Maps failed to load"));
+        document.head.appendChild(s);
+      });
+      setTimeout(initGoogleMap, 100);
+    } catch {
+      mapsLoading.current = false;
+    }
+  }
+
+  function handleUseThisLocation() {
+    if (!pinParsed || !pinLat || !pinLng) return;
+    setInputVal(pinParsed.street);
+    setAddrCity(pinParsed.city);
+    setAddrState(pinParsed.state);
+    setAddrZip(pinParsed.zip);
+    setAddrError("");
+    setAppState(prev => ({ ...prev, apLat: pinLat, apLng: pinLng }));
+    setShowMapPicker(false);
+    setFoundMsg("Location pinned!");
+    setTimeout(() => setFoundMsg(""), 3000);
+  }
+
+  // ── Step advance ────────────────────────────────────────────────────────────
   function advance(val?: string) {
-    const v = val !== undefined ? val : inputVal.trim();
+    const v      = val !== undefined ? val : inputVal.trim();
     if (!v && q?.type !== "number" && !q?.optional) return;
     const finalV = q?.type === "number" ? String(numVal) : v;
     const newAns = { ...ans, [cur]: finalV };
@@ -99,11 +225,10 @@ export default function AddPadPage() {
     }
   }
 
-  function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === "Enter") advance();
-  }
+  function handleKeyDown(e: React.KeyboardEvent) { if (e.key === "Enter") advance(); }
 
   const addrFilled = inputVal.trim() && addrCity.trim() && addrState.trim();
+  const hasPinCoords = !!(state.apLat && state.apLng);
 
   return (
     <div className="page active">
@@ -123,12 +248,14 @@ export default function AddPadPage() {
           currentDot={cur}
           onDotClick={(i) => { if (ans[i] !== undefined) setCur(i); }}
         />
+
         <div className="form-center-wrap">
           {!done ? (
             <div className="q-center">
               <p className="q-step-lbl">{`${cur + 1} of ${AP_QUESTIONS.length}`}</p>
               <p className="q-text">{q.text}</p>
 
+              {/* ── Address step ── */}
               {q.type === "text" && cur === 0 && (
                 <div style={{ width: "100%" }}>
                   <div className="pill-wrap">
@@ -137,7 +264,7 @@ export default function AddPadPage() {
                       className="pill-input"
                       placeholder="Street address"
                       value={inputVal}
-                      onChange={e => { setInputVal(e.target.value); setAddrError(""); }}
+                      onChange={e => { setInputVal(e.target.value); setAddrError(""); clearPinCoords(); }}
                       onKeyDown={e => { if (e.key === "Enter") cityRef.current?.focus(); }}
                     />
                   </div>
@@ -147,7 +274,7 @@ export default function AddPadPage() {
                       className="pill-input"
                       placeholder="City"
                       value={addrCity}
-                      onChange={e => { setAddrCity(e.target.value); setAddrError(""); }}
+                      onChange={e => { setAddrCity(e.target.value); setAddrError(""); clearPinCoords(); }}
                       onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }}
                     />
                   </div>
@@ -157,8 +284,7 @@ export default function AddPadPage() {
                         className="pill-input"
                         placeholder="State"
                         value={addrState}
-                        onChange={e => { setAddrState(e.target.value); setAddrError(""); }}
-                        onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }}
+                        onChange={e => { setAddrState(e.target.value); setAddrError(""); clearPinCoords(); }}
                         style={{ textTransform: "uppercase" }}
                         maxLength={2}
                       />
@@ -169,13 +295,21 @@ export default function AddPadPage() {
                         placeholder="ZIP"
                         value={addrZip}
                         onChange={e => { setAddrZip(e.target.value.replace(/\D/g, "")); setAddrError(""); }}
-                        onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }}
                         inputMode="numeric"
                         maxLength={5}
                       />
                     </div>
                   </div>
 
+                  {/* Pinned coords indicator */}
+                  {hasPinCoords && (
+                    <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 16 }}>📍</span>
+                      <span style={{ fontSize: 12, color: "#8DD63F", fontWeight: 600 }}>Location pinned — exact coordinates saved</span>
+                    </div>
+                  )}
+
+                  {/* Error */}
                   {addrError && (
                     <p style={{
                       marginTop: 10, color: "#E53E3E", fontSize: 13, fontWeight: 600,
@@ -191,13 +325,28 @@ export default function AddPadPage() {
                         disabled={addrValidating}
                         style={{ opacity: addrValidating ? 0.7 : 1 }}
                       >
-                        {addrValidating ? "Checking address…" : "Continue"}
+                        {addrValidating ? "Checking address…" : hasPinCoords ? "Continue →" : "Continue"}
                       </button>
                     </div>
                   )}
+
+                  {/* Map pin fallback */}
+                  <div style={{ marginTop: 14, textAlign: "center" }}>
+                    <button
+                      onClick={openMapPicker}
+                      style={{
+                        background: "none", border: "none",
+                        color: "rgba(14,31,64,0.5)", fontSize: 13, fontWeight: 600,
+                        cursor: "pointer", textDecoration: "underline", padding: "4px 0",
+                      }}
+                    >
+                      📍 Pin your location instead
+                    </button>
+                  </div>
                 </div>
               )}
 
+              {/* ── Other text questions ── */}
               {q.type === "text" && cur !== 0 && (
                 <div style={{ width: "100%" }}>
                   <div className="pill-wrap">
@@ -219,6 +368,7 @@ export default function AddPadPage() {
                 </div>
               )}
 
+              {/* ── Price ── */}
               {q.type === "price" && (
                 <div style={{ width: "100%" }}>
                   <div className="pill-wrap" style={{ display: "flex", alignItems: "center", padding: "0 18px", gap: 8 }}>
@@ -227,13 +377,11 @@ export default function AddPadPage() {
                       ref={inputRef}
                       className="pill-input"
                       style={{ padding: "16px 0", fontSize: 18, fontWeight: 700 }}
-                      type="text"
-                      inputMode="decimal"
-                      placeholder=""
+                      type="text" inputMode="decimal" placeholder=""
                       value={inputVal}
                       onChange={e => {
-                        const cleaned = e.target.value.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1");
-                        setInputVal(cleaned);
+                        const c = e.target.value.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1");
+                        setInputVal(c);
                       }}
                       onKeyDown={handleKeyDown}
                     />
@@ -248,6 +396,7 @@ export default function AddPadPage() {
                 </div>
               )}
 
+              {/* ── Textarea ── */}
               {q.type === "textarea" && (
                 <div style={{ width: "100%" }}>
                   <textarea
@@ -265,33 +414,27 @@ export default function AddPadPage() {
                   />
                   {q.hint && <p className="hint">{q.hint}</p>}
                   <div className="cta-area" style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 8 }}>
-                    {inputVal.trim() && (
-                      <button className="cta-btn" onClick={() => advance()}>Continue</button>
-                    )}
+                    {inputVal.trim() && <button className="cta-btn" onClick={() => advance()}>Continue</button>}
                     {q.optional && (
                       <button
                         style={{ background: "none", border: "none", color: "rgba(14,31,64,0.45)", fontSize: 14, fontWeight: 500, cursor: "pointer", padding: "8px 0" }}
                         onClick={() => advance("")}
-                      >
-                        Skip
-                      </button>
+                      >Skip</button>
                     )}
                   </div>
                 </div>
               )}
 
+              {/* ── Choice ── */}
               {q.type === "choice" && (
                 <div className="choice-list">
                   {q.choices?.map(ch => (
-                    <button
-                      key={ch}
-                      className={`choice-btn${ans[cur] === ch ? " selected" : ""}`}
-                      onClick={() => advance(ch)}
-                    >{ch}</button>
+                    <button key={ch} className={`choice-btn${ans[cur] === ch ? " selected" : ""}`} onClick={() => advance(ch)}>{ch}</button>
                   ))}
                 </div>
               )}
 
+              {/* ── Number ── */}
               {q.type === "number" && (
                 <div className="num-wrap">
                   <p className="num-note">One pad = one parking spot. Multiple pads can share the same driveway.</p>
@@ -327,6 +470,7 @@ export default function AddPadPage() {
               </div>
             </>
           )}
+
           {!done && Object.keys(ans).length > 0 && (
             <div className="answer-stack" style={{ marginTop: 10 }}>
               {Object.entries(ans).map(([idx, val]) => {
@@ -347,6 +491,76 @@ export default function AddPadPage() {
           )}
         </div>
       </div>
+
+      {/* ── Map pin picker modal ─────────────────────────────────────────────── */}
+      {showMapPicker && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 9999,
+          display: "flex", flexDirection: "column",
+          background: "#fff",
+        }}>
+          {/* Header */}
+          <div style={{
+            padding: "16px 20px", borderBottom: "1px solid rgba(14,31,64,0.1)",
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            flexShrink: 0,
+          }}>
+            <div>
+              <p style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "#0E1F40" }}>Pin your location</p>
+              <p style={{ margin: "2px 0 0", fontSize: 12, color: "rgba(14,31,64,0.5)", fontWeight: 500 }}>Drag the pin to your exact parking spot</p>
+            </div>
+            <button
+              onClick={() => setShowMapPicker(false)}
+              style={{
+                width: 32, height: 32, borderRadius: "50%",
+                background: "rgba(14,31,64,0.08)", border: "none",
+                fontSize: 18, cursor: "pointer", color: "#0E1F40",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}
+            >✕</button>
+          </div>
+
+          {/* Map */}
+          <div ref={mapDivRef} style={{ flex: 1, minHeight: 0 }} />
+
+          {/* Bottom panel */}
+          <div style={{
+            padding: "16px 20px 24px",
+            borderTop: "1px solid rgba(14,31,64,0.1)",
+            background: "#fff", flexShrink: 0,
+          }}>
+            {pinLoading ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                <div style={{
+                  width: 16, height: 16, borderRadius: "50%",
+                  border: "2px solid #8DD63F", borderTopColor: "transparent",
+                  animation: "spin 0.7s linear infinite",
+                }} />
+                <span style={{ fontSize: 13, color: "rgba(14,31,64,0.5)", fontWeight: 500 }}>Finding address…</span>
+              </div>
+            ) : pinAddr ? (
+              <div style={{ marginBottom: 14 }}>
+                <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: "rgba(14,31,64,0.4)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Selected location</p>
+                <p style={{ margin: "4px 0 0", fontSize: 15, fontWeight: 600, color: "#0E1F40", lineHeight: 1.4 }}>{pinAddr}</p>
+              </div>
+            ) : (
+              <p style={{ marginBottom: 14, color: "rgba(14,31,64,0.4)", fontSize: 13, fontWeight: 500 }}>Drag the pin to your parking spot</p>
+            )}
+
+            <button
+              className="cta-btn"
+              onClick={handleUseThisLocation}
+              disabled={!pinParsed || pinLoading}
+              style={{ width: "100%", opacity: pinParsed && !pinLoading ? 1 : 0.4 }}
+            >
+              Use this location
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Spinner keyframe */}
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

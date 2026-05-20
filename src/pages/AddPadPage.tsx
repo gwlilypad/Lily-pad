@@ -293,13 +293,6 @@ export default function AddPadPage() {
                     </div>
                   </div>
 
-                  {/* Pinned coords indicator */}
-                  {hasPinCoords && (
-                    <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ fontSize: 16 }}>📍</span>
-                      <span style={{ fontSize: 12, color: "#8DD63F", fontWeight: 600 }}>Location pinned — exact coordinates saved</span>
-                    </div>
-                  )}
 
                   {/* Error */}
                   {addrError && (

@@ -427,10 +427,15 @@ export default function PhotoPage() {
           ))}
         </div>
 
-        {/* Small preview area (non-interactive) */}
+        {/* Preview area — aspect-ratio matched so canvas and image align perfectly */}
         <div
           className="canvas-wrap"
-          style={{ height: 140, cursor: "pointer" }}
+          style={{
+            height: photos[activePhoto] ? "auto" : 160,
+            aspectRatio: photos[activePhoto] && naturalW > 0 ? `${naturalW}/${naturalH}` : undefined,
+            maxHeight: 280,
+            cursor: "pointer",
+          }}
           onClick={() => {
             if (photos[activePhoto]) openFullscreen(activePhoto);
             else fileRef.current?.click();
@@ -446,12 +451,13 @@ export default function PhotoPage() {
             </div>
           ) : (
             <div style={{ position: "relative", width: "100%", height: "100%" }}>
+              {/* objectFit: fill — container already matches image ratio so no crop/letterbox */}
               <img
                 src={photos[activePhoto]}
-                style={{ width: "100%", height: "100%", objectFit: "cover", position: "absolute", inset: 0 }}
+                style={{ width: "100%", height: "100%", objectFit: "fill", position: "absolute", inset: 0, display: "block" }}
                 alt=""
               />
-              {/* Preview: render a static mini-canvas showing existing boxes */}
+              {/* Canvas overlay — same coordinate space as image, perfect alignment */}
               {!fullscreenOpen && (
                 <canvas
                   width={CANVAS_PX_W}
@@ -462,7 +468,7 @@ export default function PhotoPage() {
               )}
               <div style={{
                 position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
-                background: "rgba(0,0,0,0.28)",
+                background: "rgba(0,0,0,0.22)",
               }}>
                 <div style={{
                   background: "rgba(255,255,255,0.92)", borderRadius: 20, padding: "6px 16px",

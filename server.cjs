@@ -1080,7 +1080,7 @@ app.post('/api/spots', async (req, res) => {
         price_per_hr: parseFloat(price_per_hr) || 4,
         description: descPayload,
         lat, lng,
-        status: 'active',
+        status: 'pending',
       }),
     });
     const data = await r.json();
@@ -1138,6 +1138,132 @@ app.patch('/api/spots/:id', async (req, res) => {
     // Decode response
     if (row) { try { const p = JSON.parse(row.description || '{}'); row.photo_url = p.photo_url || ''; row.description = p.text || ''; } catch {} }
     res.json(row);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Spots: host's own listings (any status) ───────────────────────────────────
+app.get('/api/spots/user/:userId', async (req, res) => {
+  const { userId } = req.params;
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/spots?host_user_id=eq.${userId}&select=*&order=created_at.desc`,
+      { headers: SVC_HEADERS }
+    );
+    const data = await r.json();
+    if (!r.ok) return res.status(r.status).json({ error: data });
+    const rows = Array.isArray(data) ? data : [];
+    const flat = rows.map(s => {
+      let photo_url = '', descText = s.description || '';
+      try { const p = JSON.parse(s.description || '{}'); if (p && typeof p === 'object') { photo_url = p.photo_url || ''; descText = p.text || ''; } } catch {}
+      return { ...s, description: descText, photo_url };
+    });
+    res.json(flat);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Spots: all pending — admin approval queue ──────────────────────────────────
+app.get('/api/spots/pending', async (req, res) => {
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/spots?status=eq.pending&select=*,host:profiles!host_user_id(full_name,email)&order=created_at.desc`,
+      { headers: SVC_HEADERS }
+    );
+    const data = await r.json();
+    if (!r.ok) return res.status(r.status).json({ error: data });
+    const rows = Array.isArray(data) ? data : [];
+    const flat = rows.map(s => {
+      let photo_url = '', descText = s.description || '';
+      try { const p = JSON.parse(s.description || '{}'); if (p && typeof p === 'object') { photo_url = p.photo_url || ''; descText = p.text || ''; } } catch {}
+      return { ...s, description: descText, photo_url, host_name: s.host?.full_name || '', host_email: s.host?.email || '' };
+    });
+    res.json(flat);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Spots: admin approve — set active + email host ────────────────────────────
+app.post('/api/spots/:id/approve', async (req, res) => {
+  const { id } = req.params;
+  const RESEND_KEY = process.env.RESEND_API_KEY || '';
+  try {
+    // 1. Activate the spot
+    const patchR = await fetch(`${SUPABASE_URL}/rest/v1/spots?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: { ...SVC_HEADERS, 'Prefer': 'return=representation' },
+      body: JSON.stringify({ status: 'active' }),
+    });
+    const patchData = await patchR.json();
+    if (!patchR.ok) return res.status(patchR.status).json({ error: patchData });
+    const spot = Array.isArray(patchData) ? patchData[0] : patchData;
+
+    // 2. Decode description JSON
+    let photo_url = '', description = '';
+    try { const p = JSON.parse(spot.description || '{}'); photo_url = p.photo_url || ''; description = p.text || ''; } catch {}
+
+    // 3. Fetch host profile for email
+    const profileR = await fetch(
+      `${SUPABASE_URL}/rest/v1/profiles?id=eq.${spot.host_user_id}&select=email,full_name`,
+      { headers: SVC_HEADERS }
+    );
+    const profiles = await profileR.json();
+    const host = Array.isArray(profiles) ? profiles[0] : profiles;
+
+    // 4. Send approval email via Resend
+    if (RESEND_KEY && host?.email) {
+      const appUrl = process.env.REPLIT_DEV_DOMAIN
+        ? `https://${process.env.REPLIT_DEV_DOMAIN}/find`
+        : 'https://lilypadparking.com/find';
+      const firstName = (host.full_name || 'there').split(' ')[0];
+      await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: 'Lily Pad <onboarding@resend.dev>',
+          to: [host.email],
+          subject: `Your Lily Pad listing is live! 🎉`,
+          html: `
+<div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;background:#0E1F40;border-radius:20px;padding:40px 32px;color:#fff;">
+  <p style="font-size:11px;font-weight:700;letter-spacing:0.18em;color:#8DD63F;text-transform:uppercase;margin:0 0 8px;">Lily Pad Parking</p>
+  <h1 style="font-size:26px;font-weight:800;margin:0 0 16px;letter-spacing:-0.02em;">Your spot is live! 🎉</h1>
+  <p style="font-size:15px;color:rgba(255,255,255,0.78);line-height:1.6;margin:0 0 8px;">
+    Hey ${firstName}, great news — your listing has been reviewed and approved by our team.
+  </p>
+  <div style="background:#142A52;border-radius:14px;padding:16px 18px;margin:20px 0;">
+    <p style="font-size:11px;font-weight:700;letter-spacing:0.12em;color:#8DD63F;text-transform:uppercase;margin:0 0 6px;">Your listing</p>
+    <p style="font-size:16px;font-weight:700;color:#fff;margin:0;line-height:1.4;">${spot.address}</p>
+    ${description ? `<p style="font-size:13px;color:rgba(255,255,255,0.60);margin:6px 0 0;line-height:1.5;">${description}</p>` : ''}
+    <p style="font-size:14px;font-weight:700;color:#8DD63F;margin:10px 0 0;">$${spot.price_per_hr}/hr</p>
+  </div>
+  <p style="font-size:14px;color:rgba(255,255,255,0.78);line-height:1.6;margin:0 0 28px;">
+    Drivers can now find and book your spot on the Lily Pad map. You'll receive booking notifications as they come in.
+  </p>
+  <div style="text-align:center;margin-bottom:28px;">
+    <a href="${appUrl}" style="display:inline-block;background:#8DD63F;color:#0E1F40;font-weight:800;font-size:15px;padding:16px 36px;border-radius:100px;text-decoration:none;">
+      View on map →
+    </a>
+  </div>
+  <p style="font-size:12px;color:rgba(255,255,255,0.40);line-height:1.6;margin:0;text-align:center;">
+    If you have questions, contact us at support@lilypadparking.com
+  </p>
+</div>`,
+        }),
+      }).catch(e => console.warn('[Approve] Email failed:', e.message));
+    }
+
+    res.json({ approved: true, spot: { ...spot, description, photo_url } });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Spots: admin reject — mark rejected ───────────────────────────────────────
+app.post('/api/spots/:id/reject', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/spots?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: { ...SVC_HEADERS, 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ status: 'rejected' }),
+    });
+    if (!r.ok) { const d = await r.json(); return res.status(r.status).json({ error: d }); }
+    res.json({ rejected: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

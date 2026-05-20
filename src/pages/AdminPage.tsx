@@ -907,6 +907,12 @@ function ResolutionReadout({ r }: { r: SupportResolution }) {
 type View = "dashboard" | "users" | "userDetail" | "service" | "staff";
 type AdminView = "renters" | "hosts";
 type StaffAuthAction = { kind: "suspend" | "reinstate"; staffId: string; staffName: string };
+interface PendingSpot {
+  id: string; address: string; pad_type: string; surface: string;
+  num_pads: number; price_per_hr: number; description: string; photo_url: string;
+  host_name: string; host_email: string; lat: number; lng: number;
+  created_at: string; host_user_id: string;
+}
 
 export default function AdminPage() {
   const { goTo, setState } = useApp();
@@ -941,6 +947,13 @@ export default function AdminPage() {
   const [authAction, setAuthAction] = useState<AuthAction | null>(null);
   const [authPassword, setAuthPassword] = useState("");
   const [authError, setAuthError] = useState("");
+
+  // Pad approval queue
+  const [usersSection, setUsersSection]   = useState<"accounts" | "padqueue">("accounts");
+  const [pendingSpots, setPendingSpots]   = useState<PendingSpot[]>([]);
+  const [loadingPending, setLoadingPending] = useState(false);
+  const [approvingSpotId, setApprovingSpotId] = useState<string | null>(null);
+  const [rejectingSpotId, setRejectingSpotId] = useState<string | null>(null);
 
   // Staff accounts (admin manages these).
   const [staffList, setStaffList] = useState<StaffAccount[]>([]);
@@ -1045,6 +1058,40 @@ export default function AdminPage() {
   useEffect(() => subscribeToSupport(() => refreshTickets()), []);
   useEffect(() => { if (view === "service") refreshTickets(); }, [view]);
   useEffect(() => subscribeEmails(() => setEmails(loadEmails())), []);
+
+  // Fetch pending spots whenever the pad queue section is opened
+  useEffect(() => {
+    if (view === "users" && usersSection === "padqueue") fetchPendingSpots();
+  }, [view, usersSection]);
+
+  async function fetchPendingSpots() {
+    setLoadingPending(true);
+    try {
+      const r = await fetch("/api/spots/pending");
+      const d = await r.json();
+      if (r.ok) setPendingSpots(Array.isArray(d) ? d : []);
+    } catch {}
+    finally { setLoadingPending(false); }
+  }
+
+  async function approveSpot(spotId: string) {
+    setApprovingSpotId(spotId);
+    try {
+      const r = await fetch(`/api/spots/${spotId}/approve`, { method: "POST" });
+      if (r.ok) { setPendingSpots(prev => prev.filter(s => s.id !== spotId)); setToast("Spot approved — host notified by email"); }
+    } catch {}
+    finally { setApprovingSpotId(null); }
+  }
+
+  async function rejectSpot(spotId: string) {
+    setRejectingSpotId(spotId);
+    try {
+      const r = await fetch(`/api/spots/${spotId}/reject`, { method: "POST" });
+      if (r.ok) { setPendingSpots(prev => prev.filter(s => s.id !== spotId)); setToast("Listing rejected"); }
+    } catch {}
+    finally { setRejectingSpotId(null); }
+  }
+
   // Auto-scroll the agent thread when messages arrive.
   useEffect(() => {
     if (view === "service" && selectedTicketId && agentThreadEndRef.current) {
@@ -2726,6 +2773,32 @@ export default function AdminPage() {
             </div>
           </div>
 
+          {/* Section toggle: ACCOUNTS | PAD QUEUE */}
+          <div style={{ background: "#142A52", borderRadius: 12, padding: 4, display: "flex", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)" }}>
+            {([
+              { id: "accounts" as const, label: "Accounts" },
+              { id: "padqueue" as const, label: "Pad Queue", badge: pendingSpots.length },
+            ]).map(t => {
+              const active = usersSection === t.id;
+              return (
+                <button key={t.id} onClick={() => setUsersSection(t.id)} style={{
+                  flex: 1, padding: "10px 8px", borderRadius: 8,
+                  background: active ? NAVY : "transparent",
+                  color: active ? "#fff" : "rgba(255,255,255,0.55)",
+                  border: "none", fontSize: 12.5, fontWeight: 700, cursor: "pointer",
+                  fontFamily: '"DM Sans",sans-serif', display: "flex",
+                  alignItems: "center", justifyContent: "center", gap: 7,
+                }}>
+                  {t.label}
+                  {(t as any).badge !== undefined && (t as any).badge > 0 && (
+                    <span style={{ background: "#E53E3E", color: "#fff", fontSize: 10, fontWeight: 800, borderRadius: 100, padding: "1px 6px", minWidth: 16, textAlign: "center" }}>{(t as any).badge}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {usersSection === "accounts" && (<>
           {/* Renter / Host segmented toggle */}
           <div style={{ background: "#142A52", borderRadius: 12, padding: 4, display: "flex", gap: 0, boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 1px 6px rgba(0,0,0,0.22)" }}>
             {([
@@ -2804,6 +2877,76 @@ export default function AdminPage() {
               </div>
             ))}
           </div>
+          </>)}
+
+          {/* ── PAD APPROVAL QUEUE ── */}
+          {usersSection === "padqueue" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,0.50)", letterSpacing: 0.8, textTransform: "uppercase" }}>
+                  {pendingSpots.length} spot{pendingSpots.length !== 1 ? "s" : ""} awaiting review
+                </span>
+                <button onClick={fetchPendingSpots} style={{ background: "rgba(255,255,255,0.08)", border: "none", borderRadius: 8, padding: "5px 10px", color: "rgba(255,255,255,0.70)", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: '"DM Sans",sans-serif' }}>↻ Refresh</button>
+              </div>
+
+              {loadingPending ? (
+                <div style={{ textAlign: "center", padding: "40px 0", color: "rgba(255,255,255,0.4)", fontSize: 13 }}>Loading…</div>
+              ) : pendingSpots.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "48px 20px" }}>
+                  <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
+                  <p style={{ color: "rgba(255,255,255,0.55)", fontSize: 14, fontWeight: 600, margin: 0 }}>No spots awaiting approval</p>
+                  <p style={{ color: "rgba(255,255,255,0.35)", fontSize: 12, margin: "6px 0 0" }}>New listings will appear here for review</p>
+                </div>
+              ) : pendingSpots.map(s => (
+                <div key={s.id} style={{ background: "#142A52", borderRadius: 16, overflow: "hidden", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 14px rgba(0,0,0,0.30)" }}>
+                  {s.photo_url && (
+                    <img src={s.photo_url} alt="Pad photo" style={{ width: "100%", height: 160, objectFit: "cover", display: "block" }} />
+                  )}
+                  <div style={{ padding: "14px 16px" }}>
+                    {/* Host info */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                      <div style={{ width: 34, height: 34, borderRadius: "50%", background: "rgba(141,214,63,0.15)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#fff" }}>{s.host_name || "Unknown Host"}</p>
+                        <p style={{ margin: 0, fontSize: 11, color: "rgba(255,255,255,0.50)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.host_email}</p>
+                      </div>
+                      <span style={{ background: "rgba(246,200,0,0.15)", color: "#F6C800", fontSize: 10, fontWeight: 800, padding: "3px 8px", borderRadius: 100, letterSpacing: "0.06em", textTransform: "uppercase", flexShrink: 0 }}>Pending</span>
+                    </div>
+                    {/* Spot details */}
+                    <p style={{ margin: "0 0 8px", fontSize: 14, fontWeight: 700, color: "#fff", lineHeight: 1.35 }}>{s.address}</p>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.55)", background: "rgba(255,255,255,0.07)", borderRadius: 6, padding: "3px 8px" }}>{s.pad_type}</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.55)", background: "rgba(255,255,255,0.07)", borderRadius: 6, padding: "3px 8px" }}>{s.surface}</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.55)", background: "rgba(255,255,255,0.07)", borderRadius: 6, padding: "3px 8px" }}>{s.num_pads} pad{s.num_pads !== 1 ? "s" : ""}</span>
+                      <span style={{ fontSize: 11, fontWeight: 800, color: GREEN }}>${s.price_per_hr}/hr</span>
+                    </div>
+                    {s.description && (
+                      <p style={{ margin: "0 0 14px", fontSize: 12.5, color: "rgba(255,255,255,0.60)", lineHeight: 1.5 }}>{s.description}</p>
+                    )}
+                    {/* Approve / Reject */}
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button
+                        onClick={() => approveSpot(s.id)}
+                        disabled={approvingSpotId === s.id || !!rejectingSpotId}
+                        style={{ flex: 1, padding: "12px", borderRadius: 100, border: "none", background: GREEN, color: NAVY, fontWeight: 800, fontSize: 13, cursor: "pointer", fontFamily: '"DM Sans",sans-serif', opacity: approvingSpotId === s.id ? 0.6 : 1, transition: "opacity 0.15s" }}
+                      >
+                        {approvingSpotId === s.id ? "Approving…" : "✓ Approve"}
+                      </button>
+                      <button
+                        onClick={() => rejectSpot(s.id)}
+                        disabled={!!approvingSpotId || rejectingSpotId === s.id}
+                        style={{ flex: 1, padding: "12px", borderRadius: 100, border: "1.5px solid rgba(239,68,68,0.40)", background: "rgba(239,68,68,0.10)", color: "#ef4444", fontWeight: 800, fontSize: 13, cursor: "pointer", fontFamily: '"DM Sans",sans-serif', opacity: rejectingSpotId === s.id ? 0.6 : 1, transition: "opacity 0.15s" }}
+                      >
+                        {rejectingSpotId === s.id ? "Rejecting…" : "✕ Reject"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       ) : selectedUser ? (
         /* ── USER DETAIL DASHBOARD ── */
@@ -3293,6 +3436,12 @@ export default function AdminPage() {
               active: view === "dashboard",
               onClick: () => { setView("dashboard"); setSelectedUserId(null); },
               svg: <><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></>,
+            },
+            {
+              label: "USERS",
+              active: view === "users" || view === "userDetail",
+              onClick: () => { setView("users"); setSelectedUserId(null); },
+              svg: <><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></>,
             },
             {
               label: "MAP",

@@ -17,7 +17,6 @@ const makeParkingSVG = (label: string, color: string) => {
 };
 const frontalImg  = makeParkingSVG("Frontal View",  "#8DD63F");
 const sideImg     = makeParkingSVG("Side View",     "#60A5FA");
-const overheadImg = makeParkingSVG("Overhead View", "#F59E0B");
 
 // ─── Data types ────────────────────────────────────────────────────────────────
 
@@ -80,23 +79,6 @@ const SLIDE_BOXES: AnimBox[][] = [
     },
   ],
 
-  // ── Slide 3: overhead view – two street-parking spots at the bottom ──────────
-  //   Grid-measured both spots: top y≈0.70, bottom y≈0.90
-  //   Left spot x: 0–0.38 → cx=0.19, hw=0.19
-  //   Right spot x: 0.62–1.0 → cx=0.81, hw=0.19
-  //   cy=(0.70+0.90)/2=0.80, hh=(0.90-0.70)/2=0.10
-  [
-    {
-      cx: 0.19, cy: 0.80, hw: 0.19, hh: 0.10,
-      color: "#8DD63F", label: "Pad 1",
-      startTime: 0,
-    },
-    {
-      cx: 0.81, cy: 0.80, hw: 0.19, hh: 0.10,
-      color: "#60A5FA", label: "Pad 2",
-      startTime: 1160,
-    },
-  ],
 ];
 
 // ─── Animation constants ───────────────────────────────────────────────────────
@@ -209,22 +191,16 @@ function drawRotateHandle(
 
 const SLIDES = [
   {
-    num: "1 of 3",
+    num: "1 of 2",
     title: "Shoot from the front, straight on.",
     desc: "Stand at the curb facing your driveway. Capture the full width so drivers can clearly see both spots and recognize the property when they arrive.",
     img: frontalImg,
   },
   {
-    num: "2 of 3",
+    num: "2 of 2",
     title: "Add a side angle view.",
     desc: "Draw a box over each spot, then drag the ↻ handle to rotate it flush with the driveway angle. This helps drivers judge whether their vehicle will fit.",
     img: sideImg,
-  },
-  {
-    num: "3 of 3",
-    title: "An overhead view shows the full picture.",
-    desc: "If possible, capture how your spots sit relative to the street. Numbered spots and clear boundaries make it easy for drivers to find the right one.",
-    img: overheadImg,
   },
 ];
 

@@ -3,20 +3,24 @@ import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/context/AuthContext";
 import type { BookingRec } from "@/context/AppContext";
 
-type DerivedStatus = "upcoming" | "active" | "completed" | "cancelled";
+type DerivedStatus = "pending" | "upcoming" | "active" | "completed" | "cancelled" | "denied";
 
 function deriveStatus(b: BookingRec, now: number): DerivedStatus {
   if (b.status === "cancelled") return "cancelled";
-  if (b.endTs <= now) return "completed";
+  if (b.status === "denied")    return "denied";
+  if (b.status === "pending")   return "pending";
+  if (b.endTs <= now)           return "completed";
   if (b.startTs <= now && now < b.endTs) return "active";
   return "upcoming";
 }
 
 const STATUS_STYLES: Record<DerivedStatus, { bg: string; border: string; color: string; label: string }> = {
+  pending:   { bg:"rgba(251,191,36,0.12)", border:"rgba(251,191,36,0.35)", color:"#f59e0b",               label:"Awaiting approval" },
   upcoming:  { bg:"rgba(141,214,63,0.12)", border:"rgba(141,214,63,0.30)", color:"#8DD63F",               label:"Upcoming"   },
   active:    { bg:"rgba(52,199,89,0.14)",  border:"rgba(52,199,89,0.30)",  color:"#34c759",               label:"Active now" },
   completed: { bg:"rgba(255,255,255,0.07)",border:"rgba(255,255,255,0.10)",color:"rgba(255,255,255,0.45)",label:"Completed"  },
   cancelled: { bg:"rgba(255,80,80,0.10)",  border:"rgba(255,80,80,0.20)",  color:"#ff6060",               label:"Cancelled"  },
+  denied:    { bg:"rgba(255,80,80,0.10)",  border:"rgba(255,80,80,0.20)",  color:"#ff6060",               label:"Not approved" },
 };
 
 function fmtDate(ts: number) { return new Date(ts).toLocaleDateString(undefined, { month:"short", day:"numeric", year:"numeric" }); }
@@ -49,6 +53,11 @@ export default function BookingsPage() {
             const idStr = String(b.id || "");
             const numId = idStr ? (parseInt(idStr.replace(/-/g, "").slice(0, 8), 16) || Math.round(Math.random() * 1e8)) : Math.round(Math.random() * 1e8);
             const rawStatus = String(b.status || "confirmed");
+            const mappedStatus: BookingRec["status"] =
+              rawStatus === "cancelled" ? "cancelled" :
+              rawStatus === "denied"    ? "denied"    :
+              rawStatus === "pending"   ? "pending"   :
+              rawStatus === "approved"  ? "active"    : "active";
             return {
               id:         numId,
               uuid:       idStr,
@@ -61,7 +70,7 @@ export default function BookingsPage() {
               pricePerHr: Number(b.price_per_hr) || 0,
               hostName:   String(b.host_name  || "Host"),
               hostPhone:  String(b.host_phone || "(555) 000-0000"),
-              status:     (rawStatus === "cancelled" ? "cancelled" : "active") as "active" | "cancelled",
+              status:     mappedStatus,
             };
           });
           setApiBookings(mapped);
@@ -77,6 +86,7 @@ export default function BookingsPage() {
     setState(s => ({ ...s, openAcctOnFind: true }));
     goTo("find");
   }
+  void backToFind;
 
   const bookings = apiBookings ?? state.bookings;
   const now = Date.now();
@@ -84,18 +94,20 @@ export default function BookingsPage() {
   const filtered = sorted.filter(b => {
     const s = deriveStatus(b, now);
     if (filter === "all") return true;
-    if (filter === "upcoming") return s === "upcoming" || s === "active";
-    return s === "completed" || s === "cancelled";
+    if (filter === "upcoming") return s === "upcoming" || s === "active" || s === "pending";
+    return s === "completed" || s === "cancelled" || s === "denied";
   });
   const comingSoon = bookings.filter(b => {
     const s = deriveStatus(b, now);
     return (s === "upcoming") && b.startTs > now && b.startTs <= now + 48 * 60 * 60 * 1000;
   }).sort((a, b) => a.startTs - b.startTs);
 
+  const pendingCount = bookings.filter(b => b.status === "pending").length;
+
   function extendCollides(b: BookingRec, addMs: number) {
     const newEnd = b.endTs + addMs;
     return bookings.some(x =>
-      x.id !== b.id && x.spotId === b.spotId && x.status === "active" &&
+      x.id !== b.id && x.spotId === b.spotId && (x.status === "active" || x.status === "approved") &&
       Math.max(x.startTs, b.startTs) < Math.min(x.endTs, newEnd)
     );
   }
@@ -106,8 +118,7 @@ export default function BookingsPage() {
       if (b.uuid) {
         await fetch(`/api/bookings/${b.uuid}/cancel`, { method: "PATCH" });
       }
-    } catch { /* non-blocking — still update local state */ }
-    // Update both apiBookings and persistent state
+    } catch { /* non-blocking */ }
     setApiBookings(prev => prev ? prev.map(x => (x.uuid === b.uuid && x.id === b.id) ? { ...x, status: "cancelled" as const } : x) : prev);
     setState(s => ({ ...s, bookings: s.bookings.map(x => x.id === b.id ? { ...x, status: "cancelled" as const } : x) }));
     setCancellingId(null);
@@ -142,6 +153,11 @@ export default function BookingsPage() {
             <div style={{ fontSize:20, fontWeight:800, color:"#fff", letterSpacing:-0.5 }}>My Bookings</div>
             <div style={{ fontSize:12, color:"rgba(255,255,255,0.38)", marginTop:2 }}>Your reserved spots</div>
           </div>
+          {pendingCount > 0 && (
+            <div style={{ marginLeft:"auto", background:"#f59e0b", borderRadius:100, padding:"3px 10px", fontSize:11, fontWeight:800, color:"#fff" }}>
+              {pendingCount} pending
+            </div>
+          )}
         </div>
         <div style={{ display:"flex", borderBottom:"1px solid rgba(255,255,255,0.08)", gap:0, marginBottom:0 }}>
           {(["all","upcoming","completed"] as const).map(f => {
@@ -157,6 +173,20 @@ export default function BookingsPage() {
       </div>
 
       <div style={{ flex:1, overflowY:"auto", padding:"20px 16px 32px", display:"flex", flexDirection:"column", gap:12 }}>
+
+        {/* Pending approval banner */}
+        {pendingCount > 0 && !loadingBookings && filter !== "completed" && (
+          <div style={{ background:"rgba(251,191,36,0.10)", border:"1.5px solid rgba(251,191,36,0.30)", borderRadius:14, padding:"12px 14px", display:"flex", alignItems:"center", gap:10 }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+            <div>
+              <div style={{ fontSize:13, fontWeight:700, color:"#f59e0b" }}>Awaiting lister approval</div>
+              <div style={{ fontSize:11, color:"rgba(255,255,255,0.45)", marginTop:1 }}>
+                {pendingCount === 1 ? "1 booking is" : `${pendingCount} bookings are`} waiting for the host to approve. You'll get an email when they respond.
+              </div>
+            </div>
+          </div>
+        )}
+
         {comingSoon.length > 0 && !loadingBookings && (
           <div style={{ marginBottom:4 }}>
             <div style={{ fontSize:11, fontWeight:800, color:"#8DD63F", letterSpacing:0.7, textTransform:"uppercase", marginBottom:10 }}>
@@ -194,8 +224,10 @@ export default function BookingsPage() {
           const total = (b.pricePerHr * (b.endTs - b.startTs) / 3600000);
           const totalLabel = `$${(Math.round(total * 100) / 100).toFixed(2)}`;
           const canModify = ds === "upcoming" || ds === "active";
+          const isPending = ds === "pending";
+          const isDenied  = ds === "denied";
           return (
-            <div key={b.id} style={{ background:"rgba(255,255,255,0.05)", borderRadius:18, border:"1px solid rgba(255,255,255,0.08)", padding:"16px", overflow:"hidden" }}>
+            <div key={b.id} style={{ background:"rgba(255,255,255,0.05)", borderRadius:18, border:`1px solid ${isPending ? "rgba(251,191,36,0.25)" : isDenied ? "rgba(255,80,80,0.15)" : "rgba(255,255,255,0.08)"}`, padding:"16px", overflow:"hidden" }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:12 }}>
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontSize:15, fontWeight:700, color:"#fff", letterSpacing:-0.3, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{b.addr}</div>
@@ -205,7 +237,24 @@ export default function BookingsPage() {
                   {st.label}
                 </div>
               </div>
-              <div style={{ display:"flex", gap:8, marginBottom:canModify?14:0 }}>
+
+              {isPending && (
+                <div style={{ marginBottom:12, padding:"10px 12px", background:"rgba(251,191,36,0.07)", borderRadius:10, border:"1px solid rgba(251,191,36,0.18)" }}>
+                  <div style={{ fontSize:12, color:"rgba(255,255,255,0.55)", lineHeight:1.45 }}>
+                    Waiting for the host to approve. You'll receive an email once they respond. You can cancel below if needed.
+                  </div>
+                </div>
+              )}
+
+              {isDenied && (
+                <div style={{ marginBottom:12, padding:"10px 12px", background:"rgba(255,80,80,0.06)", borderRadius:10, border:"1px solid rgba(255,80,80,0.14)" }}>
+                  <div style={{ fontSize:12, color:"rgba(255,180,180,0.80)", lineHeight:1.45 }}>
+                    The host was unable to accept this request. Search the map to find another spot nearby.
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display:"flex", gap:8, marginBottom:(canModify || isPending)?14:0 }}>
                 {[
                   { icon:<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>, val:fmtDate(b.startTs) },
                   { icon:<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>, val:`${fmtTime(b.startTs)} · ${dur}` },
@@ -217,12 +266,18 @@ export default function BookingsPage() {
                   </div>
                 ))}
               </div>
+
               {canModify && (
                 <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
                   <button onClick={() => setExtendFor(b)} style={{ flex:"1 1 30%", padding:"10px 0", borderRadius:12, background:"rgba(141,214,63,0.12)", border:"1px solid rgba(141,214,63,0.25)", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:700, color:"#8DD63F" }}>Extend</button>
                   <button onClick={() => setContactFor(b)} style={{ flex:"1 1 30%", padding:"10px 0", borderRadius:12, background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.12)", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:700, color:"#fff" }}>Contact</button>
                   <button onClick={() => setConfirmCancel(b)} style={{ flex:"1 1 30%", padding:"10px 0", borderRadius:12, background:"rgba(255,80,80,0.08)", border:"1px solid rgba(255,80,80,0.18)", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:700, color:"rgba(255,128,128,0.9)" }}>Cancel</button>
                 </div>
+              )}
+              {isPending && (
+                <button onClick={() => setConfirmCancel(b)} style={{ width:"100%", padding:"10px 0", borderRadius:12, background:"rgba(255,80,80,0.08)", border:"1px solid rgba(255,80,80,0.18)", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:700, color:"rgba(255,128,128,0.9)" }}>
+                  Cancel request
+                </button>
               )}
             </div>
           );
@@ -269,13 +324,13 @@ export default function BookingsPage() {
         <div onClick={() => setConfirmCancel(null)} style={{ position:"absolute",inset:0,background:"rgba(0,0,0,0.55)",display:"flex",alignItems:"flex-end",zIndex:50 }}>
           <div onClick={e => e.stopPropagation()} style={{ width:"100%",background:"#152849",borderTopLeftRadius:24,borderTopRightRadius:24,padding:"22px 20px calc(env(safe-area-inset-bottom) + 22px)",color:"#fff" }}>
             <div style={{ width:36,height:4,background:"rgba(255,255,255,0.18)",borderRadius:2,margin:"0 auto 16px" }} />
-            <div style={{ fontSize:18,fontWeight:800,marginBottom:6 }}>Cancel this booking?</div>
+            <div style={{ fontSize:18,fontWeight:800,marginBottom:6 }}>{confirmCancel.status === "pending" ? "Cancel this request?" : "Cancel this booking?"}</div>
             <div style={{ fontSize:13,color:"rgba(255,255,255,0.55)",marginBottom:18 }}>{confirmCancel.addr} · {fmtDate(confirmCancel.startTs)} {fmtTime(confirmCancel.startTs)}</div>
             <button
               disabled={cancellingId !== null}
               onClick={() => doCancel(confirmCancel)}
               style={{ width:"100%",padding:"14px 0",borderRadius:100,background:"#ef4444",border:"none",color:"#fff",fontFamily:"'DM Sans',sans-serif",fontSize:14,fontWeight:700,cursor:cancellingId !== null ? "wait" : "pointer",marginBottom:10,opacity:cancellingId !== null ? 0.7 : 1 }}
-            >{cancellingId !== null ? "Cancelling…" : "Cancel booking"}</button>
+            >{cancellingId !== null ? "Cancelling…" : confirmCancel.status === "pending" ? "Cancel request" : "Cancel booking"}</button>
             <button onClick={() => setConfirmCancel(null)} style={{ width:"100%",padding:"12px 0",borderRadius:100,background:"transparent",border:"1px solid rgba(255,255,255,0.18)",color:"#fff",fontFamily:"'DM Sans',sans-serif",fontSize:13,fontWeight:700,cursor:"pointer" }}>Keep it</button>
           </div>
         </div>

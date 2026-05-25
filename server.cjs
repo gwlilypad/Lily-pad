@@ -20,6 +20,20 @@ const SVC_HEADERS = {
   'Content-Type' : 'application/json',
 };
 
+// ── Email helper (Resend) ────────────────────────────────────────────────────
+async function sendEmail(to, subject, html) {
+  const key = process.env.RESEND_API_KEY;
+  if (!key || !to) return;
+  try {
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: 'Lily Pad <onboarding@resend.dev>', to, subject, html }),
+    });
+    if (!r.ok) console.warn('[Email] Resend error:', await r.text());
+  } catch (e) { console.warn('[Email] Failed to send:', e.message); }
+}
+
 // ── SQL that must be run once in Supabase SQL Editor ─────────────────────────
 const SETUP_SQL = `
 -- ▶ Run this ONCE in Supabase → SQL Editor
@@ -1280,20 +1294,48 @@ app.post('/api/spots/:id/reject', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── Bookings: create ────────────────────────────────────────────────────────────
+// ── Bookings: create (creates as 'pending' — lister must approve) ───────────────
 app.post('/api/bookings', async (req, res) => {
   const { user_id, spot_id, start_ts, end_ts, price_per_hr, total_price, booking_data } = req.body || {};
   if (!user_id) return res.status(400).json({ error: 'user_id required' });
-  // Store all booking details in the existing booking_data JSONB column (no schema changes needed)
-  const data_payload = {
-    ...(booking_data || {}),
-    spot_id: spot_id || null,
-    start_ts: start_ts || null,
-    end_ts: end_ts || null,
-    price_per_hr: price_per_hr || 0,
-    total_price: total_price || 0,
-  };
+
   try {
+    // Look up driver profile and spot/lister info in parallel
+    const [driverRes, spotRes] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${user_id}&select=full_name,email`, { headers: SVC_HEADERS }),
+      spot_id ? fetch(`${SUPABASE_URL}/rest/v1/spots?id=eq.${spot_id}&select=host_user_id,address`, { headers: SVC_HEADERS }) : Promise.resolve(null),
+    ]);
+    const driverRows  = await driverRes.json();
+    const driver      = Array.isArray(driverRows) ? driverRows[0] : null;
+    const driverName  = driver?.full_name || 'A driver';
+    const driverEmail = driver?.email     || null;
+
+    const spotRows    = spotRes ? await spotRes.json() : [];
+    const spot        = Array.isArray(spotRows) ? spotRows[0] : null;
+    const listerId    = spot?.host_user_id || null;
+
+    // Look up lister profile for their email
+    let listerEmail = null, listerName = 'Host';
+    if (listerId) {
+      const lrRes  = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${listerId}&select=full_name,email`, { headers: SVC_HEADERS });
+      const lrRows = await lrRes.json();
+      const lr     = Array.isArray(lrRows) ? lrRows[0] : null;
+      listerEmail  = lr?.email     || null;
+      listerName   = lr?.full_name || 'Host';
+    }
+
+    const data_payload = {
+      ...(booking_data || {}),
+      spot_id:      spot_id     || null,
+      start_ts:     start_ts    || null,
+      end_ts:       end_ts      || null,
+      price_per_hr: price_per_hr || 0,
+      total_price:  total_price  || 0,
+      lister_id:    listerId,
+      driver_name:  driverName,
+      driver_email: driverEmail,
+    };
+
     const r = await fetch(`${SUPABASE_URL}/rest/v1/bookings`, {
       method : 'POST',
       headers: { ...SVC_HEADERS, 'Prefer': 'return=representation' },
@@ -1301,12 +1343,189 @@ app.post('/api/bookings', async (req, res) => {
         user_id,
         spot_id: String(spot_id || ''),
         booking_data: data_payload,
-        status: 'confirmed',
+        status: 'pending',
       }),
     });
     const data = await r.json();
     if (!r.ok) return res.status(r.status).json({ error: data });
+
+    // Email lister about the new request (non-blocking)
+    const addr   = booking_data?.addr || spot?.address || 'your spot';
+    const dtOpts = { month: 'short', day: 'numeric' };
+    const tmOpts = { hour: 'numeric', minute: '2-digit' };
+    const dateStr = start_ts ? new Date(start_ts).toLocaleDateString('en-US', dtOpts) : '';
+    const fromStr = start_ts ? new Date(start_ts).toLocaleTimeString('en-US', tmOpts) : '';
+    const tillStr = end_ts   ? new Date(end_ts).toLocaleTimeString('en-US', tmOpts)   : '';
+    const totalLabel = total_price ? `$${Number(total_price).toFixed(2)}` : '';
+    sendEmail(listerEmail, 'New Booking Request — Lily Pad',
+      `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
+        <h2 style="color:#0E1F40;margin:0 0 8px">New booking request 🛏</h2>
+        <p style="color:#555;margin:0 0 16px">Hi ${listerName},</p>
+        <p style="color:#555;margin:0 0 20px"><strong>${driverName}</strong> has requested to book your spot.</p>
+        <div style="background:#f5f7fa;border-radius:12px;padding:16px;margin-bottom:20px">
+          <div style="font-size:13px;color:#0E1F40;margin-bottom:6px"><strong>📍 ${addr}</strong></div>
+          <div style="font-size:13px;color:#555;margin-bottom:4px">📅 ${dateStr}</div>
+          <div style="font-size:13px;color:#555;margin-bottom:4px">⏰ ${fromStr} → ${tillStr}</div>
+          ${totalLabel ? `<div style="font-size:13px;color:#555"><strong>💰 ${totalLabel}</strong></div>` : ''}
+        </div>
+        <p style="color:#555;margin:0 0 20px">Log in to your Lily Pad account and open <strong>My Pads</strong> to approve or deny this request.</p>
+        <p style="font-size:12px;color:#999;margin:0">— Lily Pad</p>
+      </div>`
+    );
+
     res.json(Array.isArray(data) ? data[0] : data);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Bookings: lister view — all bookings for spots owned by this user ───────────
+app.get('/api/bookings/lister/:listerId', async (req, res) => {
+  const { listerId } = req.params;
+  try {
+    // 1. Get all spot IDs for this lister
+    const spotRes  = await fetch(`${SUPABASE_URL}/rest/v1/spots?host_user_id=eq.${listerId}&select=id,address`, { headers: SVC_HEADERS });
+    const spotData = await spotRes.json();
+    if (!spotRes.ok || !Array.isArray(spotData) || spotData.length === 0) return res.json([]);
+    const spotMap  = {};
+    spotData.forEach(s => { spotMap[s.id] = s.address; });
+    const ids = spotData.map(s => s.id).join(',');
+
+    // 2. Fetch all bookings for those spots
+    const bRes  = await fetch(`${SUPABASE_URL}/rest/v1/bookings?spot_id=in.(${ids})&select=*&order=created_at.desc`, { headers: SVC_HEADERS });
+    const bData = await bRes.json();
+    if (!bRes.ok || !Array.isArray(bData)) return res.json([]);
+
+    const mapped = bData.map(b => {
+      const bd = b.booking_data || {};
+      return {
+        id:           b.id,
+        spot_id:      b.spot_id,
+        spot_address: bd.addr || spotMap[b.spot_id] || '',
+        driver_name:  bd.driver_name  || 'Driver',
+        driver_email: bd.driver_email || null,
+        start_ts:     bd.start_ts     || null,
+        end_ts:       bd.end_ts       || null,
+        price_per_hr: Number(bd.price_per_hr) || 0,
+        total_price:  Number(bd.total_price)  || 0,
+        pad_type:     bd.padType || 'Driveway',
+        status:       b.status   || 'pending',
+        created_at:   b.created_at,
+      };
+    });
+    res.json(mapped);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Bookings: approve ─────────────────────────────────────────────────────────
+app.patch('/api/bookings/:id/approve', async (req, res) => {
+  try {
+    // Fetch booking first so we can email the driver
+    const getR  = await fetch(`${SUPABASE_URL}/rest/v1/bookings?id=eq.${req.params.id}&select=*`, { headers: SVC_HEADERS });
+    const rows  = await getR.json();
+    const b     = Array.isArray(rows) ? rows[0] : null;
+    if (!b) return res.status(404).json({ error: 'Not found' });
+
+    const patchR = await fetch(`${SUPABASE_URL}/rest/v1/bookings?id=eq.${req.params.id}`,
+      { method: 'PATCH', headers: { ...SVC_HEADERS, 'Prefer': 'return=minimal' }, body: JSON.stringify({ status: 'approved' }) }
+    );
+    if (!patchR.ok) { const e = await patchR.json(); return res.status(patchR.status).json({ error: e }); }
+
+    const bd      = b.booking_data || {};
+    const dEmail  = bd.driver_email || null;
+    const dName   = bd.driver_name  || 'Driver';
+    const addr    = bd.addr         || 'your booked spot';
+    const dtOpts  = { month: 'short', day: 'numeric' };
+    const tmOpts  = { hour: 'numeric', minute: '2-digit' };
+    const dateStr = bd.start_ts ? new Date(bd.start_ts).toLocaleDateString('en-US', dtOpts)  : '';
+    const fromStr = bd.start_ts ? new Date(bd.start_ts).toLocaleTimeString('en-US', tmOpts) : '';
+    const tillStr = bd.end_ts   ? new Date(bd.end_ts).toLocaleTimeString('en-US', tmOpts)   : '';
+    sendEmail(dEmail, 'Booking Approved — Lily Pad',
+      `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
+        <h2 style="color:#0E1F40;margin:0 0 8px">Your booking is approved! ✅</h2>
+        <p style="color:#555;margin:0 0 16px">Hi ${dName},</p>
+        <p style="color:#555;margin:0 0 20px">Great news — the host has approved your booking request.</p>
+        <div style="background:#f0fce8;border-radius:12px;padding:16px;margin-bottom:20px;border:1px solid #c8e9a0">
+          <div style="font-size:13px;color:#0E1F40;margin-bottom:6px"><strong>📍 ${addr}</strong></div>
+          <div style="font-size:13px;color:#555;margin-bottom:4px">📅 ${dateStr}</div>
+          <div style="font-size:13px;color:#555">⏰ ${fromStr} → ${tillStr}</div>
+        </div>
+        <p style="color:#555;margin:0 0 20px">Open Lily Pad and check <strong>My Bookings</strong> to view your booking details.</p>
+        <p style="font-size:12px;color:#999;margin:0">— Lily Pad</p>
+      </div>`
+    );
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Bookings: deny ────────────────────────────────────────────────────────────
+app.patch('/api/bookings/:id/deny', async (req, res) => {
+  try {
+    const getR  = await fetch(`${SUPABASE_URL}/rest/v1/bookings?id=eq.${req.params.id}&select=*`, { headers: SVC_HEADERS });
+    const rows  = await getR.json();
+    const b     = Array.isArray(rows) ? rows[0] : null;
+    if (!b) return res.status(404).json({ error: 'Not found' });
+
+    const patchR = await fetch(`${SUPABASE_URL}/rest/v1/bookings?id=eq.${req.params.id}`,
+      { method: 'PATCH', headers: { ...SVC_HEADERS, 'Prefer': 'return=minimal' }, body: JSON.stringify({ status: 'denied' }) }
+    );
+    if (!patchR.ok) { const e = await patchR.json(); return res.status(patchR.status).json({ error: e }); }
+
+    const bd     = b.booking_data || {};
+    const dEmail = bd.driver_email || null;
+    const dName  = bd.driver_name  || 'Driver';
+    const addr   = bd.addr         || 'the spot';
+    sendEmail(dEmail, 'Booking Request Update — Lily Pad',
+      `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
+        <h2 style="color:#0E1F40;margin:0 0 8px">Booking not approved</h2>
+        <p style="color:#555;margin:0 0 16px">Hi ${dName},</p>
+        <p style="color:#555;margin:0 0 20px">Unfortunately, the host was unable to approve your booking request for <strong>${addr}</strong>.</p>
+        <p style="color:#555;margin:0 0 20px">Open Lily Pad and search the map — there are other spots nearby that may work for you.</p>
+        <p style="font-size:12px;color:#999;margin:0">— Lily Pad</p>
+      </div>`
+    );
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Spots: delete — cancels all active/pending bookings and emails drivers ─────
+app.delete('/api/spots/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    // 1. Find all non-cancelled bookings for this spot
+    const bRes  = await fetch(`${SUPABASE_URL}/rest/v1/bookings?spot_id=eq.${id}&status=not.in.(cancelled,denied)&select=*`, { headers: SVC_HEADERS });
+    const bData = await bRes.json();
+    const bookings = Array.isArray(bData) ? bData : [];
+
+    // 2. Email each driver and cancel their bookings
+    await Promise.all(bookings.map(async b => {
+      const bd     = b.booking_data || {};
+      const dEmail = bd.driver_email || null;
+      const dName  = bd.driver_name  || 'Driver';
+      const addr   = bd.addr         || 'the spot';
+      sendEmail(dEmail, 'Booking Cancelled — Lily Pad',
+        `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
+          <h2 style="color:#0E1F40;margin:0 0 8px">Booking cancelled</h2>
+          <p style="color:#555;margin:0 0 16px">Hi ${dName},</p>
+          <p style="color:#555;margin:0 0 20px">The host has removed the listing for <strong>${addr}</strong>. Your booking has been automatically cancelled.</p>
+          <p style="color:#555;margin:0 0 20px">We're sorry for the inconvenience — open Lily Pad to find another spot nearby.</p>
+          <p style="font-size:12px;color:#999;margin:0">— Lily Pad</p>
+        </div>`
+      );
+    }));
+
+    // 3. Bulk-cancel affected bookings
+    if (bookings.length > 0) {
+      const ids = bookings.map(b => b.id).join(',');
+      await fetch(`${SUPABASE_URL}/rest/v1/bookings?id=in.(${ids})`,
+        { method: 'PATCH', headers: { ...SVC_HEADERS, 'Prefer': 'return=minimal' }, body: JSON.stringify({ status: 'cancelled' }) }
+      );
+    }
+
+    // 4. Delete the spot
+    const delR = await fetch(`${SUPABASE_URL}/rest/v1/spots?id=eq.${id}`,
+      { method: 'DELETE', headers: { ...SVC_HEADERS, 'Prefer': 'return=minimal' } }
+    );
+    if (!delR.ok) { const e = await delR.json(); return res.status(delR.status).json({ error: e }); }
+    res.json({ ok: true, cancelled: bookings.length });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

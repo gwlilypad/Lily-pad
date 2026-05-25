@@ -19,7 +19,7 @@ export interface BookingRec {
   pricePerHr: number;
   hostName: string;
   hostPhone: string;
-  status: "active" | "cancelled";
+  status: "active" | "cancelled" | "pending" | "denied" | "approved";
 }
 
 export interface AppState {

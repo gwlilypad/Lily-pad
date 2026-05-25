@@ -1,9 +1,33 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/context/AuthContext";
 
 const NAVY = "#0E1F40";
 const GREEN = "#8DD63F";
+
+interface ListerBooking {
+  id: string;
+  spot_id: string;
+  spot_address: string;
+  driver_name: string;
+  driver_email: string | null;
+  start_ts: string | null;
+  end_ts: string | null;
+  price_per_hr: number;
+  total_price: number;
+  pad_type: string;
+  status: string;
+  created_at: string;
+}
+
+function fmtDt(ts: string | null) {
+  if (!ts) return "—";
+  return new Date(ts).toLocaleDateString("en-US", { month:"short", day:"numeric" });
+}
+function fmtTm(ts: string | null) {
+  if (!ts) return "";
+  return new Date(ts).toLocaleTimeString("en-US", { hour:"numeric", minute:"2-digit" });
+}
 
 interface Pad {
   id: number;
@@ -125,11 +149,21 @@ export default function PadDashboardPage() {
   const { user } = useAuth();
   const [pads, setPads] = useState<Pad[]>([]);
   const [loadingPads, setLoadingPads] = useState(true);
+  const [listerBookings, setListerBookings] = useState<ListerBooking[]>([]);
+  const [actingOn, setActingOn] = useState<string | null>(null);
 
   function startAddPad() {
     setState(s => ({ ...s, addingExtraPad: true, apAns: {} }));
     goTo("addpad");
   }
+
+  const fetchListerBookings = useCallback(() => {
+    if (!user?.id) return;
+    fetch(`/api/bookings/lister/${user.id}`)
+      .then(r => r.ok ? r.json() : [])
+      .then(data => { if (Array.isArray(data)) setListerBookings(data); })
+      .catch(() => {});
+  }, [user?.id]);
 
   useEffect(() => {
     if (!user?.id) { setLoadingPads(false); return; }
@@ -161,7 +195,26 @@ export default function PadDashboardPage() {
         setLoadingPads(false);
       })
       .catch(() => setLoadingPads(false));
-  }, [user?.id]);
+    fetchListerBookings();
+  }, [user?.id, fetchListerBookings]);
+
+  async function handleApprove(bookingId: string) {
+    setActingOn(bookingId);
+    try {
+      await fetch(`/api/bookings/${bookingId}/approve`, { method: "PATCH" });
+      setListerBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: "approved" } : b));
+    } catch { /* non-blocking */ }
+    setActingOn(null);
+  }
+
+  async function handleDeny(bookingId: string) {
+    setActingOn(bookingId);
+    try {
+      await fetch(`/api/bookings/${bookingId}/deny`, { method: "PATCH" });
+      setListerBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: "denied" } : b));
+    } catch { /* non-blocking */ }
+    setActingOn(null);
+  }
 
   const [openPadId, setOpenPadId] = useState<number | null>(null);
   const [pendingPauseId, setPendingPauseId] = useState<number | null>(null);
@@ -255,7 +308,7 @@ export default function PadDashboardPage() {
           <div style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
           </div>
-          <div>
+          <div style={{ flex: 1 }}>
             <div style={{ fontSize: 20, fontWeight: 800, color: "#fff", letterSpacing: -0.5 }}>
               {openPad ? openPad.nickname || openPad.address : "My Pads"}
             </div>
@@ -263,6 +316,11 @@ export default function PadDashboardPage() {
               {openPad ? `${openPad.address} · ${openPad.city}` : `${pads.length} listing${pads.length !== 1 ? "s" : ""}`}
             </div>
           </div>
+          {!openPad && listerBookings.filter(b => b.status === "pending").length > 0 && (
+            <div style={{ background: "#f59e0b", borderRadius: 100, padding: "4px 10px", fontSize: 11, fontWeight: 800, color: "#fff", flexShrink: 0 }}>
+              {listerBookings.filter(b => b.status === "pending").length} new
+            </div>
+          )}
         </div>
       </div>
 
@@ -277,6 +335,85 @@ export default function PadDashboardPage() {
         ) : !openPad ? (
           /* ── LIST VIEW ── */
           <>
+            {/* ── Booking Requests Section ── */}
+            {listerBookings.length > 0 && (() => {
+              const pending  = listerBookings.filter(b => b.status === "pending");
+              const recent   = listerBookings.filter(b => b.status === "approved" || b.status === "denied").slice(0, 5);
+              if (pending.length === 0 && recent.length === 0) return null;
+              return (
+                <div style={{ marginBottom: 18 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(14,31,64,0.45)", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 10 }}>
+                    Booking Requests
+                    {pending.length > 0 && (
+                      <span style={{ marginLeft: 8, background: "#f59e0b", color: "#fff", borderRadius: 100, padding: "2px 7px", fontSize: 10, fontWeight: 800 }}>{pending.length} new</span>
+                    )}
+                  </div>
+                  {[...pending, ...recent].map(bk => {
+                    const isPending  = bk.status === "pending";
+                    const isApproved = bk.status === "approved";
+                    const isDenied   = bk.status === "denied";
+                    const acting     = actingOn === bk.id;
+                    return (
+                      <div key={bk.id} style={{
+                        background: "#fff", borderRadius: 16, border: `1.5px solid ${isPending ? "rgba(251,191,36,0.45)" : isApproved ? "rgba(141,214,63,0.35)" : "rgba(14,31,64,0.08)"}`,
+                        padding: "14px 16px", marginBottom: 10,
+                        boxShadow: isPending ? "0 2px 12px rgba(251,191,36,0.10)" : "0 1px 6px rgba(14,31,64,0.05)",
+                      }}>
+                        {/* Status + date row */}
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                          <div style={{
+                            fontSize: 10, fontWeight: 800, letterSpacing: 0.5, textTransform: "uppercase",
+                            color: isPending ? "#f59e0b" : isApproved ? "#5a9e1a" : "rgba(14,31,64,0.35)",
+                            background: isPending ? "rgba(251,191,36,0.12)" : isApproved ? "rgba(141,214,63,0.12)" : "rgba(14,31,64,0.05)",
+                            border: `1px solid ${isPending ? "rgba(251,191,36,0.30)" : isApproved ? "rgba(141,214,63,0.30)" : "rgba(14,31,64,0.10)"}`,
+                            borderRadius: 20, padding: "3px 9px",
+                          }}>
+                            {isPending ? "● Awaiting your response" : isApproved ? "✓ Approved" : "✕ Denied"}
+                          </div>
+                          <span style={{ fontSize: 11, color: "rgba(14,31,64,0.38)", fontWeight: 500 }}>
+                            {new Date(bk.created_at).toLocaleDateString("en-US", { month:"short", day:"numeric" })}
+                          </span>
+                        </div>
+                        {/* Driver + spot */}
+                        <div style={{ fontSize: 14, fontWeight: 700, color: NAVY, marginBottom: 2 }}>{bk.driver_name}</div>
+                        <div style={{ fontSize: 12, color: "rgba(14,31,64,0.50)", marginBottom: 8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{bk.spot_address}</div>
+                        {/* Date / time / price chips */}
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: isPending ? 12 : 0 }}>
+                          {[
+                            { icon: "📅", val: fmtDt(bk.start_ts) },
+                            { icon: "⏰", val: `${fmtTm(bk.start_ts)} → ${fmtTm(bk.end_ts)}` },
+                            { icon: "💰", val: `$${Number(bk.total_price).toFixed(0)}` },
+                          ].map((chip, i) => (
+                            <div key={i} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(14,31,64,0.04)", borderRadius: 8, padding: "5px 9px", border: "1px solid rgba(14,31,64,0.07)" }}>
+                              <span style={{ fontSize: 11 }}>{chip.icon}</span>
+                              <span style={{ fontSize: 11, fontWeight: 600, color: NAVY }}>{chip.val}</span>
+                            </div>
+                          ))}
+                        </div>
+                        {/* Approve / Deny buttons — only for pending */}
+                        {isPending && (
+                          <div style={{ display: "flex", gap: 8 }}>
+                            <button
+                              disabled={acting}
+                              onClick={() => handleApprove(bk.id)}
+                              style={{ flex: 1, padding: "11px 0", borderRadius: 12, background: acting ? "rgba(141,214,63,0.06)" : "rgba(141,214,63,0.14)", border: "1px solid rgba(141,214,63,0.40)", color: "#5a9e1a", fontSize: 13, fontWeight: 700, cursor: acting ? "wait" : "pointer", fontFamily: "'DM Sans',sans-serif", opacity: acting ? 0.6 : 1 }}>
+                              {acting ? "…" : "✓ Approve"}
+                            </button>
+                            <button
+                              disabled={acting}
+                              onClick={() => handleDeny(bk.id)}
+                              style={{ flex: 1, padding: "11px 0", borderRadius: 12, background: acting ? "rgba(255,80,80,0.04)" : "rgba(255,80,80,0.08)", border: "1px solid rgba(255,80,80,0.22)", color: "#ef4444", fontSize: 13, fontWeight: 700, cursor: acting ? "wait" : "pointer", fontFamily: "'DM Sans',sans-serif", opacity: acting ? 0.6 : 1 }}>
+                              {acting ? "…" : "✕ Deny"}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+
             {(() => {
               const totalEarnings = pads.reduce((sum, p) => sum + p.bookings * p.price * 2, 0);
               const totalBookings = pads.reduce((sum, p) => sum + p.bookings, 0);

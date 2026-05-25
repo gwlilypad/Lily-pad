@@ -3088,7 +3088,7 @@ export default function FindPage() {
                         id: newId, uuid: bookingUuid,
                         spotId: spot.id, addr: spot.addr, city: "Houston, TX", padType,
                         startTs: bookStartTs, endTs: bookEndTs, pricePerHr: priceNum,
-                        hostName, hostPhone, status: "active" as const,
+                        hostName, hostPhone, status: "pending" as const,
                       };
                       return { ...s, bookings: [...s.bookings, rec] };
                     });

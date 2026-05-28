@@ -6,3 +6,9 @@ id = "n73vE3D2k1S3kENhRbGfK"
 uri = "file://zipFile.zip"
 type = "unspecified"
 title = "lilypad-build.zip (compiled bundle only — no src/ folder)"
+
+[[outputs]]
+id = "ystbAN8j20EM6KxI4YDaV"
+uri = "file://lily-pad-full.zip"
+type = "unspecified"
+title = "Lily Pad — Full Source Code"

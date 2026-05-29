@@ -1004,6 +1004,23 @@ app.get('/api/maps-key', (req, res) => {
   res.json({ key });
 });
 
+// ── Maps JS proxy — fetches Maps script server-side so no browser Referer is sent ──
+// This bypasses API key HTTP referrer restrictions on the Google Cloud Console.
+app.get('/api/maps-proxy.js', async (req, res) => {
+  const key = process.env.GOOGLE_MAPS_API_KEY;
+  if (!key) return res.status(500).send('// Maps not configured');
+  try {
+    const url = `https://maps.googleapis.com/maps/api/js?key=${key}`;
+    const r = await fetch(url, { headers: { 'Referer': '' } });
+    const js = await r.text();
+    res.setHeader('Content-Type', 'application/javascript');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.send(js);
+  } catch (e) {
+    res.status(500).send(`// Maps proxy error: ${e.message}`);
+  }
+});
+
 // ── Reverse geocode: lat/lng → structured address ──────────────────────────────
 app.get('/api/reverse-geocode', async (req, res) => {
   const { lat, lng } = req.query;

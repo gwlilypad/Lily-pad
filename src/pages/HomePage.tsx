@@ -29,7 +29,7 @@ function AdminSlide({ open }: { open: boolean }) {
 }
 
 const CarSVG = () => (
-  <svg width="135" height="66" viewBox="0 0 90 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <svg width="97" height="47" viewBox="0 0 90 44" fill="none" xmlns="http://www.w3.org/2000/svg">
     <defs>
       <linearGradient id="carBody" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#f5f6f8"/><stop offset="100%" stopColor="#d2d8e2"/></linearGradient>
       <linearGradient id="carRoof" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#eceef2"/><stop offset="100%" stopColor="#c8cdd8"/></linearGradient>
@@ -190,17 +190,19 @@ export default function HomePage() {
         alignItems: "center", padding: "48px 20px 0", boxSizing: "border-box", zIndex: 5,
       }}>
         <div style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-          <div style={{ display: "flex", alignItems: "center", padding: 0 }}>
-            <img
-              src={lilypadLogo}
-              alt="Lily Pad"
-              style={{ width: 90, height: 90, objectFit: "contain", marginLeft: -10, marginTop: -6 }}
-            />
+          <div style={{ display: "flex", flexDirection: "column", marginLeft: -2, marginTop: -6 }}>
+            <div style={{ width: 64, height: 50, overflow: "hidden" }}>
+              <img src={lilypadLogo} alt="Lily Pad" style={{ width: 64, height: 118, objectFit: "contain", objectPosition: "top center" }} />
+            </div>
+            <div style={{ paddingLeft: 3 }}>
+              <p style={{ margin: 0, color: "#ffffff", fontSize: 13, fontWeight: 700, letterSpacing: "-0.01em", lineHeight: 1.1 }}>lily pad</p>
+              <p style={{ margin: 0, color: "#8DD63F", fontSize: 7, fontWeight: 700, letterSpacing: "0.13em", textTransform: "uppercase" }}>Parking Marketplace</p>
+            </div>
           </div>
         </div>
 
         <div style={{ display: "flex", justifyContent: "center", marginTop: 24, flexShrink: 0 }}>
-          <div style={{ filter: "drop-shadow(0 6px 20px rgba(0,0,0,0.35))", transform: "scale(0.72)", transformOrigin: "center center" }}>
+          <div style={{ filter: "drop-shadow(0 6px 20px rgba(0,0,0,0.35))" }}>
             <CarSVG />
           </div>
         </div>

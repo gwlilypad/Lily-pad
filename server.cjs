@@ -28,7 +28,7 @@ async function sendEmail(to, subject, html) {
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: 'Lily Pad <onboarding@resend.dev>', to, subject, html }),
+      body: JSON.stringify({ from: 'Lily Pad <noreply@lilypadparking.com>', to, subject, html }),
     });
     if (!r.ok) console.warn('[Email] Resend error:', await r.text());
   } catch (e) { console.warn('[Email] Failed to send:', e.message); }
@@ -597,7 +597,7 @@ app.post('/api/staff/invite', async (req, res) => {
       method : 'POST',
       headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
       body   : JSON.stringify({
-        from   : 'Lily Pad <onboarding@resend.dev>',
+        from   : 'Lily Pad <noreply@lilypadparking.com>',
         to     : [emailLower],
         subject: `You're invited to the Lily Pad ${roleLabel} team`,
         html   : `
@@ -1244,7 +1244,7 @@ app.post('/api/spots/:id/approve', async (req, res) => {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from: 'Lily Pad <onboarding@resend.dev>',
+          from: 'Lily Pad <noreply@lilypadparking.com>',
           to: [host.email],
           subject: `Your Lily Pad listing is live! 🎉`,
           html: `

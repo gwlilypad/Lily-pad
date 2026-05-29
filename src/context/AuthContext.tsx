@@ -99,27 +99,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, fullName: string, userRole = "driver") => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { emailRedirectTo: `${window.location.origin}/verify` },
-    });
-    if (error) return { error: error.message };
-    // Supabase silently "succeeds" for existing emails to prevent enumeration,
-    // but returns an empty identities array — treat that as a duplicate.
-    if (data.user && (!data.user.identities || data.user.identities.length === 0)) {
-      return { error: "An account with this email already exists" };
-    }
-    if (data.user) {
-      await fetch("/api/profile", {
+    try {
+      const res = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: data.user.id, email, full_name: fullName, account_type: userRole }),
+        body: JSON.stringify({ email, password, full_name: fullName, account_type: userRole }),
       });
+      const data = await res.json();
+      if (!res.ok || data.error) return { error: data.error || "Signup failed. Please try again." };
+      if (data.session?.access_token) {
+        await supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        });
+      }
+      return { error: null };
+    } catch (e: any) {
+      return { error: e.message || "Signup failed. Please try again." };
     }
-    // No session → Supabase sent a confirmation email; caller should show "check your inbox"
-    if (!data.session) return { error: null, confirmEmail: true };
-    return { error: null };
   };
 
   const verifyOtp = async (email: string, token: string) => {

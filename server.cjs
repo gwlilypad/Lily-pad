@@ -410,19 +410,19 @@ app.post('/api/auth/refresh', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── Auth: customer signup — always uses standard flow so Supabase sends confirmation email ──
-// Enable "Confirm email" in Supabase → Authentication → Providers → Email for this to require
-// email verification. If confirmation is off in the dashboard the user is signed in immediately.
+// ── Auth: customer signup — uses admin API to pre-confirm email (no SMTP required) ──
 app.post('/api/auth/signup', async (req, res) => {
   const { email, password, full_name, account_type } = req.body || {};
   if (!email || !password) return res.status(400).json({ error: 'email and password required' });
   try {
-    const r = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
+    // Create user via admin API with email pre-confirmed — bypasses Supabase SMTP entirely
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
       method : 'POST',
-      headers: { 'apikey': SUPABASE_ANON, 'Content-Type': 'application/json' },
+      headers: { 'apikey': SVC_KEY, 'Authorization': `Bearer ${SVC_KEY}`, 'Content-Type': 'application/json' },
       body   : JSON.stringify({
         email, password,
-        data: { full_name: full_name || '', account_type: account_type || 'renter' },
+        email_confirm: true,
+        user_metadata: { full_name: full_name || '', account_type: account_type || 'renter' },
       }),
     });
     const data = await r.json();
@@ -431,23 +431,30 @@ app.post('/api/auth/signup', async (req, res) => {
       return res.status(r.status).json({ error: msg });
     }
 
-    // Create/upsert profile row immediately (user.id is available even before confirmation)
-    if (data.user && data.user.id) {
+    // Upsert profile row
+    if (data.id) {
       await fetch(`${SUPABASE_URL}/rest/v1/profiles`, {
         method : 'POST',
         headers: { ...SVC_HEADERS, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
         body   : JSON.stringify({
-          id: data.user.id, email, full_name: full_name || '',
+          id: data.id, email, full_name: full_name || '',
           account_type: account_type || 'renter',
         }),
       }).catch(() => {});
     }
 
-    // Supabase returned a session → email confirmation is OFF in dashboard, sign in now
-    if (data.access_token) return res.json({ created: true, session: data });
+    // Auto sign-in so the client gets a session immediately — no OTP step needed
+    const signInR = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+      method : 'POST',
+      headers: { 'apikey': SUPABASE_ANON, 'Content-Type': 'application/json' },
+      body   : JSON.stringify({ email, password }),
+    });
+    const signInData = await signInR.json();
+    if (signInR.ok && signInData.access_token) {
+      return res.json({ created: true, session: signInData });
+    }
 
-    // No session → confirmation email was sent; client should show "check your email"
-    return res.json({ created: true, session: null, confirm_email: true });
+    return res.json({ created: true, session: null });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

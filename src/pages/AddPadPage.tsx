@@ -3,8 +3,8 @@ import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/context/AuthContext";
 import SharedHeader from "@/components/SharedHeader";
 import NavBar from "@/components/NavBar";
-
-declare global { interface Window { google: any; } }
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 
 type InputType = "text" | "choice" | "number" | "price" | "textarea";
 interface Question {
@@ -46,10 +46,10 @@ export default function AddPadPage() {
   const [pinLng, setPinLng] = useState(0);
   const [pinAddrEditable, setPinAddrEditable] = useState("");
   const [mapType, setMapType] = useState<"roadmap" | "satellite">("roadmap");
-  const mapDivRef   = useRef<HTMLDivElement>(null);
-  const gmapRef     = useRef<any>(null);
-  const markerRef   = useRef<any>(null);
-  const mapsLoading = useRef(false);
+  const mapDivRef        = useRef<HTMLDivElement>(null);
+  const leafletMapRef    = useRef<any>(null);
+  const leafletMarkerRef = useRef<any>(null);
+  const tileLayerRef     = useRef<any>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const cityRef  = useRef<HTMLInputElement>(null);
@@ -141,59 +141,62 @@ export default function AddPadPage() {
     finally { setPinLoading(false); }
   }, []);
 
-  const initGoogleMap = useCallback(() => {
-    if (!mapDivRef.current || !window.google?.maps) return;
-    const G       = window.google.maps;
-    const houston = { lat: 29.7604, lng: -95.3698 };
-    const map = new G.Map(mapDivRef.current, {
-      center: houston, zoom: 18,
-      mapTypeId: "roadmap",
-      disableDefaultUI: true,
-      zoomControl: true,
-      gestureHandling: "greedy",
+  // Clean up Leaflet map when picker closes
+  useEffect(() => {
+    if (!showMapPicker && leafletMapRef.current) {
+      leafletMapRef.current.remove();
+      leafletMapRef.current   = null;
+      leafletMarkerRef.current = null;
+      tileLayerRef.current     = null;
+    }
+  }, [showMapPicker]);
+
+  const initLeafletMap = useCallback(() => {
+    if (!mapDivRef.current) return;
+    if (leafletMapRef.current) {
+      leafletMapRef.current.remove();
+      leafletMapRef.current   = null;
+      leafletMarkerRef.current = null;
+      tileLayerRef.current     = null;
+    }
+    const pinIcon = L.divIcon({
+      html: `<svg width="30" height="42" viewBox="0 0 30 42" xmlns="http://www.w3.org/2000/svg">
+        <path d="M15 0C6.716 0 0 6.716 0 15c0 9.941 15 27 15 27s15-17.059 15-27C30 6.716 23.284 0 15 0z" fill="#8DD63F"/>
+        <circle cx="15" cy="15" r="6.5" fill="white"/>
+      </svg>`,
+      className: "",
+      iconSize: [30, 42],
+      iconAnchor: [15, 42],
     });
-    const marker = new G.Marker({
-      position: houston, map, draggable: true,
-      animation: G.Animation.DROP,
-      title: "Drag to your exact spot",
+    const houston: [number, number] = [29.7604, -95.3698];
+    const map = L.map(mapDivRef.current, { center: houston, zoom: 17, zoomControl: true });
+    const tileLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "© OpenStreetMap contributors",
+      maxZoom: 19,
+    }).addTo(map);
+    const marker = L.marker(houston, { draggable: true, icon: pinIcon }).addTo(map);
+    marker.on("dragend", () => {
+      const { lat, lng } = marker.getLatLng();
+      doReverseGeocode(lat, lng);
     });
-    marker.addListener("dragend", () => {
-      const pos = marker.getPosition();
-      if (pos) doReverseGeocode(pos.lat(), pos.lng());
-    });
-    // Try to centre on user's GPS location
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(pos => {
-        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        map.setCenter(loc);
-        marker.setPosition(loc);
-        doReverseGeocode(loc.lat, loc.lng);
+        const loc: [number, number] = [pos.coords.latitude, pos.coords.longitude];
+        map.setView(loc, 17);
+        marker.setLatLng(loc);
+        doReverseGeocode(loc[0], loc[1]);
       }, () => {});
     }
-    gmapRef.current   = map;
-    markerRef.current = marker;
+    leafletMapRef.current    = map;
+    leafletMarkerRef.current = marker;
+    tileLayerRef.current     = tileLayer;
   }, [doReverseGeocode]);
 
-  async function openMapPicker() {
+  function openMapPicker() {
     setShowMapPicker(true);
     setMapType("roadmap");
     setPinAddr(""); setPinAddrEditable(""); setPinParsed(null); setPinLoading(false);
-    // Destroy any previous map instance so the new one starts fresh
-    if (gmapRef.current) { gmapRef.current = null; }
-    if (window.google?.maps) { setTimeout(initGoogleMap, 100); return; }
-    if (mapsLoading.current) return;
-    mapsLoading.current = true;
-    try {
-      await new Promise<void>((resolve, reject) => {
-        const s = document.createElement("script");
-        s.src = `/api/maps-proxy.js`;
-        s.async = true;
-        s.onload  = () => resolve();
-        s.onerror = () => reject(new Error("Maps failed to load"));
-        document.head.appendChild(s);
-      });
-      setTimeout(initGoogleMap, 100);
-    } catch { mapsLoading.current = false; }
+    setTimeout(initLeafletMap, 100);
   }
 
   function handleUseThisLocation() {
@@ -530,7 +533,12 @@ export default function AddPadPage() {
                   key={type}
                   onClick={() => {
                     setMapType(type);
-                    if (gmapRef.current) gmapRef.current.setMapTypeId(type);
+                    if (!leafletMapRef.current || !tileLayerRef.current) return;
+                    leafletMapRef.current.removeLayer(tileLayerRef.current);
+                    const url = type === "roadmap"
+                      ? "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                      : "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+                    tileLayerRef.current = L.tileLayer(url, { maxZoom: 19 }).addTo(leafletMapRef.current);
                   }}
                   style={{
                     padding: "7px 13px",

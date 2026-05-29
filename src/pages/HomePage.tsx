@@ -3,7 +3,7 @@ import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { PadSVG } from "@/components/PadSVG";
-import lilypadLogo from "@/assets/lilypad-logo.png";
+import lilypadLogo from "@/assets/lilypad-logo-nobg.png";
 
 function AdminSlide({ open }: { open: boolean }) {
   return (
@@ -194,13 +194,13 @@ export default function HomePage() {
             <img
               src={lilypadLogo}
               alt="Lily Pad"
-              style={{ width: 72, height: 72, objectFit: "contain", mixBlendMode: "lighten", marginLeft: -8, marginTop: -4 }}
+              style={{ width: 90, height: 90, objectFit: "contain", marginLeft: -10, marginTop: -6 }}
             />
           </div>
         </div>
 
         <div style={{ display: "flex", justifyContent: "center", marginTop: 24, flexShrink: 0 }}>
-          <div style={{ filter: "drop-shadow(0 6px 20px rgba(0,0,0,0.35))" }}>
+          <div style={{ filter: "drop-shadow(0 6px 20px rgba(0,0,0,0.35))", transform: "scale(0.72)", transformOrigin: "center center" }}>
             <CarSVG />
           </div>
         </div>

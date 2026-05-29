@@ -214,7 +214,7 @@ export default function HomePage() {
           onClick={handleFindAPad}
           style={{ width: "100%", background: "#8DD63F", color: "#0E1F40", border: "none", borderRadius: 50, padding: "16px", fontSize: 16, fontWeight: 800, cursor: "pointer", letterSpacing: "-0.01em", flexShrink: 0, boxShadow: "0 4px 18px rgba(141,214,63,0.30)" }}
         >
-          Find a pad
+          Find a Lily Pad
         </button>
       </div>
 

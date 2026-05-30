@@ -909,9 +909,10 @@ type AdminView = "renters" | "hosts";
 type StaffAuthAction = { kind: "suspend" | "reinstate"; staffId: string; staffName: string };
 interface PendingSpot {
   id: string; address: string; pad_type: string; surface: string;
-  num_pads: number; price_per_hr: number; description: string; photo_url: string;
+  num_pads: number; price_per_hr: number; description: string;
+  photo_url: string; photo_urls: string[];
   host_name: string; host_email: string; lat: number; lng: number;
-  created_at: string; host_user_id: string;
+  created_at: string; host_user_id: string; spot_name?: string;
 }
 
 export default function AdminPage() {
@@ -954,6 +955,9 @@ export default function AdminPage() {
   const [loadingPending, setLoadingPending] = useState(false);
   const [approvingSpotId, setApprovingSpotId] = useState<string | null>(null);
   const [rejectingSpotId, setRejectingSpotId] = useState<string | null>(null);
+  const [selectedSpot, setSelectedSpot]   = useState<PendingSpot | null>(null);
+  const [approveConfirmSpot, setApproveConfirmSpot] = useState<PendingSpot | null>(null);
+  const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null);
 
   // Staff accounts (admin manages these).
   const [staffList, setStaffList] = useState<StaffAccount[]>([]);
@@ -2898,12 +2902,22 @@ export default function AdminPage() {
                   <p style={{ color: "rgba(255,255,255,0.35)", fontSize: 12, margin: "6px 0 0" }}>New listings will appear here for review</p>
                 </div>
               ) : pendingSpots.map(s => (
-                <div key={s.id} style={{ background: "#142A52", borderRadius: 16, overflow: "hidden", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 14px rgba(0,0,0,0.30)" }}>
+                <div
+                  key={s.id}
+                  onClick={() => setSelectedSpot(s)}
+                  style={{ background: "#142A52", borderRadius: 16, overflow: "hidden", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 14px rgba(0,0,0,0.30)", cursor: "pointer", position: "relative" }}
+                >
                   {s.photo_url && (
-                    <img src={s.photo_url} alt="Pad photo" style={{ width: "100%", height: 160, objectFit: "cover", display: "block" }} />
+                    <div style={{ position: "relative" }}>
+                      <img src={s.photo_url} alt="Pad photo" style={{ width: "100%", height: 160, objectFit: "cover", display: "block" }} />
+                      {(s.photo_urls?.length ?? 0) > 1 && (
+                        <span style={{ position: "absolute", bottom: 8, right: 8, background: "rgba(0,0,0,0.60)", color: "#fff", fontSize: 10.5, fontWeight: 700, borderRadius: 20, padding: "3px 9px" }}>
+                          +{s.photo_urls.length - 1} more
+                        </span>
+                      )}
+                    </div>
                   )}
                   <div style={{ padding: "14px 16px" }}>
-                    {/* Host info */}
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
                       <div style={{ width: 34, height: 34, borderRadius: "50%", background: "rgba(141,214,63,0.15)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -2912,36 +2926,19 @@ export default function AdminPage() {
                         <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#fff" }}>{s.host_name || "Unknown Host"}</p>
                         <p style={{ margin: 0, fontSize: 11, color: "rgba(255,255,255,0.50)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.host_email}</p>
                       </div>
-                      <span style={{ background: "rgba(246,200,0,0.15)", color: "#F6C800", fontSize: 10, fontWeight: 800, padding: "3px 8px", borderRadius: 100, letterSpacing: "0.06em", textTransform: "uppercase", flexShrink: 0 }}>Pending</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                        <span style={{ background: "rgba(246,200,0,0.15)", color: "#F6C800", fontSize: 10, fontWeight: 800, padding: "3px 8px", borderRadius: 100, letterSpacing: "0.06em", textTransform: "uppercase" }}>Pending</span>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="2.5"><path d="M9 18l6-6-6-6"/></svg>
+                      </div>
                     </div>
-                    {/* Spot details */}
-                    <p style={{ margin: "0 0 8px", fontSize: 14, fontWeight: 700, color: "#fff", lineHeight: 1.35 }}>{s.address}</p>
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+                    <p style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 700, color: "#fff", lineHeight: 1.35 }}>{s.spot_name || s.address}</p>
+                    {s.spot_name && <p style={{ margin: "0 0 8px", fontSize: 11.5, color: "rgba(255,255,255,0.50)" }}>{s.address}</p>}
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                       <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.55)", background: "rgba(255,255,255,0.07)", borderRadius: 6, padding: "3px 8px" }}>{s.pad_type}</span>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.55)", background: "rgba(255,255,255,0.07)", borderRadius: 6, padding: "3px 8px" }}>{s.surface}</span>
                       <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.55)", background: "rgba(255,255,255,0.07)", borderRadius: 6, padding: "3px 8px" }}>{s.num_pads} pad{s.num_pads !== 1 ? "s" : ""}</span>
                       <span style={{ fontSize: 11, fontWeight: 800, color: GREEN }}>${s.price_per_hr}/hr</span>
                     </div>
-                    {s.description && (
-                      <p style={{ margin: "0 0 14px", fontSize: 12.5, color: "rgba(255,255,255,0.60)", lineHeight: 1.5 }}>{s.description}</p>
-                    )}
-                    {/* Approve / Reject */}
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button
-                        onClick={() => approveSpot(s.id)}
-                        disabled={approvingSpotId === s.id || !!rejectingSpotId}
-                        style={{ flex: 1, padding: "12px", borderRadius: 100, border: "none", background: GREEN, color: NAVY, fontWeight: 800, fontSize: 13, cursor: "pointer", fontFamily: '"DM Sans",sans-serif', opacity: approvingSpotId === s.id ? 0.6 : 1, transition: "opacity 0.15s" }}
-                      >
-                        {approvingSpotId === s.id ? "Approving…" : "✓ Approve"}
-                      </button>
-                      <button
-                        onClick={() => rejectSpot(s.id)}
-                        disabled={!!approvingSpotId || rejectingSpotId === s.id}
-                        style={{ flex: 1, padding: "12px", borderRadius: 100, border: "1.5px solid rgba(239,68,68,0.40)", background: "rgba(239,68,68,0.10)", color: "#ef4444", fontWeight: 800, fontSize: 13, cursor: "pointer", fontFamily: '"DM Sans",sans-serif', opacity: rejectingSpotId === s.id ? 0.6 : 1, transition: "opacity 0.15s" }}
-                      >
-                        {rejectingSpotId === s.id ? "Rejecting…" : "✕ Reject"}
-                      </button>
-                    </div>
+                    <p style={{ margin: "10px 0 0", fontSize: 11.5, color: "rgba(255,255,255,0.40)", fontWeight: 600 }}>Tap to review all photos & details →</p>
                   </div>
                 </div>
               ))}
@@ -3481,6 +3478,198 @@ export default function AdminPage() {
           ))}
         </div>
       )}
+
+      {/* ── PAD DETAIL OVERLAY ── */}
+      {selectedSpot && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 400, background: NAVY, display: "flex", flexDirection: "column", fontFamily: '"DM Sans",sans-serif' }}>
+          {/* Header */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "16px 20px 12px", flexShrink: 0, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+            <button onClick={() => setSelectedSpot(null)} style={{ background: "rgba(255,255,255,0.08)", border: "none", borderRadius: "50%", width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#fff", flexShrink: 0 }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+            <div style={{ flex: 1 }}>
+              <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Pad Review</p>
+              <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: "#fff", lineHeight: 1.2 }}>{selectedSpot.spot_name || selectedSpot.address}</p>
+            </div>
+            <span style={{ background: "rgba(246,200,0,0.15)", color: "#F6C800", fontSize: 10, fontWeight: 800, padding: "3px 10px", borderRadius: 100, letterSpacing: "0.06em", textTransform: "uppercase", flexShrink: 0 }}>Pending</span>
+          </div>
+
+          {/* Scrollable body */}
+          <div style={{ flex: 1, overflowY: "auto", padding: "0 0 130px" }}>
+
+            {/* Photo gallery */}
+            {(selectedSpot.photo_urls?.length ?? 0) > 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                {selectedSpot.photo_urls.map((url, i) => (
+                  <div key={i} onClick={() => setLightboxPhoto(url)} style={{ position: "relative", cursor: "zoom-in" }}>
+                    <img src={url} alt={`Photo ${i + 1}`} style={{ width: "100%", maxHeight: 280, objectFit: "cover", display: "block" }} />
+                    <div style={{ position: "absolute", bottom: 8, right: 10, background: "rgba(0,0,0,0.55)", borderRadius: 20, padding: "3px 9px", display: "flex", alignItems: "center", gap: 4 }}>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v6M8 11h6"/></svg>
+                      <span style={{ color: "#fff", fontSize: 10, fontWeight: 700 }}>Tap to expand</span>
+                    </div>
+                    <span style={{ position: "absolute", top: 8, left: 10, background: "rgba(0,0,0,0.55)", color: "#fff", fontSize: 10, fontWeight: 700, borderRadius: 20, padding: "3px 9px" }}>
+                      Photo {i + 1} of {selectedSpot.photo_urls.length}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ height: 120, background: "rgba(255,255,255,0.04)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <span style={{ color: "rgba(255,255,255,0.30)", fontSize: 12, fontWeight: 600 }}>No photos uploaded</span>
+              </div>
+            )}
+
+            <div style={{ padding: "20px 20px 0" }}>
+
+              {/* Host profile card */}
+              <div style={{ background: "#142A52", borderRadius: 16, padding: "16px", marginBottom: 16, boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 10px rgba(0,0,0,0.25)" }}>
+                <p style={{ margin: "0 0 12px", fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.10em", textTransform: "uppercase" }}>Host Profile</p>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ width: 48, height: 48, borderRadius: "50%", background: `linear-gradient(135deg, ${GREEN}33, ${GREEN}11)`, border: `1.5px solid ${GREEN}44`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ margin: 0, fontSize: 16, fontWeight: 800, color: "#fff" }}>{selectedSpot.host_name || "Unknown Host"}</p>
+                    <a href={`mailto:${selectedSpot.host_email}`} style={{ color: GREEN, fontSize: 12.5, fontWeight: 600, textDecoration: "none" }}>{selectedSpot.host_email}</a>
+                  </div>
+                </div>
+                <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <div style={{ flex: 1, minWidth: 120, background: "rgba(255,255,255,0.05)", borderRadius: 10, padding: "10px 12px" }}>
+                    <p style={{ margin: "0 0 2px", fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.45)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Host ID</p>
+                    <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.70)", wordBreak: "break-all" }}>{selectedSpot.host_user_id?.slice(0, 18)}…</p>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 120, background: "rgba(255,255,255,0.05)", borderRadius: 10, padding: "10px 12px" }}>
+                    <p style={{ margin: "0 0 2px", fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.45)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Submitted</p>
+                    <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: "#fff" }}>
+                      {selectedSpot.created_at ? new Date(selectedSpot.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Listing details */}
+              <div style={{ background: "#142A52", borderRadius: 16, padding: "16px", marginBottom: 16, boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 10px rgba(0,0,0,0.25)" }}>
+                <p style={{ margin: "0 0 12px", fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.10em", textTransform: "uppercase" }}>Listing Details</p>
+
+                {selectedSpot.spot_name && (
+                  <div style={{ marginBottom: 12 }}>
+                    <p style={{ margin: "0 0 2px", fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.45)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Pad Name</p>
+                    <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: "#fff" }}>{selectedSpot.spot_name}</p>
+                  </div>
+                )}
+
+                <div style={{ marginBottom: 12 }}>
+                  <p style={{ margin: "0 0 2px", fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.45)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Address</p>
+                  <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#fff", lineHeight: 1.4 }}>{selectedSpot.address}</p>
+                </div>
+
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+                  {[
+                    { label: "Type", value: selectedSpot.pad_type },
+                    { label: "Surface", value: selectedSpot.surface },
+                    { label: "Spaces", value: `${selectedSpot.num_pads} pad${selectedSpot.num_pads !== 1 ? "s" : ""}` },
+                    { label: "Rate", value: `$${selectedSpot.price_per_hr}/hr`, accent: true },
+                  ].map(f => (
+                    <div key={f.label} style={{ flex: 1, minWidth: 80, background: "rgba(255,255,255,0.05)", borderRadius: 10, padding: "10px 12px" }}>
+                      <p style={{ margin: "0 0 2px", fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.45)", textTransform: "uppercase", letterSpacing: "0.08em" }}>{f.label}</p>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: f.accent ? GREEN : "#fff" }}>{f.value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {selectedSpot.lat && selectedSpot.lng && (
+                  <div style={{ marginBottom: 12 }}>
+                    <p style={{ margin: "0 0 2px", fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.45)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Coordinates</p>
+                    <p style={{ margin: 0, fontSize: 11.5, fontWeight: 600, color: "rgba(255,255,255,0.65)" }}>{selectedSpot.lat.toFixed(5)}, {selectedSpot.lng.toFixed(5)}</p>
+                  </div>
+                )}
+
+                {selectedSpot.description && (
+                  <div>
+                    <p style={{ margin: "0 0 4px", fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.45)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Description</p>
+                    <p style={{ margin: 0, fontSize: 13, color: "rgba(255,255,255,0.75)", lineHeight: 1.6 }}>{selectedSpot.description}</p>
+                  </div>
+                )}
+              </div>
+
+            </div>
+          </div>
+
+          {/* Fixed bottom action bar */}
+          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "14px 20px 32px", background: `linear-gradient(to top, ${NAVY} 75%, transparent)`, display: "flex", gap: 10 }}>
+            <button
+              onClick={() => { const id = selectedSpot.id; setSelectedSpot(null); rejectSpot(id); }}
+              disabled={rejectingSpotId === selectedSpot.id || !!approvingSpotId}
+              style={{ flex: 1, padding: "14px", borderRadius: 100, border: "1.5px solid rgba(239,68,68,0.40)", background: "rgba(239,68,68,0.10)", color: "#ef4444", fontWeight: 800, fontSize: 14, cursor: "pointer", fontFamily: '"DM Sans",sans-serif', opacity: rejectingSpotId === selectedSpot.id ? 0.6 : 1 }}
+            >
+              {rejectingSpotId === selectedSpot.id ? "Rejecting…" : "✕ Reject"}
+            </button>
+            <button
+              onClick={() => setApproveConfirmSpot(selectedSpot)}
+              disabled={!!approvingSpotId}
+              style={{ flex: 1, padding: "14px", borderRadius: 100, border: "none", background: GREEN, color: NAVY, fontWeight: 800, fontSize: 14, cursor: "pointer", fontFamily: '"DM Sans",sans-serif', opacity: approvingSpotId === selectedSpot.id ? 0.6 : 1 }}
+            >
+              {approvingSpotId === selectedSpot.id ? "Approving…" : "✓ Approve"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── PHOTO LIGHTBOX ── */}
+      {lightboxPhoto && (
+        <div
+          onClick={() => setLightboxPhoto(null)}
+          style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.95)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "zoom-out" }}
+        >
+          <button onClick={e => { e.stopPropagation(); setLightboxPhoto(null); }} style={{ position: "absolute", top: 18, right: 18, background: "rgba(255,255,255,0.12)", border: "none", borderRadius: "50%", width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#fff" }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+          <img src={lightboxPhoto} alt="Full size" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} onClick={e => e.stopPropagation()} />
+        </div>
+      )}
+
+      {/* ── APPROVE CONFIRMATION MODAL ── */}
+      {approveConfirmSpot && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 600, background: "rgba(0,0,0,0.72)", display: "flex", alignItems: "flex-end", justifyContent: "center", fontFamily: '"DM Sans",sans-serif' }}>
+          <div style={{ background: "#142A52", borderRadius: "24px 24px 0 0", padding: "28px 24px 40px", width: "100%", maxWidth: 480, boxShadow: "0 -8px 40px rgba(0,0,0,0.50)" }}>
+            <div style={{ width: 36, height: 4, background: "rgba(255,255,255,0.15)", borderRadius: 2, margin: "0 auto 22px" }} />
+
+            <div style={{ width: 52, height: 52, borderRadius: "50%", background: `${GREEN}22`, border: `2px solid ${GREEN}55`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+
+            <h2 style={{ margin: "0 0 6px", fontSize: 20, fontWeight: 800, color: "#fff", textAlign: "center", letterSpacing: "-0.02em" }}>Approve this pad?</h2>
+            <p style={{ margin: "0 0 4px", fontSize: 13.5, fontWeight: 700, color: "#fff", textAlign: "center" }}>
+              {approveConfirmSpot.spot_name || approveConfirmSpot.address}
+            </p>
+            <p style={{ margin: "0 0 24px", fontSize: 12.5, color: "rgba(255,255,255,0.50)", textAlign: "center", lineHeight: 1.55 }}>
+              This listing will go live on the map immediately and {approveConfirmSpot.host_name || "the host"} will be notified by email.
+            </p>
+
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                onClick={() => setApproveConfirmSpot(null)}
+                style={{ flex: 1, padding: "14px", borderRadius: 100, border: "1.5px solid rgba(255,255,255,0.15)", background: "transparent", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: '"DM Sans",sans-serif' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  const spot = approveConfirmSpot;
+                  setApproveConfirmSpot(null);
+                  setSelectedSpot(null);
+                  await approveSpot(spot.id);
+                }}
+                disabled={!!approvingSpotId}
+                style={{ flex: 2, padding: "14px", borderRadius: 100, border: "none", background: GREEN, color: NAVY, fontWeight: 800, fontSize: 14, cursor: "pointer", fontFamily: '"DM Sans",sans-serif' }}
+              >
+                Yes, Approve
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

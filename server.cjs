@@ -1276,9 +1276,17 @@ app.get('/api/spots/pending', async (req, res) => {
     if (!r.ok) return res.status(r.status).json({ error: data });
     const rows = Array.isArray(data) ? data : [];
     const flat = rows.map(s => {
-      let photo_url = '', descText = s.description || '';
-      try { const p = JSON.parse(s.description || '{}'); if (p && typeof p === 'object') { photo_url = p.photo_url || ''; descText = p.text || ''; } } catch {}
-      return { ...s, description: descText, photo_url, host_name: s.host?.full_name || '', host_email: s.host?.email || '' };
+      let photo_url = '', descText = s.description || '', photo_urls = [];
+      try {
+        const p = JSON.parse(s.description || '{}');
+        if (p && typeof p === 'object') {
+          photo_url  = p.photo_url  || '';
+          descText   = p.text       || '';
+          photo_urls = Array.isArray(p.photo_urls) ? p.photo_urls : (photo_url ? [photo_url] : []);
+        }
+      } catch {}
+      if (!photo_urls.length && photo_url) photo_urls = [photo_url];
+      return { ...s, description: descText, photo_url, photo_urls, host_name: s.host?.full_name || '', host_email: s.host?.email || '' };
     });
     res.json(flat);
   } catch (e) { res.status(500).json({ error: e.message }); }

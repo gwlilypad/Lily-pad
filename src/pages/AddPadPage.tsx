@@ -182,11 +182,9 @@ export default function AddPadPage() {
     if (mapsLoading.current) return;
     mapsLoading.current = true;
     try {
-      const keyRes = await fetch("/api/maps-key");
-      const { key } = await keyRes.json();
       await new Promise<void>((resolve, reject) => {
         const s = document.createElement("script");
-        s.src = `https://maps.googleapis.com/maps/api/js?key=${key}`;
+        s.src = `/api/maps-proxy.js`;
         s.async = true;
         s.onload  = () => resolve();
         s.onerror = () => reject(new Error("Maps failed to load"));

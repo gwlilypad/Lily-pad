@@ -62,9 +62,8 @@ export default function EarlyAccessPage() {
   }
 
   const roleOptions: { id: Role; label: string }[] = [
-    { id: "driver", label: "Driver"  },
-    { id: "host",   label: "Host"    },
-    { id: "both",   label: "Both"    },
+    { id: "driver", label: "Driver" },
+    { id: "host",   label: "Host"   },
   ];
 
   return (
@@ -338,7 +337,7 @@ export default function EarlyAccessPage() {
           <img
             src={lilypadLogo}
             alt="Lily Pad"
-            style={{ width: 120, height: "auto", marginBottom: 8 }}
+            style={{ width: 175, height: "auto", marginBottom: 16 }}
           />
 
           <div style={{

@@ -27,6 +27,7 @@ import ListingSuccessPage from "@/pages/ListingSuccessPage";
 import SignInPage from "@/pages/SignInPage";
 import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
 import EmailVerifyPage from "@/pages/EmailVerifyPage";
+import PWAInstallBanner from "@/components/PWAInstallBanner";
 
 const PAGE_ROUTES: Record<PageId, string> = {
   home: "/",
@@ -127,6 +128,7 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <AppInner />
+        <PWAInstallBanner />
       </AuthProvider>
     </BrowserRouter>
   );

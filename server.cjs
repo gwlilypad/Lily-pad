@@ -949,15 +949,14 @@ app.get('/api/spots', async (req, res) => {
     const rows = Array.isArray(data) ? data : [];
     // description is stored as JSON: { text, photo_url } — decode it transparently
     const flat = rows.map(s => {
-      let photo_url = '', descText = s.description || '';
-      let photo_urls = [];
+      let photo_url = '', descText = s.description || '', photo_urls = [], services = [];
       try {
         const parsed = JSON.parse(s.description || '{}');
         if (parsed && typeof parsed === 'object') {
           photo_url  = parsed.photo_url  || '';
           descText   = parsed.text       || '';
-          photo_urls = Array.isArray(parsed.photo_urls) ? parsed.photo_urls
-                       : (photo_url ? [photo_url] : []);
+          photo_urls = Array.isArray(parsed.photo_urls) ? parsed.photo_urls : (photo_url ? [photo_url] : []);
+          services   = Array.isArray(parsed.services)   ? parsed.services   : [];
         }
       } catch { /* plain-text description — legacy row */ }
       if (!photo_urls.length && photo_url) photo_urls = [photo_url];
@@ -966,6 +965,7 @@ app.get('/api/spots', async (req, res) => {
         description: descText,
         photo_url,
         photo_urls,
+        services,
         host_name: (s.host && s.host.full_name) ? s.host.full_name : '',
       };
     });
@@ -1194,13 +1194,22 @@ app.patch('/api/spots/:id', async (req, res) => {
     const existing = Array.isArray(curData) ? curData[0] : curData;
 
     // Parse existing description JSON (may be plain text for legacy rows)
-    let descObj = { text: '', photo_url: '' };
-    try { const p = JSON.parse(existing?.description || '{}'); if (p && typeof p === 'object') descObj = { text: p.text || '', photo_url: p.photo_url || '' }; }
-    catch { descObj.text = existing?.description || ''; }
+    let descObj = { text: '', photo_url: '', photo_urls: [], services: [] };
+    try {
+      const p = JSON.parse(existing?.description || '{}');
+      if (p && typeof p === 'object') descObj = {
+        text: p.text || '',
+        photo_url: p.photo_url || '',
+        photo_urls: Array.isArray(p.photo_urls) ? p.photo_urls : [],
+        services: Array.isArray(p.services) ? p.services : [],
+      };
+    } catch { descObj.text = existing?.description || ''; }
 
-    // Merge changes — photo_url and description.text are stored inside description JSON
-    if ('photo_url'   in body) descObj.photo_url = body.photo_url;
-    if ('description' in body) descObj.text      = body.description;
+    // Merge changes — all stored inside description JSON blob
+    if ('photo_url'   in body) descObj.photo_url  = body.photo_url;
+    if ('photo_urls'  in body) descObj.photo_urls  = body.photo_urls;
+    if ('description' in body) descObj.text        = body.description;
+    if ('services'    in body) descObj.services    = body.services;
 
     const patchFields = { description: JSON.stringify(descObj) };
     if ('status'       in body) patchFields.status       = body.status;
@@ -1249,17 +1258,18 @@ app.get('/api/spots/user/:userId', async (req, res) => {
     if (!r.ok) return res.status(r.status).json({ error: data });
     const rows = Array.isArray(data) ? data : [];
     const flat = rows.map(s => {
-      let photo_url = '', descText = s.description || '', photo_urls = [];
+      let photo_url = '', descText = s.description || '', photo_urls = [], services = [];
       try {
         const p = JSON.parse(s.description || '{}');
         if (p && typeof p === 'object') {
           photo_url  = p.photo_url  || '';
           descText   = p.text       || '';
           photo_urls = Array.isArray(p.photo_urls) ? p.photo_urls : (photo_url ? [photo_url] : []);
+          services   = Array.isArray(p.services)   ? p.services   : [];
         }
       } catch {}
       if (!photo_urls.length && photo_url) photo_urls = [photo_url];
-      return { ...s, description: descText, photo_url, photo_urls };
+      return { ...s, description: descText, photo_url, photo_urls, services };
     });
     res.json(flat);
   } catch (e) { res.status(500).json({ error: e.message }); }

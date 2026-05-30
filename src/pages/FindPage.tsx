@@ -29,7 +29,7 @@ const NEIGHBORHOOD_ZOOM = 14;
 const GLOBE_CENTER: [number, number] = [20, 0];
 const GLOBE_ZOOM = 2;
 
-type SpotRecord = { id: string; price: string; addr: string; meta: string; lat: number; lng: number; featured: boolean; host_name?: string; photo_url?: string; photo_urls?: string[] };
+type SpotRecord = { id: string; price: string; addr: string; meta: string; lat: number; lng: number; featured: boolean; host_name?: string; photo_url?: string; photo_urls?: string[]; services?: string[] };
 
 const SPOTS: SpotRecord[] = [];
 
@@ -2884,6 +2884,28 @@ export default function FindPage() {
 
               {/* Divider */}
               <div style={{ height: 1, background: "rgba(255,255,255,0.07)", margin: "0 16px 14px", flexShrink: 0 }} />
+
+              {/* Amenities */}
+              {spot.services && spot.services.length > 0 && (
+                <div style={{ padding: "0 16px 14px", flexShrink: 0 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.36)", letterSpacing: 0.6, textTransform: "uppercase", marginBottom: 9 }}>Amenities</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+                    {spot.services.map(svc => (
+                      <span key={svc} style={{
+                        display: "inline-flex", alignItems: "center", gap: 5,
+                        background: "rgba(141,214,63,0.10)",
+                        border: "1px solid rgba(141,214,63,0.28)",
+                        borderRadius: 999, padding: "5px 12px",
+                        fontSize: 12, fontWeight: 600, color: "#8DD63F",
+                      }}>
+                        <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M2 6l3 3 5-5"/></svg>
+                        {svc}
+                      </span>
+                    ))}
+                  </div>
+                  <div style={{ height: 1, background: "rgba(255,255,255,0.07)", marginTop: 14 }} />
+                </div>
+              )}
 
               {/* Host row */}
               <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "0 16px 14px", flexShrink: 0 }}>

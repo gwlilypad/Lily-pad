@@ -186,7 +186,7 @@ export default function PadDashboardPage() {
               nickname: padName,
               price: Number(s.price_per_hr) || 4,
               description: String(s.description || ""),
-              services: [],
+              services: Array.isArray(s.services) ? s.services as string[] : [],
               photoUrl: String(s.photo_url || ""),
               status: s.status === "active" ? "active" : s.status === "paused" ? "paused" : "pending",
               pausedUntil: null,
@@ -269,6 +269,7 @@ export default function PadDashboardPage() {
           ...(nameChanged ? { spot_name: trimmedName } : {}),
           price_per_hr: editDraft.price,
           description: editDraft.description,
+          services: editDraft.services,
         }),
       });
       if (!r.ok) {
@@ -447,11 +448,23 @@ export default function PadDashboardPage() {
   }
 
   function toggleService(id: number, service: string) {
+    let newServices: string[] = [];
+    let spotId = "";
     setPads(prev => prev.map(p => {
       if (p.id !== id) return p;
       const has = p.services.includes(service);
-      return { ...p, services: has ? p.services.filter(s => s !== service) : [...p.services, service] };
+      const updated = has ? p.services.filter(s => s !== service) : [...p.services, service];
+      newServices = updated;
+      spotId = p.spotId;
+      return { ...p, services: updated };
     }));
+    if (spotId) {
+      fetch(`/api/spots/${spotId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ services: newServices }),
+      }).catch(() => {});
+    }
   }
 
   function onPhotoPick(e: React.ChangeEvent<HTMLInputElement>) {
@@ -692,16 +705,16 @@ export default function PadDashboardPage() {
             <div style={{ position: "relative", borderRadius: 20, overflow: "hidden", marginBottom: 16, boxShadow: "0 4px 20px rgba(0,0,0,0.40)" }}>
               <div style={{ height: 210, background: openPad.photoUrl ? `url(${openPad.photoUrl}) center/cover` : `linear-gradient(135deg, #142A52 0%, #1e3d72 100%)` }} />
               <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, transparent 35%, rgba(8,15,35,0.88) 100%)" }} />
-              <div style={{ position: "absolute", bottom: 14, left: 16, right: 56, minWidth: 0 }}>
+              <div style={{ position: "absolute", top: 12, left: 12 }}>
+                <StatusPill pad={openPad} />
+              </div>
+              <div style={{ position: "absolute", bottom: 14, left: 16, right: 16, minWidth: 0 }}>
                 <div style={{ fontSize: 19, fontWeight: 800, color: "#fff", letterSpacing: -0.4, textShadow: "0 1px 5px rgba(0,0,0,0.6)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {openPad.name}
                 </div>
                 <div style={{ fontSize: 11.5, color: "rgba(255,255,255,0.68)", marginTop: 2, textShadow: "0 1px 3px rgba(0,0,0,0.5)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {openPad.address}, {openPad.city}
                 </div>
-              </div>
-              <div style={{ position: "absolute", bottom: 14, right: 16 }}>
-                <StatusPill pad={openPad} />
               </div>
               <button onClick={() => photoInputRef.current?.click()} style={{
                 position: "absolute", top: 12, right: 12,

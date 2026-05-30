@@ -140,58 +140,85 @@ export default function AddPadPage() {
     finally { setPinLoading(false); }
   }, []);
 
+  const [mapError, setMapError] = useState("");
+
   const initGoogleMap = useCallback(() => {
-    if (!mapDivRef.current || !window.google?.maps) return;
-    const G       = window.google.maps;
-    const houston = { lat: 29.7604, lng: -95.3698 };
-    const map = new G.Map(mapDivRef.current, {
-      center: houston, zoom: 19,
-      mapTypeId: "roadmap",
-      disableDefaultUI: true,
-      zoomControl: true,
-      gestureHandling: "greedy",
-    });
-    const marker = new G.Marker({
-      position: houston, map, draggable: true,
-      animation: G.Animation.DROP,
-      title: "Drag to your exact spot",
-    });
-    marker.addListener("dragend", () => {
-      const pos = marker.getPosition();
-      if (pos) doReverseGeocode(pos.lat(), pos.lng());
-    });
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(pos => {
-        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        map.setCenter(loc);
-        map.setZoom(19);
-        marker.setPosition(loc);
-        doReverseGeocode(loc.lat, loc.lng);
-      }, () => {});
+    if (!mapDivRef.current) {
+      setMapError("Map container not ready — please close and try again.");
+      return;
     }
-    gmapRef.current   = map;
-    markerRef.current = marker;
+    if (!window.google?.maps) {
+      setMapError("Google Maps failed to load — check your internet connection.");
+      return;
+    }
+    try {
+      const G       = window.google.maps;
+      const houston = { lat: 29.7604, lng: -95.3698 };
+      const map = new G.Map(mapDivRef.current, {
+        center: houston, zoom: 19,
+        mapTypeId: "roadmap",
+        disableDefaultUI: true,
+        zoomControl: true,
+        gestureHandling: "greedy",
+      });
+      const marker = new G.Marker({
+        position: houston, map, draggable: true,
+        animation: G.Animation.DROP,
+        title: "Drag to your exact spot",
+      });
+      marker.addListener("dragend", () => {
+        const pos = marker.getPosition();
+        if (pos) doReverseGeocode(pos.lat(), pos.lng());
+      });
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(pos => {
+          const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          map.setCenter(loc);
+          map.setZoom(19);
+          marker.setPosition(loc);
+          doReverseGeocode(loc.lat, loc.lng);
+        }, () => {});
+      }
+      gmapRef.current   = map;
+      markerRef.current = marker;
+    } catch (e: any) {
+      setMapError(`Maps init error: ${e?.message || e}`);
+    }
   }, [doReverseGeocode]);
 
   async function openMapPicker() {
     setShowMapPicker(true);
     setMapType("roadmap");
+    setMapError("");
     setPinAddr(""); setPinAddrEditable(""); setPinParsed(null); setPinLoading(false);
     if (gmapRef.current) { gmapRef.current = null; }
-    if (window.google?.maps) { setTimeout(initGoogleMap, 200); return; }
+    // If already loaded, init after next paint so DOM is committed
+    if (window.google?.maps) {
+      requestAnimationFrame(() => requestAnimationFrame(initGoogleMap));
+      return;
+    }
     if (mapsLoading.current) return;
     mapsLoading.current = true;
     try {
+      const keyRes = await fetch("/api/maps-key");
+      const { key } = await keyRes.json();
+      // Use the canonical callback pattern — Maps JS calls __lilyMapsReady when fully ready
       await new Promise<void>((resolve, reject) => {
+        (window as any).__lilyMapsReady = () => {
+          delete (window as any).__lilyMapsReady;
+          resolve();
+        };
         const s = document.createElement("script");
-        s.src = `/api/maps-proxy.js`;
+        s.src = `https://maps.googleapis.com/maps/api/js?key=${key}&callback=__lilyMapsReady`;
         s.async = true;
-        s.onload  = () => resolve();
-        s.onerror = () => reject(new Error("Maps failed to load"));
+        s.onerror = () => reject(new Error("Script load failed — check API key or network"));
         document.head.appendChild(s);
       });
-      setTimeout(initGoogleMap, 100);
-    } catch { mapsLoading.current = false; }
+      initGoogleMap();
+    } catch (e: any) {
+      mapsLoading.current = false;
+      setMapError(`Maps load error: ${e?.message || e}`);
+    }
   }
 
   function handleUseThisLocation() {
@@ -516,7 +543,19 @@ export default function AddPadPage() {
 
           {/* Map + overlay toggle */}
           <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
-            <div ref={mapDivRef} style={{ position: "absolute", inset: 0 }} />
+            {mapError ? (
+              <div style={{
+                position: "absolute", inset: 0, display: "flex", flexDirection: "column",
+                alignItems: "center", justifyContent: "center", padding: 24, background: "#f6f8fc",
+              }}>
+                <p style={{ color: "#c0392b", fontWeight: 700, fontSize: 14, textAlign: "center", margin: 0 }}>⚠️ {mapError}</p>
+                <p style={{ color: "rgba(14,31,64,0.5)", fontSize: 12, marginTop: 8, textAlign: "center" }}>
+                  Check that the Maps JavaScript API is enabled in Google Cloud Console and billing is active.
+                </p>
+              </div>
+            ) : (
+              <div ref={mapDivRef} style={{ position: "absolute", inset: 0 }} />
+            )}
             {/* Map type toggle */}
             <div style={{
               position: "absolute", top: 12, right: 12, zIndex: 10,

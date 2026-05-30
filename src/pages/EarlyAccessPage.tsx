@@ -152,11 +152,27 @@ export default function EarlyAccessPage() {
     return (
       <div style={outerStyle}>
         <style>{animCSS}</style>
-        <div style={centeredColStyle}>
-          <img src={lilypadLogo} alt="Lily Pad" style={{ width: 220, height: "auto", marginBottom: 36 }} />
+
+        {/* top half — logo centered */}
+        <div style={{
+          flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
+          padding: "24px 0 0", overflow: "hidden",
+        }}>
+          <img
+            src={lilypadLogo}
+            alt="Lily Pad"
+            style={{ width: "160%", maxWidth: 700, height: "auto", transform: "translateY(4%)" }}
+          />
+        </div>
+
+        {/* bottom half — tagline + CTA */}
+        <div style={{
+          flex: 1, display: "flex", flexDirection: "column", alignItems: "center",
+          justifyContent: "center", padding: "0 32px 52px", textAlign: "center", gap: 0,
+        }}>
           <h1 style={{
             fontSize: 26, fontWeight: 800, color: "#fff",
-            margin: "0 0 44px", letterSpacing: "-0.025em", lineHeight: 1.25, maxWidth: 300,
+            margin: "0 0 36px", letterSpacing: "-0.025em", lineHeight: 1.25, maxWidth: 300,
           }}>
             Lily Pad. Your neighbor<br />saved you a spot.
           </h1>

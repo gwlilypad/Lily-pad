@@ -586,7 +586,7 @@ function GrowthChart() {
 
 // ── Initials + colored avatar ───────────────────────────────────────────────
 function Avatar({ user, size = 40 }: { user: MockUser; size?: number }) {
-  const initials = (user.firstName[0] + user.lastName[0]).toUpperCase();
+  const initials = user.lastName ? (user.firstName[0] + user.lastName[0]).toUpperCase() : user.firstName.slice(0, 2).toUpperCase();
   const bg = user.type === "host" ? "rgba(141,214,63,0.18)" : user.type === "driver" ? "rgba(255,255,255,0.12)" : "rgba(120,170,255,0.20)";
   const fg = user.type === "host" ? "#B6E97A" : user.type === "driver" ? "#fff" : "#9DBEFF";
   return (

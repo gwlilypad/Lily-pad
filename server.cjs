@@ -1766,7 +1766,12 @@ app.get('/api/admin/users', async (req, res) => {
     if (!profRes.ok) return res.status(profRes.status).json({ error: profiles });
     const counts = {};
     if (Array.isArray(bookings)) bookings.forEach(b => { if (b.user_id) counts[b.user_id] = (counts[b.user_id] || 0) + 1; });
-    const result = Array.isArray(profiles) ? profiles.map(p => ({ ...p, booking_count: counts[p.id] || 0 })) : [];
+    const result = Array.isArray(profiles)
+      ? profiles
+          .filter(p => !String(p.email || '').toLowerCase().endsWith('@lilypadparking.com'))
+          .filter(p => String(p.email || '').includes('@'))
+          .map(p => ({ ...p, booking_count: counts[p.id] || 0 }))
+      : [];
     res.json(result);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

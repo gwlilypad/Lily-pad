@@ -233,14 +233,14 @@ export default function EarlyAccessPage() {
       <style>{animCSS}</style>
 
       {/* logo — same large centered style as welcome, plus back button overlay */}
-      <div style={{ position: "relative", flexShrink: 0, overflow: "hidden", height: 160 }}>
+      <div style={{ position: "relative", flexShrink: 0, overflow: "hidden", height: 220 }}>
         <img
           src={lilypadLogo}
           alt="Lily Pad"
           style={{
             width: "160%", maxWidth: 700, height: "auto",
             position: "absolute", left: "50%", top: "50%",
-            transform: "translate(-50%, -40%)",
+            transform: "translate(-50%, -46%)",
           }}
         />
         {/* back button — top-left */}

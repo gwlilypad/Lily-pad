@@ -131,7 +131,7 @@ export default function AddPadPage() {
     setPinLng(lng);
     setPinLoading(true);
     setPinAddr("");
-    setPinAddrEditable("");
+    // Do NOT clear pinAddrEditable — keep the old address visible while the new one loads
     setPinParsed(null);
     try {
       const r    = await fetch(`/api/reverse-geocode?lat=${lat}&lng=${lng}`);
@@ -653,40 +653,51 @@ export default function AddPadPage() {
             borderTop: "1px solid rgba(14,31,64,0.1)",
             background: "#fff", flexShrink: 0,
           }}>
-            {pinLoading ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-                <div style={{
-                  width: 16, height: 16, borderRadius: "50%",
-                  border: "2px solid #8DD63F", borderTopColor: "transparent",
-                  animation: "spin 0.7s linear infinite",
-                }} />
-                <span style={{ fontSize: 13, color: "rgba(14,31,64,0.5)", fontWeight: 500 }}>Finding address…</span>
-              </div>
-            ) : pinAddrEditable !== "" ? (
-              <div style={{ marginBottom: 12 }}>
-                <p style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 700, color: "rgba(14,31,64,0.4)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                  Confirm or correct address
+            {/* Address field — always visible once map loads */}
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: "rgba(14,31,64,0.45)", textTransform: "uppercase", letterSpacing: "0.07em" }}>
+                  Address
                 </p>
+                {pinLoading && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                    <div style={{
+                      width: 11, height: 11, borderRadius: "50%",
+                      border: "2px solid #8DD63F", borderTopColor: "transparent",
+                      animation: "spin 0.7s linear infinite", flexShrink: 0,
+                    }} />
+                    <span style={{ fontSize: 10, color: "#8DD63F", fontWeight: 600 }}>Updating…</span>
+                  </div>
+                )}
+              </div>
+              {/* Wrapper gives the input a border that highlights when loading */}
+              <div style={{
+                borderRadius: 12,
+                border: pinLoading
+                  ? "1.5px solid #8DD63F"
+                  : "1.5px solid rgba(14,31,64,0.18)",
+                transition: "border-color 0.2s",
+                background: "#F6F8FC",
+                overflow: "hidden",
+              }}>
                 <input
                   value={pinAddrEditable}
                   onChange={e => setPinAddrEditable(e.target.value)}
+                  placeholder={pinLat ? "Loading address…" : "Drag the pin to your spot"}
                   style={{
                     width: "100%", boxSizing: "border-box",
-                    padding: "12px 14px", borderRadius: 12,
-                    border: "1.5px solid rgba(14,31,64,0.18)",
-                    background: "#F6F8FC", fontSize: 14, fontWeight: 500,
+                    padding: "12px 14px",
+                    border: "none", background: "transparent",
+                    fontSize: 14, fontWeight: 500,
                     color: "#0E1F40", fontFamily: "'DM Sans',sans-serif",
                     outline: "none",
                   }}
-                  placeholder="Street address"
                 />
-                <p style={{ margin: "5px 0 0", fontSize: 11, color: "rgba(14,31,64,0.38)", fontWeight: 500 }}>
-                  Edit if the address is slightly off — the pin coordinates are always saved exactly.
-                </p>
               </div>
-            ) : (
-              <p style={{ marginBottom: 14, color: "rgba(14,31,64,0.4)", fontSize: 13, fontWeight: 500 }}>Drag the pin to your parking spot</p>
-            )}
+              <p style={{ margin: "5px 0 0", fontSize: 11, color: "rgba(14,31,64,0.38)", fontWeight: 500 }}>
+                Drag the pin to update · Edit text to correct the name · Pin coordinates always saved exactly.
+              </p>
+            </div>
 
             <button
               className="cta-btn"

@@ -807,7 +807,7 @@ export default function AdminPage() {
   // Holds the trimmed pending text (and the ticket it's bound to so a tab/ticket
   // switch can't accidentally fire it on the wrong conversation).
   const [pendingReply, setPendingReply] = useState<{ ticketId: string; text: string } | null>(null);
-  type ServiceTab = "chat" | "email";
+  type ServiceTab = "chat" | "email" | "tickets";
   type PipelineFilter = "all" | "open" | "pending" | "resolved";
   type AudienceFilter = "all" | "renter" | "padRenter";
   type EmailAudienceFilter = "all" | "renter" | "padRenter" | "guest";
@@ -1736,12 +1736,15 @@ export default function AdminPage() {
       ) : view === "service" ? (
         /* ── CUSTOMER SERVICE — Live Chat + Email ── */
         (() => {
-          // ── chat tickets ──
-          const sortedAll = [...tickets].sort((a, b) => sortDir === "recent" ? b.updatedAt - a.updatedAt : a.updatedAt - b.updatedAt);
-          const totalChats = tickets.length;
-          const openCount     = tickets.filter(t => { const p = ticketPipeline(t); return p === "new" || p === "working"; }).length;
-          const pendingCount  = tickets.filter(t => ticketPipeline(t) === "pending").length;
-          const resolvedCount = tickets.filter(t => ticketPipeline(t) === "resolved").length;
+          // ── chat tickets ── (change-request tickets are shown in their own "Tickets" tab)
+          const changeRequestTickets = tickets.filter(t => t.subject.startsWith("[Change Request]"));
+          const chatTickets = tickets.filter(t => !t.subject.startsWith("[Change Request]"));
+          const sortedAll = [...chatTickets].sort((a, b) => sortDir === "recent" ? b.updatedAt - a.updatedAt : a.updatedAt - b.updatedAt);
+          const totalChats = chatTickets.length;
+          const openCount     = chatTickets.filter(t => { const p = ticketPipeline(t); return p === "new" || p === "working"; }).length;
+          const pendingCount  = chatTickets.filter(t => ticketPipeline(t) === "pending").length;
+          const resolvedCount = chatTickets.filter(t => ticketPipeline(t) === "resolved").length;
+          const openCRCount   = changeRequestTickets.filter(t => t.status === "open").length;
           const filtered = sortedAll.filter(t => {
             const p = ticketPipeline(t);
             if (pipelineFilter === "open"     && !(p === "new" || p === "working")) return false;
@@ -1751,6 +1754,7 @@ export default function AdminPage() {
             return true;
           });
           const selected = selectedTicketId ? sortedAll.find(t => t.id === selectedTicketId) || null : null;
+          const selectedCR = selectedTicketId ? changeRequestTickets.find(t => t.id === selectedTicketId) || null : null;
 
           const audienceLabel  = (a: SupportTicket["accountType"]) => a === "padRenter" ? "Lister" : "Renter";
           const audiencePillBg = (a: SupportTicket["accountType"]) => a === "padRenter" ? "rgba(141,214,63,0.16)" : "rgba(120,170,255,0.16)";
@@ -2103,19 +2107,20 @@ export default function AdminPage() {
                 <p style={{ fontSize: 22, fontWeight: 800, color: "#fff", margin: "2px 0 0", letterSpacing: "-0.02em" }}>Customer interaction</p>
               </div>
 
-              {/* ── Sub-tab toggle: Live chat / Email ── */}
-              <div style={{ display: "flex", gap: 6, background: "#142A52", borderRadius: 100, padding: 4 }}>
+              {/* ── Sub-tab toggle: Live chat / Email / Tickets ── */}
+              <div style={{ display: "flex", gap: 4, background: "#142A52", borderRadius: 100, padding: 4 }}>
                 {([
                   { key: "chat" as ServiceTab, label: "Live chat", count: totalChats, accent: openCount + (role === "admin" ? pendingCount : 0) },
                   { key: "email" as ServiceTab, label: "Email", count: totalEmails, accent: unreadEmails },
+                  { key: "tickets" as ServiceTab, label: "Tickets", count: changeRequestTickets.length, accent: openCRCount },
                 ]).map(t => {
                   const active = serviceTab === t.key;
                   return (
-                    <button key={t.key} onClick={() => { setServiceTab(t.key); setSelectedTicketId(null); setSelectedEmailId(null); setResolveOpen(false); setPendingReply(null); resetResolutionAuthFields(); }} style={{ flex: 1, padding: "9px 10px", borderRadius: 100, border: "none", background: active ? GREEN : "transparent", color: active ? NAVY : "rgba(255,255,255,0.65)", fontWeight: 800, fontSize: 12.5, cursor: "pointer", fontFamily: '"DM Sans",sans-serif', display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                    <button key={t.key} onClick={() => { setServiceTab(t.key); setSelectedTicketId(null); setSelectedEmailId(null); setResolveOpen(false); setPendingReply(null); resetResolutionAuthFields(); }} style={{ flex: 1, padding: "9px 8px", borderRadius: 100, border: "none", background: active ? GREEN : "transparent", color: active ? NAVY : "rgba(255,255,255,0.65)", fontWeight: 800, fontSize: 11.5, cursor: "pointer", fontFamily: '"DM Sans",sans-serif', display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
                       <span>{t.label}</span>
-                      <span style={{ fontSize: 10.5, fontWeight: 800, padding: "2px 7px", borderRadius: 100, background: active ? "rgba(14,31,64,0.16)" : "rgba(255,255,255,0.10)", color: active ? NAVY : "rgba(255,255,255,0.78)" }}>{t.count}</span>
+                      <span style={{ fontSize: 10, fontWeight: 800, padding: "2px 6px", borderRadius: 100, background: active ? "rgba(14,31,64,0.16)" : "rgba(255,255,255,0.10)", color: active ? NAVY : "rgba(255,255,255,0.78)" }}>{t.count}</span>
                       {t.accent > 0 && !active && (
-                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: GREEN, boxShadow: "0 0 0 3px rgba(141,214,63,0.25)" }} />
+                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: GREEN, boxShadow: "0 0 0 3px rgba(141,214,63,0.25)", flexShrink: 0 }} />
                       )}
                     </button>
                   );
@@ -2228,6 +2233,197 @@ export default function AdminPage() {
                     </div>
                   )}
                 </>
+              ) : serviceTab === "tickets" ? (
+                /* ── CHANGE REQUEST TICKETS ── */
+                (() => {
+                  const crSorted = [...changeRequestTickets].sort((a, b) => b.updatedAt - a.updatedAt);
+
+                  function parseCRPayload(t: SupportTicket): { field?: string; current?: string; requested?: string; padName?: string; spotId?: string; hostName?: string; hostEmail?: string; hostPhone?: string } {
+                    try {
+                      const firstMsg = t.messages[0];
+                      if (!firstMsg) return {};
+                      const p = JSON.parse(firstMsg.text);
+                      if (p?.type === "change_request") return p;
+                    } catch {}
+                    return {};
+                  }
+
+                  async function markInProgress(id: string) {
+                    try {
+                      await fetch(`/api/support/conversations/${id}`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ status: "in_progress" }),
+                      });
+                      refreshTickets();
+                    } catch {}
+                  }
+
+                  async function resolveTicket(id: string) {
+                    try {
+                      await fetch(`/api/support/conversations/${id}`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ status: "resolved" }),
+                      });
+                      refreshTickets();
+                    } catch {}
+                  }
+
+                  if (selectedCR) {
+                    const cr = parseCRPayload(selectedCR);
+                    const statusColor = selectedCR.status === "resolved" ? "#9DBEFF" : selectedCR.status === "in_progress" ? "#F59E0B" : GREEN;
+                    const statusLabel = selectedCR.status === "resolved" ? "Resolved" : selectedCR.status === "in_progress" ? "In progress" : "New · Needs review";
+                    return (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                        <button onClick={() => setSelectedTicketId(null)} style={{ display: "flex", alignItems: "center", gap: 8, background: "none", border: "none", color: "rgba(255,255,255,0.65)", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: '"DM Sans",sans-serif', padding: 0, alignSelf: "flex-start" }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+                          All tickets
+                        </button>
+
+                        {/* Status pill */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase", padding: "3px 10px", borderRadius: 100, color: statusColor, background: `${statusColor}22`, border: `1px solid ${statusColor}44` }}>{statusLabel}</span>
+                          <span style={{ fontSize: 11.5, color: "rgba(255,255,255,0.45)" }}>{formatSupportTime(selectedCR.createdAt)}</span>
+                        </div>
+
+                        {/* Host profile card */}
+                        <div style={{ background: "#142A52", borderRadius: 16, padding: "14px 16px", border: "1px solid rgba(255,255,255,0.08)", display: "flex", flexDirection: "column", gap: 10 }}>
+                          <div style={{ fontSize: 10, fontWeight: 800, color: "rgba(255,255,255,0.40)", letterSpacing: "0.10em", textTransform: "uppercase" }}>Host profile</div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                            <div style={{ width: 44, height: 44, borderRadius: "50%", background: "rgba(141,214,63,0.18)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 17, fontWeight: 800, color: GREEN }}>
+                              {(cr.hostName || selectedCR.userName || "H").charAt(0).toUpperCase()}
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 14, fontWeight: 800, color: "#fff" }}>{cr.hostName || selectedCR.userName || "—"}</div>
+                              {(cr.hostEmail || selectedCR.userEmail) && (
+                                <a href={`mailto:${cr.hostEmail || selectedCR.userEmail}`} style={{ fontSize: 12, color: GREEN, fontWeight: 600, textDecoration: "none", display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
+                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                                  {cr.hostEmail || selectedCR.userEmail}
+                                </a>
+                              )}
+                              {cr.hostPhone && (
+                                <a href={`tel:${cr.hostPhone}`} style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", fontWeight: 600, textDecoration: "none", display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
+                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.62 3.48 2 2 0 0 1 3.62 1.27h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.91a16 16 0 0 0 6.16 6.16l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                                  {cr.hostPhone}
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Request detail */}
+                        <div style={{ background: "#142A52", borderRadius: 16, padding: "14px 16px", border: "1px solid rgba(255,255,255,0.08)", display: "flex", flexDirection: "column", gap: 10 }}>
+                          <div style={{ fontSize: 10, fontWeight: 800, color: "rgba(255,255,255,0.40)", letterSpacing: "0.10em", textTransform: "uppercase" }}>Change request details</div>
+                          {cr.field && (
+                            <div>
+                              <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.38)", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 3 }}>Field</div>
+                              <div style={{ fontSize: 13.5, fontWeight: 700, color: "#fff" }}>{cr.field}</div>
+                            </div>
+                          )}
+                          {cr.padName && (
+                            <div>
+                              <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.38)", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 3 }}>Pad</div>
+                              <div style={{ fontSize: 13.5, fontWeight: 600, color: "rgba(255,255,255,0.85)" }}>{cr.padName}</div>
+                            </div>
+                          )}
+                          {cr.current && (
+                            <div>
+                              <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.38)", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 3 }}>Current value</div>
+                              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.65)" }}>{cr.current}</div>
+                            </div>
+                          )}
+                          {cr.requested && (
+                            <div>
+                              <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.38)", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 3 }}>Requested change</div>
+                              <div style={{ fontSize: 13.5, fontWeight: 600, color: "#fff", background: "rgba(141,214,63,0.08)", border: "1px solid rgba(141,214,63,0.18)", borderRadius: 10, padding: "10px 12px", lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{cr.requested}</div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Actions */}
+                        {selectedCR.status !== "resolved" && (
+                          <div style={{ display: "flex", gap: 8 }}>
+                            {selectedCR.status === "open" && (
+                              <button onClick={() => markInProgress(selectedCR.id)} style={{ flex: 1, padding: "11px", borderRadius: 100, border: "1px solid rgba(245,158,11,0.40)", background: "rgba(245,158,11,0.10)", color: "#F59E0B", fontWeight: 800, fontSize: 12.5, cursor: "pointer", fontFamily: '"DM Sans",sans-serif' }}>
+                                Mark in progress
+                              </button>
+                            )}
+                            <button onClick={() => resolveTicket(selectedCR.id)} style={{ flex: 1, padding: "11px", borderRadius: 100, border: "none", background: GREEN, color: NAVY, fontWeight: 800, fontSize: 12.5, cursor: "pointer", fontFamily: '"DM Sans",sans-serif' }}>
+                              {selectedCR.status === "in_progress" ? "Mark resolved" : "Resolve ticket"}
+                            </button>
+                          </div>
+                        )}
+                        {selectedCR.status === "resolved" && (
+                          <div style={{ textAlign: "center", fontSize: 12, color: "rgba(255,255,255,0.40)", fontStyle: "italic" }}>This ticket has been resolved.</div>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <div style={{ flex: 1, background: "#142A52", borderRadius: 14, padding: "12px 14px", textAlign: "center" }}>
+                          <div style={{ fontSize: 22, fontWeight: 800, color: "#fff", letterSpacing: "-0.02em" }}>{changeRequestTickets.length}</div>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.10em", textTransform: "uppercase", marginTop: 2 }}>Total</div>
+                        </div>
+                        <div style={{ flex: 1, background: "#142A52", borderRadius: 14, padding: "12px 14px", textAlign: "center" }}>
+                          <div style={{ fontSize: 22, fontWeight: 800, color: openCRCount > 0 ? GREEN : "#fff", letterSpacing: "-0.02em" }}>{openCRCount}</div>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.10em", textTransform: "uppercase", marginTop: 2 }}>Open</div>
+                        </div>
+                        <div style={{ flex: 1, background: "#142A52", borderRadius: 14, padding: "12px 14px", textAlign: "center" }}>
+                          <div style={{ fontSize: 22, fontWeight: 800, color: "#9DBEFF", letterSpacing: "-0.02em" }}>{changeRequestTickets.filter(t => t.status === "resolved").length}</div>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.10em", textTransform: "uppercase", marginTop: 2 }}>Resolved</div>
+                        </div>
+                      </div>
+
+                      {crSorted.length === 0 ? (
+                        <div style={{ background: "#142A52", borderRadius: 18, padding: "36px 22px", textAlign: "center", color: "rgba(255,255,255,0.40)", fontSize: 13 }}>
+                          No change request tickets yet. When a host requests a locked-field update, it appears here.
+                        </div>
+                      ) : (
+                        crSorted.map(t => {
+                          const cr = parseCRPayload(t);
+                          const isOpen = t.status === "open";
+                          const isInProgress = t.status === "in_progress";
+                          const isResolved = t.status === "resolved";
+                          const statusColor = isResolved ? "#9DBEFF" : isInProgress ? "#F59E0B" : GREEN;
+                          const statusLabel = isResolved ? "Resolved" : isInProgress ? "In progress" : "New";
+                          return (
+                            <div
+                              key={t.id}
+                              onClick={() => setSelectedTicketId(t.id)}
+                              style={{ background: "#142A52", borderRadius: 14, padding: "12px 14px", cursor: "pointer", border: isOpen ? `1px solid rgba(141,214,63,0.28)` : "1px solid rgba(255,255,255,0.04)", display: "flex", flexDirection: "column", gap: 8 }}
+                            >
+                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                  <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(141,214,63,0.14)", color: GREEN, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                                  </div>
+                                  <div style={{ minWidth: 0 }}>
+                                    <div style={{ fontSize: 12.5, fontWeight: 800, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cr.field || t.subject}</div>
+                                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", marginTop: 1 }}>{cr.padName || "—"}</div>
+                                  </div>
+                                </div>
+                                <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.5, textTransform: "uppercase", padding: "3px 8px", borderRadius: 100, color: statusColor, background: `${statusColor}22`, flexShrink: 0 }}>{statusLabel}</span>
+                              </div>
+                              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)" }}>
+                                {cr.hostName || t.userName}{cr.hostEmail || t.userEmail ? ` · ${cr.hostEmail || t.userEmail}` : ""}
+                              </div>
+                              {cr.requested && (
+                                <div style={{ fontSize: 11.5, color: "rgba(255,255,255,0.70)", background: "rgba(255,255,255,0.04)", borderRadius: 8, padding: "6px 9px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  {cr.requested}
+                                </div>
+                              )}
+                              <div style={{ fontSize: 10.5, color: "rgba(255,255,255,0.35)" }}>{formatSupportTime(t.createdAt)}</div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  );
+                })()
               ) : (
                 <>
                   {/* ── Email overall summary ── */}

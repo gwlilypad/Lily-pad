@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/lib/supabase";
 
 const NAVY = "#0E1F40";
 const GREEN = "#8DD63F";
@@ -231,6 +232,118 @@ export default function PadDashboardPage() {
   const [renameError, setRenameError] = useState("");
   const [renameSaving, setRenameSaving] = useState(false);
 
+  // User profile (for change-request contact info)
+  const [userProfile, setUserProfile] = useState<{ phone?: string; full_name?: string } | null>(null);
+  useEffect(() => {
+    if (!user?.id) return;
+    supabase.from("profiles").select("phone, full_name").eq("id", user.id).single()
+      .then(({ data }) => { if (data) setUserProfile(data as { phone?: string; full_name?: string }); });
+  }, [user?.id]);
+
+  // Edit mode
+  const [editMode, setEditMode] = useState(false);
+  const [editDraft, setEditDraft] = useState<{
+    name: string; price: number; description: string; services: string[];
+  } | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState("");
+
+  async function saveEdit() {
+    if (!openPad || !editDraft) return;
+    setEditSaving(true);
+    setEditError("");
+    try {
+      const trimmedName = editDraft.name.trim();
+      const nameChanged = trimmedName !== openPad.name;
+      if (nameChanged) {
+        if (trimmedName.length < 2) { setEditError("Pad name must be at least 2 characters."); setEditSaving(false); return; }
+        const chkUrl = `/api/spots/check-name?name=${encodeURIComponent(trimmedName)}${openPad.spotId ? `&excludeId=${openPad.spotId}` : ""}`;
+        const chk = await fetch(chkUrl);
+        const { available } = await chk.json();
+        if (!available) { setEditError("That name is already taken. Try something unique."); setEditSaving(false); return; }
+      }
+      const r = await fetch(`/api/spots/${openPad.spotId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...(nameChanged ? { spot_name: trimmedName } : {}),
+          price_per_hr: editDraft.price,
+          description: editDraft.description,
+        }),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        setEditError((err as { error?: string }).error || "Could not save. Try again.");
+        setEditSaving(false);
+        return;
+      }
+      updatePad(openPad.id, {
+        name: trimmedName,
+        nickname: trimmedName,
+        price: editDraft.price,
+        description: editDraft.description,
+        services: editDraft.services,
+      });
+      setEditMode(false);
+      setEditDraft(null);
+    } catch {
+      setEditError("Network error. Try again.");
+    }
+    setEditSaving(false);
+  }
+
+  // Change request modal
+  const [changeRequestField, setChangeRequestField] = useState<string | null>(null);
+  const [changeRequestText, setChangeRequestText] = useState("");
+  const [changeRequestSending, setChangeRequestSending] = useState(false);
+  const [changeRequestSent, setChangeRequestSent] = useState(false);
+
+  function openChangeRequest(fieldLabel: string) {
+    setChangeRequestField(fieldLabel);
+    setChangeRequestText("");
+    setChangeRequestSent(false);
+  }
+
+  async function submitChangeRequest() {
+    if (!openPad || !changeRequestField || !changeRequestText.trim() || !user) return;
+    setChangeRequestSending(true);
+    try {
+      const fieldValue = changeRequestField === "Address"
+        ? `${openPad.address}, ${openPad.city}`
+        : changeRequestField === "Pad type"
+        ? openPad.type
+        : String(openPad.spotCount);
+
+      const payload = JSON.stringify({
+        type: "change_request",
+        field: changeRequestField,
+        current: fieldValue,
+        requested: changeRequestText.trim(),
+        padName: openPad.name,
+        spotId: openPad.spotId || "",
+        hostName: userProfile?.full_name || user.email || "",
+        hostEmail: user.email || "",
+        hostPhone: userProfile?.phone || "",
+      });
+
+      await fetch("/api/support/conversations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: user.id,
+          user_name: userProfile?.full_name || user.email || "Host",
+          user_email: user.email || "",
+          subject: `[Change Request] ${changeRequestField} — ${openPad.name}`,
+          first_message: payload,
+        }),
+      });
+      setChangeRequestSent(true);
+    } catch {
+      setChangeRequestSent(true);
+    }
+    setChangeRequestSending(false);
+  }
+
   function startRename(pad: Pad) {
     setRenamingPad(pad);
     setRenameValue(pad.name);
@@ -351,7 +464,7 @@ export default function PadDashboardPage() {
   }
 
   return (
-    <div className="page active" style={{ background: "#f5f7fa", display: "flex", flexDirection: "column", fontFamily: "'DM Sans',sans-serif" }}>
+    <div className="page active" style={{ background: openPad ? NAVY : "#f5f7fa", display: "flex", flexDirection: "column", fontFamily: "'DM Sans',sans-serif" }}>
 
       {/* Header */}
       <div style={{ flexShrink: 0, padding: "52px 20px 22px", background: NAVY }}>
@@ -657,115 +770,199 @@ export default function PadDashboardPage() {
             </button>
           </>
         ) : (
-          /* ── DETAIL / EDIT VIEW ── */
+          /* ── DETAIL / EDIT VIEW (dark profile) ── */
           <>
-            {/* Photo with replace */}
+            {/* Photo hero */}
             <input ref={photoInputRef} type="file" accept="image/*" onChange={onPhotoPick} style={{ display: "none" }} />
-            <div style={{ position: "relative", borderRadius: 18, overflow: "hidden", marginBottom: 14, boxShadow: "0 2px 12px rgba(14,31,64,0.06)" }}>
-              <div style={{ height: 180, background: `url(${openPad.photoUrl}) center/cover, #ddd` }} />
-              <button onClick={() => photoInputRef.current?.click()} style={{
-                position: "absolute", bottom: 12, right: 12,
-                background: "rgba(255,255,255,0.95)", border: "none", borderRadius: 100,
-                padding: "8px 14px", fontSize: 12, fontWeight: 700, color: NAVY,
-                cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
-                display: "flex", alignItems: "center", gap: 6,
-                boxShadow: "0 2px 8px rgba(0,0,0,0.18)",
-              }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-                Change photo
-              </button>
-              <div style={{ position: "absolute", top: 12, left: 12 }}>
+            <div style={{ position: "relative", borderRadius: 20, overflow: "hidden", marginBottom: 16, boxShadow: "0 4px 20px rgba(0,0,0,0.40)" }}>
+              <div style={{ height: 210, background: openPad.photoUrl ? `url(${openPad.photoUrl}) center/cover` : `linear-gradient(135deg, #142A52 0%, #1e3d72 100%)` }} />
+              <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, transparent 35%, rgba(8,15,35,0.88) 100%)" }} />
+              <div style={{ position: "absolute", bottom: 14, left: 16, right: 56, minWidth: 0 }}>
+                <div style={{ fontSize: 19, fontWeight: 800, color: "#fff", letterSpacing: -0.4, textShadow: "0 1px 5px rgba(0,0,0,0.6)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {openPad.name}
+                </div>
+                <div style={{ fontSize: 11.5, color: "rgba(255,255,255,0.68)", marginTop: 2, textShadow: "0 1px 3px rgba(0,0,0,0.5)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {openPad.address}, {openPad.city}
+                </div>
+              </div>
+              <div style={{ position: "absolute", bottom: 14, right: 16 }}>
                 <StatusPill pad={openPad} />
               </div>
+              <button onClick={() => photoInputRef.current?.click()} style={{
+                position: "absolute", top: 12, right: 12,
+                background: "rgba(0,0,0,0.48)", backdropFilter: "blur(8px)",
+                border: "1px solid rgba(255,255,255,0.18)", borderRadius: 100,
+                padding: "7px 12px", fontSize: 11, fontWeight: 700, color: "#fff",
+                cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+                display: "flex", alignItems: "center", gap: 5,
+              }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                Photo
+              </button>
             </div>
 
             {/* Quick stats */}
-            <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
+            <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
               {[
                 { l: "Listed", r: openPad.since },
                 { l: "Bookings", r: String(openPad.bookings) },
                 { l: "Earnings", r: `$${(openPad.bookings * openPad.price * 2).toFixed(0)}` },
               ].map(s => (
-                <div key={s.l} style={{ flex: 1, background: "#fff", borderRadius: 12, padding: "10px 12px", border: "1px solid rgba(14,31,64,0.07)" }}>
-                  <div style={{ fontSize: 9, color: "rgba(14,31,64,0.32)", fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 3 }}>{s.l}</div>
-                  <div style={{ fontSize: 14, fontWeight: 800, color: s.l === "Earnings" ? GREEN : NAVY, letterSpacing: -0.2 }}>{s.r}</div>
+                <div key={s.l} style={{ flex: 1, background: "#142A52", borderRadius: 12, padding: "10px 12px", border: "1px solid rgba(255,255,255,0.06)", boxShadow: "0 1px 6px rgba(0,0,0,0.18)" }}>
+                  <div style={{ fontSize: 9, color: "rgba(255,255,255,0.38)", fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 3 }}>{s.l}</div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: s.l === "Earnings" ? GREEN : "#fff", letterSpacing: -0.2 }}>{s.r}</div>
                 </div>
               ))}
             </div>
 
-            {/* Locked vital info */}
-            <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(14,31,64,0.38)", letterSpacing: 0.6, textTransform: "uppercase", marginBottom: 10 }}>
+            {/* Open / Closed toggle */}
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              gap: 12, padding: "14px 16px", borderRadius: 14, marginBottom: 16,
+              background: openPad.status === "active" ? "rgba(141,214,63,0.10)" : "rgba(255,200,0,0.10)",
+              border: `1px solid ${openPad.status === "active" ? "rgba(141,214,63,0.26)" : "rgba(255,200,0,0.26)"}`,
+            }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 700, color: "#fff", letterSpacing: -0.2 }}>
+                  {openPad.status === "active" ? "Open for new bookings" : (openPad.pausedUntil ? "Closed for tonight" : "Closed indefinitely")}
+                </div>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.48)", marginTop: 2 }}>
+                  {openPad.status === "active" ? "Drivers can find and book this pad." : "New bookings are paused."}
+                </div>
+              </div>
+              {openPad.status !== "pending" && (
+                <PauseSwitch paused={openPad.status === "paused"} onPress={() => requestPauseToggle(openPad.id)} />
+              )}
+            </div>
+
+            {/* ── LOCKED FIELDS ── */}
+            <div style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,0.32)", letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 8 }}>
               Listing details · locked
             </div>
-            <div style={{ background: "#fff", borderRadius: 14, padding: "4px 14px", marginBottom: 22, border: "1px solid rgba(14,31,64,0.07)" }}>
-              <LockedRow label="Address" value={`${openPad.address}, ${openPad.city}`} />
-              <LockedRow label="Pad type" value={openPad.type} />
-              <LockedRow label="Number of spots" value={String(openPad.spotCount)} />
-            </div>
-
-            {/* Editable */}
-            <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(14,31,64,0.38)", letterSpacing: 0.6, textTransform: "uppercase", marginBottom: 10 }}>
-              You can edit
-            </div>
-            <div style={{ background: "#fff", borderRadius: 14, padding: "12px 14px", marginBottom: 14, border: "1px solid rgba(14,31,64,0.07)" }}>
-              <div style={{ marginBottom: 14 }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-                  <div style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(14,31,64,0.45)", letterSpacing: 0.6, textTransform: "uppercase" }}>Pad name</div>
-                  <span style={{ fontSize: 10, color: "rgba(14,31,64,0.35)", fontWeight: 500 }}>Unique across all pads</span>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <div style={{ flex: 1, padding: "10px 12px", borderRadius: 10, border: "1.5px solid rgba(14,31,64,0.12)", background: "rgba(14,31,64,0.03)", fontSize: 14, color: NAVY, fontFamily: "'DM Sans',sans-serif", fontWeight: 600 }}>
-                    {openPad.name}
+            <div style={{ background: "#142A52", borderRadius: 14, padding: "4px 14px", marginBottom: 18, border: "1px solid rgba(255,255,255,0.06)", boxShadow: "0 1px 6px rgba(0,0,0,0.18)" }}>
+              {([
+                { label: "Address", value: `${openPad.address}, ${openPad.city}` },
+                { label: "Pad type", value: openPad.type },
+                { label: "Number of spots", value: String(openPad.spotCount) },
+              ]).map((row, i, arr) => (
+                <div key={row.label} style={{ display: "flex", alignItems: "center", padding: "13px 0", borderBottom: i < arr.length - 1 ? "1px solid rgba(255,255,255,0.06)" : "none", gap: 10 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.35)", letterSpacing: 0.6, textTransform: "uppercase" }}>{row.label}</div>
+                    <div style={{ fontSize: 13.5, fontWeight: 600, color: "#fff", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.value}</div>
                   </div>
                   <button
-                    onClick={() => startRename(openPad)}
-                    style={{ padding: "10px 14px", borderRadius: 10, background: "rgba(141,214,63,0.12)", border: "1px solid rgba(141,214,63,0.40)", color: "#5a9e1a", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", whiteSpace: "nowrap" }}
+                    onClick={() => openChangeRequest(row.label)}
+                    style={{ flexShrink: 0, padding: "6px 11px", borderRadius: 100, background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.62)", fontSize: 10.5, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", letterSpacing: 0.2, display: "flex", alignItems: "center", gap: 4 }}
                   >
-                    Rename
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    Request change
                   </button>
                 </div>
-              </div>
+              ))}
+            </div>
 
-              <div style={{ marginBottom: 14 }}>
-                <div style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(14,31,64,0.45)", letterSpacing: 0.6, textTransform: "uppercase", marginBottom: 6 }}>Price per hour</div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderRadius: 10, border: "1.5px solid rgba(14,31,64,0.12)", background: "#fff" }}>
-                  <span style={{ fontSize: 16, fontWeight: 800, color: GREEN }}>$</span>
+            {/* ── EDITABLE FIELDS ── */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <div style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,0.32)", letterSpacing: 0.8, textTransform: "uppercase" }}>
+                Listing info · editable
+              </div>
+              {!editMode ? (
+                <button
+                  onClick={() => { setEditMode(true); setEditDraft({ name: openPad.name, price: openPad.price, description: openPad.description, services: [...openPad.services] }); setEditError(""); }}
+                  style={{ padding: "5px 13px", borderRadius: 100, background: "rgba(141,214,63,0.15)", border: "1px solid rgba(141,214,63,0.35)", color: GREEN, fontSize: 11, fontWeight: 800, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", letterSpacing: 0.2 }}
+                >
+                  Edit listing
+                </button>
+              ) : (
+                <button
+                  onClick={() => { setEditMode(false); setEditDraft(null); setEditError(""); }}
+                  style={{ padding: "5px 13px", borderRadius: 100, background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.62)", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
+            <div style={{ background: "#142A52", borderRadius: 14, padding: "14px 14px", marginBottom: 14, border: "1px solid rgba(255,255,255,0.06)", boxShadow: "0 1px 6px rgba(0,0,0,0.18)" }}>
+              {/* Pad name */}
+              <div style={{ marginBottom: 14, paddingBottom: 14, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.36)", letterSpacing: 0.6, textTransform: "uppercase", marginBottom: 6 }}>Pad name</div>
+                {editMode && editDraft ? (
                   <input
-                    type="number" min="0" step="0.5"
-                    value={openPad.price}
-                    onChange={e => updatePad(openPad.id, { price: Number(e.target.value) || 0 })}
-                    style={{ flex: 1, padding: 0, border: "none", background: "transparent", fontSize: 16, fontWeight: 700, color: NAVY, fontFamily: "'DM Sans',sans-serif", outline: "none" }}
+                    value={editDraft.name}
+                    onChange={e => setEditDraft(d => d ? { ...d, name: e.target.value } : d)}
+                    placeholder="e.g. Front driveway…"
+                    maxLength={60}
+                    style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1.5px solid rgba(141,214,63,0.38)", background: "rgba(141,214,63,0.06)", fontSize: 14, color: "#fff", fontFamily: "'DM Sans',sans-serif", fontWeight: 600, outline: "none", boxSizing: "border-box" }}
                   />
-                  <span style={{ fontSize: 12, color: "rgba(14,31,64,0.40)", fontWeight: 600 }}>/ hr</span>
-                </div>
+                ) : (
+                  <div style={{ fontSize: 14, fontWeight: 600, color: "#fff" }}>{openPad.name}</div>
+                )}
               </div>
-
+              {/* Price */}
+              <div style={{ marginBottom: 14, paddingBottom: 14, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.36)", letterSpacing: 0.6, textTransform: "uppercase", marginBottom: 6 }}>Price per hour</div>
+                {editMode && editDraft ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderRadius: 10, border: "1.5px solid rgba(141,214,63,0.38)", background: "rgba(141,214,63,0.06)" }}>
+                    <span style={{ fontSize: 16, fontWeight: 800, color: GREEN }}>$</span>
+                    <input
+                      type="number" min="0" step="0.5"
+                      value={editDraft.price}
+                      onChange={e => setEditDraft(d => d ? { ...d, price: Number(e.target.value) || 0 } : d)}
+                      style={{ flex: 1, padding: 0, border: "none", background: "transparent", fontSize: 16, fontWeight: 700, color: "#fff", fontFamily: "'DM Sans',sans-serif", outline: "none" }}
+                    />
+                    <span style={{ fontSize: 12, color: "rgba(255,255,255,0.42)", fontWeight: 600 }}>/ hr</span>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 20, fontWeight: 800, color: GREEN, letterSpacing: -0.4 }}>
+                    ${openPad.price}<span style={{ fontSize: 11, color: "rgba(141,214,63,0.55)", fontWeight: 500 }}>/hr</span>
+                  </div>
+                )}
+              </div>
+              {/* Description */}
               <div>
-                <div style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(14,31,64,0.45)", letterSpacing: 0.6, textTransform: "uppercase", marginBottom: 6 }}>Description</div>
-                <textarea
-                  value={openPad.description}
-                  onChange={e => updatePad(openPad.id, { description: e.target.value })}
-                  rows={3}
-                  placeholder="Tell renters what makes this spot great…"
-                  style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1.5px solid rgba(14,31,64,0.12)", background: "#fff", fontSize: 14, color: NAVY, fontFamily: "'DM Sans',sans-serif", fontWeight: 500, outline: "none", resize: "vertical", boxSizing: "border-box", lineHeight: 1.45 }}
-                />
+                <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.36)", letterSpacing: 0.6, textTransform: "uppercase", marginBottom: 6 }}>Description</div>
+                {editMode && editDraft ? (
+                  <textarea
+                    value={editDraft.description}
+                    onChange={e => setEditDraft(d => d ? { ...d, description: e.target.value } : d)}
+                    rows={3}
+                    placeholder="Tell renters what makes this spot great…"
+                    style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1.5px solid rgba(141,214,63,0.38)", background: "rgba(141,214,63,0.06)", fontSize: 13.5, color: "#fff", fontFamily: "'DM Sans',sans-serif", fontWeight: 500, outline: "none", resize: "vertical", boxSizing: "border-box", lineHeight: 1.45 }}
+                  />
+                ) : (
+                  <div style={{ fontSize: 13.5, color: openPad.description ? "rgba(255,255,255,0.78)" : "rgba(255,255,255,0.28)", lineHeight: 1.5, fontStyle: openPad.description ? "normal" : "italic" }}>
+                    {openPad.description || "No description yet."}
+                  </div>
+                )}
               </div>
             </div>
 
             {/* Services */}
-            <div style={{ background: "#fff", borderRadius: 14, padding: "14px 14px", marginBottom: 16, border: "1px solid rgba(14,31,64,0.07)" }}>
-              <div style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(14,31,64,0.45)", letterSpacing: 0.6, textTransform: "uppercase", marginBottom: 10 }}>Services & amenities</div>
+            <div style={{ background: "#142A52", borderRadius: 14, padding: "14px 14px", marginBottom: 14, border: "1px solid rgba(255,255,255,0.06)", boxShadow: "0 1px 6px rgba(0,0,0,0.18)" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.36)", letterSpacing: 0.6, textTransform: "uppercase" }}>Services & amenities</div>
+                {!editMode && <span style={{ fontSize: 10, color: "rgba(255,255,255,0.28)", fontStyle: "italic" }}>Press "Edit listing" to change</span>}
+              </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {ALL_SERVICES.map(svc => {
-                  const on = openPad.services.includes(svc);
+                  const on = editMode && editDraft ? editDraft.services.includes(svc) : openPad.services.includes(svc);
                   return (
-                    <button key={svc} onClick={() => toggleService(openPad.id, svc)} style={{
+                    <button key={svc} onClick={() => {
+                      if (!editMode || !editDraft) return;
+                      setEditDraft(d => {
+                        if (!d) return d;
+                        const has = d.services.includes(svc);
+                        return { ...d, services: has ? d.services.filter(s => s !== svc) : [...d.services, svc] };
+                      });
+                    }} style={{
                       padding: "7px 12px", borderRadius: 100,
-                      background: on ? "rgba(141,214,63,0.16)" : "rgba(14,31,64,0.04)",
-                      border: `1px solid ${on ? "rgba(141,214,63,0.40)" : "rgba(14,31,64,0.10)"}`,
-                      color: on ? "#5a9e1a" : "rgba(14,31,64,0.55)",
-                      fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+                      background: on ? "rgba(141,214,63,0.16)" : "rgba(255,255,255,0.06)",
+                      border: `1px solid ${on ? "rgba(141,214,63,0.40)" : "rgba(255,255,255,0.08)"}`,
+                      color: on ? GREEN : "rgba(255,255,255,0.48)",
+                      fontSize: 12, fontWeight: 700, cursor: editMode ? "pointer" : "default",
+                      fontFamily: "'DM Sans',sans-serif",
                       display: "flex", alignItems: "center", gap: 5,
+                      opacity: !editMode ? 0.85 : 1,
                     }}>
                       {on && <span style={{ fontSize: 11 }}>✓</span>}
                       {svc}
@@ -775,37 +972,76 @@ export default function PadDashboardPage() {
               </div>
             </div>
 
-            {/* Open / closed toggle */}
-            <div style={{
-              display: "flex", alignItems: "center", justifyContent: "space-between",
-              gap: 12, padding: "14px 16px", borderRadius: 16,
-              background: openPad.status === "active" ? "rgba(141,214,63,0.10)" : "rgba(255,200,0,0.10)",
-              border: `1px solid ${openPad.status === "active" ? "rgba(141,214,63,0.30)" : "rgba(255,200,0,0.30)"}`,
-            }}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: NAVY, letterSpacing: -0.2 }}>
-                  {openPad.status === "active" ? "Open for new bookings" : (openPad.pausedUntil ? "Closed for tonight" : "Closed indefinitely")}
-                </div>
-                <div style={{ fontSize: 11.5, color: "rgba(14,31,64,0.55)", marginTop: 3 }}>
-                  {openPad.status === "active"
-                    ? "Drivers can book this pad from the map."
-                    : "New bookings are paused. Existing bookings will still complete."}
-                </div>
-              </div>
-              {openPad.status !== "pending" && (
-                <PauseSwitch
-                  paused={openPad.status === "paused"}
-                  onPress={() => requestPauseToggle(openPad.id)}
-                />
-              )}
-            </div>
-
-            <p style={{ textAlign: "center", fontSize: 10.5, color: "rgba(14,31,64,0.32)", margin: "16px 0 4px" }}>
-              Need to change address, pad type, or spot count? Contact support.
-            </p>
+            {/* Save / error row — only visible in edit mode */}
+            {editMode && (
+              <>
+                {editError && <div style={{ fontSize: 12.5, color: "#ef4444", fontWeight: 600, marginBottom: 8, paddingLeft: 2 }}>{editError}</div>}
+                <button
+                  onClick={saveEdit}
+                  disabled={editSaving}
+                  style={{ width: "100%", padding: "14px 0", borderRadius: 14, background: editSaving ? "rgba(141,214,63,0.35)" : GREEN, border: "none", color: NAVY, fontSize: 15, fontWeight: 800, cursor: editSaving ? "default" : "pointer", fontFamily: "'DM Sans',sans-serif", marginBottom: 20 }}
+                >
+                  {editSaving ? "Saving…" : "Save changes"}
+                </button>
+              </>
+            )}
           </>
         )}
       </div>
+
+      {/* ── Change Request modal ── */}
+      {changeRequestField && (
+        <div
+          onClick={() => { setChangeRequestField(null); setChangeRequestSent(false); }}
+          style={{ position: "fixed", inset: 0, background: "rgba(5,10,25,0.75)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 400, padding: 16, animation: "fadeIn 0.18s ease" }}>
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{ width: "100%", maxWidth: 460, background: "#142A52", borderRadius: 22, padding: "20px 20px 28px", boxShadow: "0 -8px 36px rgba(0,0,0,0.50)", fontFamily: "'DM Sans',sans-serif", border: "1px solid rgba(255,255,255,0.08)" }}>
+            <div style={{ width: 36, height: 4, background: "rgba(255,255,255,0.18)", borderRadius: 100, margin: "0 auto 18px" }} />
+            {changeRequestSent ? (
+              <div style={{ textAlign: "center", padding: "6px 0 2px" }}>
+                <div style={{ fontSize: 34, marginBottom: 10 }}>✅</div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: "#fff", letterSpacing: -0.3, marginBottom: 8 }}>Request sent!</div>
+                <div style={{ fontSize: 13, color: "rgba(255,255,255,0.58)", lineHeight: 1.55, marginBottom: 22 }}>
+                  Our team will review your request to change <strong style={{ color: "#fff" }}>{changeRequestField.toLowerCase()}</strong> and reach out within 1–2 business days.
+                </div>
+                <button onClick={() => { setChangeRequestField(null); setChangeRequestSent(false); }} style={{ width: "100%", padding: "14px 0", borderRadius: 14, background: GREEN, border: "none", color: NAVY, fontSize: 14, fontWeight: 800, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>
+                  Done
+                </button>
+              </div>
+            ) : (
+              <>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.38)", letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 4 }}>Request a change</div>
+                <div style={{ fontSize: 19, fontWeight: 800, color: "#fff", letterSpacing: -0.3, marginBottom: 6 }}>{changeRequestField}</div>
+                <div style={{ fontSize: 12.5, color: "rgba(255,255,255,0.48)", marginBottom: 18, lineHeight: 1.5 }}>
+                  This field is locked because changes can affect existing bookings. Describe what you'd like updated and our team will review it — typically within 1–2 business days.
+                </div>
+                <div style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,0.42)", letterSpacing: 0.6, textTransform: "uppercase", marginBottom: 6 }}>
+                  What would you like to change it to?
+                </div>
+                <textarea
+                  autoFocus
+                  value={changeRequestText}
+                  onChange={e => setChangeRequestText(e.target.value)}
+                  rows={3}
+                  placeholder={`Describe the change to ${changeRequestField.toLowerCase()}…`}
+                  style={{ width: "100%", padding: "11px 13px", borderRadius: 12, border: "1.5px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)", fontSize: 13.5, color: "#fff", fontFamily: "'DM Sans',sans-serif", fontWeight: 500, outline: "none", resize: "none", boxSizing: "border-box", lineHeight: 1.45, marginBottom: 14 }}
+                />
+                <button
+                  onClick={submitChangeRequest}
+                  disabled={changeRequestSending || !changeRequestText.trim()}
+                  style={{ width: "100%", padding: "14px 0", borderRadius: 14, background: changeRequestSending || !changeRequestText.trim() ? "rgba(141,214,63,0.28)" : GREEN, border: "none", color: NAVY, fontSize: 15, fontWeight: 800, cursor: changeRequestSending || !changeRequestText.trim() ? "default" : "pointer", fontFamily: "'DM Sans',sans-serif", marginBottom: 10 }}
+                >
+                  {changeRequestSending ? "Sending…" : "Submit request"}
+                </button>
+                <button onClick={() => setChangeRequestField(null)} style={{ width: "100%", padding: "10px 0", borderRadius: 100, background: "transparent", border: "none", color: "rgba(255,255,255,0.42)", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>
+                  Cancel
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Pause confirmation modal */}
       {/* ── Rename modal ── */}

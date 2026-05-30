@@ -38,7 +38,8 @@ interface Pad {
   type: string;          // Driveway / Business lot
   spotCount: number;
   // Editable
-  nickname: string;
+  name: string;          // globally-unique spot_name
+  nickname: string;      // legacy alias (= name)
   price: number;         // $/hr
   description: string;
   services: string[];
@@ -171,23 +172,27 @@ export default function PadDashboardPage() {
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (Array.isArray(data) && data.length > 0) {
-          const loaded: Pad[] = data.map((s: Record<string, unknown>, idx: number) => ({
-            id: idx + 1,
-            spotId: String(s.id || ""),
-            address: String(s.address || ""),
-            city: "Houston, TX",
-            type: String(s.pad_type || "Driveway"),
-            spotCount: Number(s.num_pads) || 1,
-            nickname: String(s.address || "My Pad"),
-            price: Number(s.price_per_hr) || 4,
-            description: String(s.description || ""),
-            services: [],
-            photoUrl: String(s.photo_url || ""),
-            status: s.status === "active" ? "active" : s.status === "paused" ? "paused" : "pending",
-            pausedUntil: null,
-            since: s.created_at ? new Date(String(s.created_at)).toLocaleDateString(undefined, { month: "short", year: "numeric" }) : "—",
-            bookings: 0,
-          }));
+          const loaded: Pad[] = data.map((s: Record<string, unknown>, idx: number) => {
+            const padName = String(s.spot_name || "My Lily Pad");
+            return {
+              id: idx + 1,
+              spotId: String(s.id || ""),
+              address: String(s.address || ""),
+              city: "Houston, TX",
+              type: String(s.pad_type || "Driveway"),
+              spotCount: Number(s.num_pads) || 1,
+              name: padName,
+              nickname: padName,
+              price: Number(s.price_per_hr) || 4,
+              description: String(s.description || ""),
+              services: [],
+              photoUrl: String(s.photo_url || ""),
+              status: s.status === "active" ? "active" : s.status === "paused" ? "paused" : "pending",
+              pausedUntil: null,
+              since: s.created_at ? new Date(String(s.created_at)).toLocaleDateString(undefined, { month: "short", year: "numeric" }) : "—",
+              bookings: 0,
+            };
+          });
           setPads(loaded);
         } else {
           setPads([]);
@@ -219,6 +224,52 @@ export default function PadDashboardPage() {
   const [openPadId, setOpenPadId] = useState<number | null>(null);
   const [pendingPauseId, setPendingPauseId] = useState<number | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
+
+  // Rename state
+  const [renamingPad, setRenamingPad] = useState<Pad | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [renameError, setRenameError] = useState("");
+  const [renameSaving, setRenameSaving] = useState(false);
+
+  function startRename(pad: Pad) {
+    setRenamingPad(pad);
+    setRenameValue(pad.name);
+    setRenameError("");
+  }
+
+  async function saveRename() {
+    if (!renamingPad) return;
+    const trimmed = renameValue.trim();
+    if (trimmed.length < 2) { setRenameError("Name must be at least 2 characters."); return; }
+    setRenameSaving(true);
+    setRenameError("");
+    try {
+      const chkUrl = `/api/spots/check-name?name=${encodeURIComponent(trimmed)}${renamingPad.spotId ? `&excludeId=${renamingPad.spotId}` : ""}`;
+      const chk = await fetch(chkUrl);
+      const { available } = await chk.json();
+      if (!available) {
+        setRenameError("That name is already taken across all Lily Pad accounts. Try something unique.");
+        setRenameSaving(false);
+        return;
+      }
+      const r = await fetch(`/api/spots/${renamingPad.spotId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ spot_name: trimmed }),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        setRenameError((err as {error?: string}).error || "Could not save. Try again.");
+        setRenameSaving(false);
+        return;
+      }
+      updatePad(renamingPad.id, { name: trimmed, nickname: trimmed });
+      setRenamingPad(null);
+    } catch {
+      setRenameError("Network error. Try again.");
+    }
+    setRenameSaving(false);
+  }
 
   const openPad = openPadId == null ? null : pads.find(p => p.id === openPadId) || null;
   const pendingPad = pendingPauseId == null ? null : pads.find(p => p.id === pendingPauseId) || null;
@@ -310,7 +361,7 @@ export default function PadDashboardPage() {
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 20, fontWeight: 800, color: "#fff", letterSpacing: -0.5 }}>
-              {openPad ? openPad.nickname || openPad.address : "My Pads"}
+              {openPad ? openPad.name || openPad.address : "My Pads"}
             </div>
             <div style={{ fontSize: 12, color: "rgba(255,255,255,0.40)", marginTop: 2 }}>
               {openPad ? `${openPad.address} · ${openPad.city}` : `${pads.length} listing${pads.length !== 1 ? "s" : ""}`}
@@ -508,7 +559,7 @@ export default function PadDashboardPage() {
                         return (
                           <div key={p.id} style={{ marginBottom: 10 }}>
                             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                              <span style={{ fontSize: 12.5, fontWeight: 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "65%" }}>{p.nickname || p.address}</span>
+                              <span style={{ fontSize: 12.5, fontWeight: 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "65%" }}>{p.name || p.address}</span>
                               <span style={{ fontSize: 12.5, fontWeight: 700, color: NAVY }}>${earn}</span>
                             </div>
                             <div style={{ height: 6, background: "rgba(14,31,64,0.06)", borderRadius: 100, overflow: "hidden" }}>
@@ -557,11 +608,19 @@ export default function PadDashboardPage() {
                 </div>
                 <div style={{ padding: "14px 16px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 15, fontWeight: 700, color: NAVY, letterSpacing: -0.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {pad.nickname || pad.address}
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: NAVY, letterSpacing: -0.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {pad.name}
+                        </div>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); startRename(pad); }}
+                          style={{ flexShrink: 0, padding: "2px 8px", borderRadius: 100, background: "rgba(141,214,63,0.12)", border: "1px solid rgba(141,214,63,0.35)", color: "#5a9e1a", fontSize: 10, fontWeight: 800, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", letterSpacing: 0.2 }}
+                        >
+                          Rename
+                        </button>
                       </div>
-                      <div style={{ fontSize: 12, color: "rgba(14,31,64,0.45)", marginTop: 2 }}>
+                      <div style={{ fontSize: 12, color: "rgba(14,31,64,0.45)" }}>
                         {pad.address} · {pad.type}{pad.spotCount > 1 ? ` · ${pad.spotCount} spots` : ""}
                       </div>
                     </div>
@@ -650,13 +709,21 @@ export default function PadDashboardPage() {
             </div>
             <div style={{ background: "#fff", borderRadius: 14, padding: "12px 14px", marginBottom: 14, border: "1px solid rgba(14,31,64,0.07)" }}>
               <div style={{ marginBottom: 14 }}>
-                <div style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(14,31,64,0.45)", letterSpacing: 0.6, textTransform: "uppercase", marginBottom: 6 }}>Nickname</div>
-                <input
-                  value={openPad.nickname}
-                  onChange={e => updatePad(openPad.id, { nickname: e.target.value })}
-                  placeholder="e.g. Front driveway"
-                  style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1.5px solid rgba(14,31,64,0.12)", background: "#fff", fontSize: 14, color: NAVY, fontFamily: "'DM Sans',sans-serif", fontWeight: 500, outline: "none", boxSizing: "border-box" }}
-                />
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                  <div style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(14,31,64,0.45)", letterSpacing: 0.6, textTransform: "uppercase" }}>Pad name</div>
+                  <span style={{ fontSize: 10, color: "rgba(14,31,64,0.35)", fontWeight: 500 }}>Unique across all pads</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ flex: 1, padding: "10px 12px", borderRadius: 10, border: "1.5px solid rgba(14,31,64,0.12)", background: "rgba(14,31,64,0.03)", fontSize: 14, color: NAVY, fontFamily: "'DM Sans',sans-serif", fontWeight: 600 }}>
+                    {openPad.name}
+                  </div>
+                  <button
+                    onClick={() => startRename(openPad)}
+                    style={{ padding: "10px 14px", borderRadius: 10, background: "rgba(141,214,63,0.12)", border: "1px solid rgba(141,214,63,0.40)", color: "#5a9e1a", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", whiteSpace: "nowrap" }}
+                  >
+                    Rename
+                  </button>
+                </div>
               </div>
 
               <div style={{ marginBottom: 14 }}>
@@ -741,6 +808,44 @@ export default function PadDashboardPage() {
       </div>
 
       {/* Pause confirmation modal */}
+      {/* ── Rename modal ── */}
+      {renamingPad && (
+        <div
+          onClick={() => setRenamingPad(null)}
+          style={{ position: "fixed", inset: 0, background: "rgba(14,31,64,0.55)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 300, padding: 16, animation: "fadeIn 0.18s ease" }}>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: "100%", maxWidth: 460, background: "#fff", borderRadius: 22, padding: "20px 20px 28px", boxShadow: "0 -8px 30px rgba(14,31,64,0.25)", fontFamily: "'DM Sans',sans-serif" }}>
+            <div style={{ width: 36, height: 4, background: "rgba(14,31,64,0.18)", borderRadius: 100, margin: "0 auto 16px" }} />
+            <div style={{ fontSize: 18, fontWeight: 800, color: NAVY, letterSpacing: -0.3, marginBottom: 4 }}>Rename pad</div>
+            <div style={{ fontSize: 12.5, color: "rgba(14,31,64,0.50)", marginBottom: 16, lineHeight: 1.45 }}>
+              Give your pad a unique name — no two pads on Lily Pad can share the same name.
+            </div>
+            <input
+              autoFocus
+              value={renameValue}
+              onChange={e => { setRenameValue(e.target.value); setRenameError(""); }}
+              onKeyDown={e => e.key === "Enter" && saveRename()}
+              placeholder="e.g. Front driveway, Oak Street spot…"
+              maxLength={60}
+              style={{ width: "100%", padding: "12px 14px", borderRadius: 12, border: `1.5px solid ${renameError ? "rgba(239,68,68,0.60)" : "rgba(14,31,64,0.18)"}`, background: "#fff", fontSize: 15, color: NAVY, fontFamily: "'DM Sans',sans-serif", fontWeight: 600, outline: "none", boxSizing: "border-box", marginBottom: renameError ? 6 : 14 }}
+            />
+            {renameError && (
+              <div style={{ fontSize: 12, color: "#ef4444", fontWeight: 600, marginBottom: 14, paddingLeft: 2 }}>{renameError}</div>
+            )}
+            <button
+              onClick={saveRename}
+              disabled={renameSaving || !renameValue.trim()}
+              style={{ width: "100%", padding: "14px 0", borderRadius: 14, background: renameSaving || !renameValue.trim() ? "rgba(141,214,63,0.30)" : GREEN, border: "none", color: NAVY, fontSize: 15, fontWeight: 800, cursor: renameSaving || !renameValue.trim() ? "default" : "pointer", fontFamily: "'DM Sans',sans-serif", marginBottom: 10 }}>
+              {renameSaving ? "Saving…" : "Save name"}
+            </button>
+            <button onClick={() => setRenamingPad(null)} style={{ width: "100%", padding: "10px 0", borderRadius: 100, background: "transparent", border: "none", color: "rgba(14,31,64,0.50)", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       {pendingPad && (
         <div
           onClick={() => setPendingPauseId(null)}
@@ -766,7 +871,7 @@ export default function PadDashboardPage() {
               Stop new bookings?
             </div>
             <div style={{ fontSize: 13, color: "rgba(14,31,64,0.60)", lineHeight: 1.45, marginBottom: 16 }}>
-              <strong style={{ color: NAVY }}>{pendingPad.nickname || pendingPad.address}</strong> won't appear to new drivers. Any bookings already on the calendar will still go through.
+              <strong style={{ color: NAVY }}>{pendingPad.name || pendingPad.address}</strong> won't appear to new drivers. Any bookings already on the calendar will still go through.
             </div>
 
             <button

@@ -71,6 +71,11 @@ CREATE TABLE IF NOT EXISTS public.spots (
   created_at    TIMESTAMPTZ DEFAULT NOW()
 );
 
+ALTER TABLE public.spots ADD COLUMN IF NOT EXISTS spot_name TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS spots_spot_name_unique
+  ON public.spots (lower(spot_name))
+  WHERE spot_name IS NOT NULL AND spot_name != '';
+
 ALTER TABLE public.spots ENABLE ROW LEVEL SECURITY;
 
 DO $$ BEGIN
@@ -1082,9 +1087,39 @@ app.get('/api/geocode', async (req, res) => {
   }
 });
 
+// ── Helper: find a globally-unique spot_name starting from baseName ──────────
+async function findUniquePadName(baseName) {
+  let name = baseName;
+  let attempt = 1;
+  while (true) {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/spots?spot_name=ilike.${encodeURIComponent(name)}&select=id&limit=1`,
+      { headers: SVC_HEADERS }
+    );
+    const data = await r.json();
+    if (!Array.isArray(data) || data.length === 0) return name;
+    attempt++;
+    name = `${baseName} ${attempt}`;
+    if (attempt > 999) return `${baseName} ${Date.now()}`; // safety
+  }
+}
+
+// ── Spots: check whether a name is available (case-insensitive) ───────────────
+app.get('/api/spots/check-name', async (req, res) => {
+  const { name, excludeId } = req.query;
+  if (!name || !String(name).trim()) return res.json({ available: false });
+  try {
+    let url = `${SUPABASE_URL}/rest/v1/spots?spot_name=ilike.${encodeURIComponent(String(name).trim())}&select=id&limit=1`;
+    if (excludeId) url += `&id=neq.${excludeId}`;
+    const r = await fetch(url, { headers: SVC_HEADERS });
+    const data = await r.json();
+    res.json({ available: Array.isArray(data) && data.length === 0 });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Spots: create a new pad listing ───────────────────────────────────────────
 app.post('/api/spots', async (req, res) => {
-  const { host_user_id, address, pad_type, surface, num_pads, price_per_hr, description, photo_url, photo_urls } = req.body || {};
+  const { host_user_id, address, pad_type, surface, num_pads, price_per_hr, description, photo_url, photo_urls, spot_name: rawSpotName } = req.body || {};
   if (!host_user_id || !address) return res.status(400).json({ error: 'host_user_id and address required' });
 
   // Use pre-validated lat/lng from client if provided, otherwise geocode with Google Maps
@@ -1111,6 +1146,8 @@ app.post('/api/spots', async (req, res) => {
     // photo_url(s) encoded inside description JSON — no separate column needed
     const allUrls = Array.isArray(photo_urls) && photo_urls.length ? photo_urls : (photo_url ? [photo_url] : []);
     const descPayload = JSON.stringify({ text: description || '', photo_url: allUrls[0] || '', photo_urls: allUrls });
+    // Assign a globally-unique pad name
+    const assignedName = await findUniquePadName(rawSpotName?.trim() || 'My Lily Pad');
     const r = await fetch(`${SUPABASE_URL}/rest/v1/spots`, {
       method : 'POST',
       headers: { ...SVC_HEADERS, 'Prefer': 'return=representation' },
@@ -1124,6 +1161,7 @@ app.post('/api/spots', async (req, res) => {
         description: descPayload,
         lat, lng,
         status: 'pending',
+        spot_name: assignedName,
       }),
     });
     const data = await r.json();
@@ -1170,6 +1208,21 @@ app.patch('/api/spots/:id', async (req, res) => {
     if ('address'      in body) patchFields.address       = body.address;
     if ('lat'          in body) patchFields.lat           = body.lat;
     if ('lng'          in body) patchFields.lng           = body.lng;
+    if ('spot_name'    in body) {
+      const newName = String(body.spot_name || '').trim();
+      if (newName) {
+        // Uniqueness check (case-insensitive, exclude self)
+        const chkR = await fetch(
+          `${SUPABASE_URL}/rest/v1/spots?spot_name=ilike.${encodeURIComponent(newName)}&id=neq.${id}&select=id&limit=1`,
+          { headers: SVC_HEADERS }
+        );
+        const chkData = await chkR.json();
+        if (Array.isArray(chkData) && chkData.length > 0) {
+          return res.status(409).json({ error: 'That pad name is already taken. Choose a different name.' });
+        }
+        patchFields.spot_name = newName;
+      }
+    }
 
     const r = await fetch(
       `${SUPABASE_URL}/rest/v1/spots?id=eq.${id}`,

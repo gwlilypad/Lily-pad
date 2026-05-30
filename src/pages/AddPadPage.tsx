@@ -171,13 +171,22 @@ export default function AddPadPage() {
         if (pos) doReverseGeocode(pos.lat(), pos.lng());
       });
       if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(pos => {
-          const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          map.setCenter(loc);
-          map.setZoom(19);
-          marker.setPosition(loc);
-          doReverseGeocode(loc.lat, loc.lng);
-        }, () => {});
+        navigator.geolocation.getCurrentPosition(
+          pos => {
+            const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+            map.setCenter(loc);
+            map.setZoom(19);
+            marker.setPosition(loc);
+            doReverseGeocode(loc.lat, loc.lng);
+          },
+          () => {
+            // Geolocation denied or failed — fall back to Houston default
+            doReverseGeocode(houston.lat, houston.lng);
+          }
+        );
+      } else {
+        // Browser has no geolocation — use Houston default immediately
+        doReverseGeocode(houston.lat, houston.lng);
       }
       gmapRef.current   = map;
       markerRef.current = marker;
@@ -249,16 +258,30 @@ export default function AddPadPage() {
     }
   }
 
+  function parseEditedAddress(edited: string) {
+    // Parse "10509 Lancaster Forest Ln, Houston, TX 77080, USA"
+    // into { street, city, state, zip }
+    const parts = edited.split(",").map(s => s.trim()).filter(Boolean);
+    const street = parts[0] || "";
+    const city   = parts[1] || "";
+    // parts[2] is typically "TX 77080" or "TX" — split to get state + zip
+    const stateZip = (parts[2] || "").trim().split(/\s+/);
+    const state  = stateZip[0] || "";
+    const zip    = stateZip[1] || "";
+    return { street, city, state, zip };
+  }
+
   function handleUseThisLocation() {
     if (!pinLat || !pinLng) return;
-    // Use the edited address text — split on first comma to get street portion
-    const edited  = pinAddrEditable.trim();
-    const street  = edited.includes(",") ? edited.split(",")[0].trim() : edited;
-    setInputVal(street || pinParsed?.street || "");
-    setAddrCity(pinParsed?.city   || "");
-    setAddrState(pinParsed?.state || "");
-    setAddrZip(pinParsed?.zip     || "");
+    const edited = pinAddrEditable.trim();
+    // Parse all parts from the user's (possibly corrected) address text
+    const parsed = edited ? parseEditedAddress(edited) : null;
+    setInputVal(parsed?.street || pinParsed?.street || "");
+    setAddrCity(parsed?.city   || pinParsed?.city   || "");
+    setAddrState(parsed?.state || pinParsed?.state  || "");
+    setAddrZip(parsed?.zip     || pinParsed?.zip    || "");
     setAddrError("");
+    // Save exact pin coordinates — these override any geocoded coords
     setAppState(prev => ({ ...prev, apLat: pinLat, apLng: pinLng }));
     setShowMapPicker(false);
     setFoundMsg("Location pinned!");

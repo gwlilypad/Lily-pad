@@ -2887,10 +2887,7 @@ export default function AdminPage() {
                   <p style={{ fontSize: 11.5, color: "rgba(255,255,255,0.62)", margin: "1px 0 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.email}</p>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3, flexShrink: 0 }}>
-                  <span style={{ fontSize: 14, fontWeight: 800, color: GREEN, letterSpacing: "-0.01em" }}>
-                    ${(adminView === "hosts" ? u.earningsThisMonth : u.totalSpent)?.toFixed(0) || "0"}
-                  </span>
-                  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.55)", fontWeight: 600 }}>{u.bookingsThisMonth} bookings</span>
+                  <span style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", fontWeight: 600 }}>{u.bookingsThisMonth} booking{u.bookingsThisMonth !== 1 ? "s" : ""}</span>
                   {u.type === "both" && <TypeBadge type="both" />}
                 </div>
               </div>
@@ -3025,14 +3022,10 @@ export default function AdminPage() {
           </div>
 
           {/* Stats row */}
-          <div style={{ display: "grid", gridTemplateColumns: selectedUser.type === "both" ? "1fr 1fr" : "1fr 1fr", gap: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 10 }}>
             <div style={{ background: "#142A52", borderRadius: 14, padding: "12px 14px", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 1px 6px rgba(0,0,0,0.22)" }}>
-              <p style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.10em", textTransform: "uppercase", margin: 0 }}>Bookings (mo)</p>
+              <p style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.10em", textTransform: "uppercase", margin: 0 }}>Bookings (all time)</p>
               <p style={{ fontSize: 22, fontWeight: 800, color: "#fff", margin: "2px 0 0", letterSpacing: "-0.02em" }}>{selectedUser.bookingsThisMonth}</p>
-            </div>
-            <div style={{ background: "#142A52", borderRadius: 14, padding: "12px 14px", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 1px 6px rgba(0,0,0,0.22)" }}>
-              <p style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.10em", textTransform: "uppercase", margin: 0 }}>{selectedUser.type === "driver" ? "Total Spent" : "Earnings (mo)"}</p>
-              <p style={{ fontSize: 22, fontWeight: 800, color: GREEN, margin: "2px 0 0", letterSpacing: "-0.02em" }}>${(selectedUser.type === "driver" ? selectedUser.totalSpent : selectedUser.earningsThisMonth)?.toFixed(2) || "0.00"}</p>
             </div>
           </div>
 

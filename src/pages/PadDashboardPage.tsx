@@ -581,77 +581,16 @@ export default function PadDashboardPage() {
             })()}
 
             {(() => {
-              const totalEarnings = pads.reduce((sum, p) => sum + p.bookings * p.price * 2, 0);
-              const totalBookings = pads.reduce((sum, p) => sum + p.bookings, 0);
+              const totalBookings = listerBookings.length;
               const activeCount = pads.filter(p => p.status === "active").length;
-              const monthEarnings = Math.round(totalEarnings * 0.32);
-              const lastMonthEarnings = Math.round(totalEarnings * 0.27);
-              const monthDelta = lastMonthEarnings === 0 ? 0 : Math.round(((monthEarnings - lastMonthEarnings) / lastMonthEarnings) * 100);
-              const occupancy = Math.min(98, Math.round((totalBookings / Math.max(1, pads.length * 30)) * 100));
-
-              const dayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-              const seed = totalEarnings || 42;
-              const dailyBars = dayLabels.map((_, i) => {
-                const base = ((Math.sin(seed + i * 1.3) + 1) / 2);
-                return 0.25 + base * 0.75;
-              });
-              const maxBar = Math.max(...dailyBars);
 
               return (
                 <>
-                  {/* Earnings hero */}
-                  <div style={{
-                    background: `linear-gradient(140deg, ${NAVY} 0%, #16315a 100%)`,
-                    borderRadius: 20, padding: "18px 18px 16px", marginBottom: 14,
-                    color: "#fff", boxShadow: "0 4px 18px rgba(14,31,64,0.18)",
-                    position: "relative", overflow: "hidden",
-                  }}>
-                    <div style={{ position: "absolute", top: -30, right: -30, width: 140, height: 140, background: "radial-gradient(circle, rgba(141,214,63,0.20), transparent 65%)", borderRadius: "50%" }} />
-                    <div style={{ position: "relative" }}>
-                      <div style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,0.55)", letterSpacing: 0.7, textTransform: "uppercase", marginBottom: 4 }}>
-                        Total earnings · all time
-                      </div>
-                      <div style={{ fontSize: 34, fontWeight: 800, letterSpacing: -1.2, lineHeight: 1.05 }}>
-                        ${totalEarnings.toLocaleString()}
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6, fontSize: 12, color: "rgba(255,255,255,0.65)" }}>
-                        <span style={{
-                          background: monthDelta >= 0 ? "rgba(141,214,63,0.18)" : "rgba(255,120,120,0.18)",
-                          color: monthDelta >= 0 ? GREEN : "#ff8585",
-                          padding: "2px 8px", borderRadius: 100, fontSize: 11, fontWeight: 700,
-                          display: "inline-flex", alignItems: "center", gap: 3,
-                        }}>
-                          {monthDelta >= 0 ? "▲" : "▼"} {Math.abs(monthDelta)}%
-                        </span>
-                        <span>${monthEarnings.toLocaleString()} this month</span>
-                      </div>
-
-                      {/* Mini bar chart */}
-                      <div style={{ marginTop: 16, display: "flex", alignItems: "flex-end", gap: 6, height: 48 }}>
-                        {dailyBars.map((h, i) => (
-                          <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                            <div style={{
-                              width: "100%", height: `${(h / maxBar) * 100}%`,
-                              background: i === 6 ? GREEN : "rgba(141,214,63,0.45)",
-                              borderRadius: "4px 4px 2px 2px",
-                              transition: "height 0.3s",
-                            }} />
-                            <span style={{ fontSize: 9, color: "rgba(255,255,255,0.40)", fontWeight: 600, letterSpacing: 0.3 }}>{dayLabels[i]}</span>
-                          </div>
-                        ))}
-                      </div>
-                      <div style={{ fontSize: 10, color: "rgba(255,255,255,0.40)", marginTop: 6, letterSpacing: 0.3 }}>
-                        Earnings · last 7 days
-                      </div>
-                    </div>
-                  </div>
-
                   {/* Stats grid */}
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 18 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 18 }}>
                     {[
                       { l: "Bookings", v: String(totalBookings), sub: "all time" },
                       { l: "Active pads", v: `${activeCount}/${pads.length}`, sub: pads.length === 1 ? "listing" : "listings" },
-                      { l: "Occupancy", v: `${occupancy}%`, sub: "this month" },
                     ].map(s => (
                       <div key={s.l} style={{ background: "#fff", borderRadius: 14, padding: "11px 12px", border: "1px solid rgba(14,31,64,0.07)" }}>
                         <div style={{ fontSize: 9.5, color: "rgba(14,31,64,0.32)", fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 4 }}>{s.l}</div>
@@ -660,31 +599,6 @@ export default function PadDashboardPage() {
                       </div>
                     ))}
                   </div>
-
-                  {/* Per-pad earnings breakdown */}
-                  {pads.length > 1 && (
-                    <div style={{ background: "#fff", borderRadius: 14, padding: "14px 14px", marginBottom: 18, border: "1px solid rgba(14,31,64,0.07)" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(14,31,64,0.45)", letterSpacing: 0.5, textTransform: "uppercase" }}>Earnings by pad</span>
-                        <span style={{ fontSize: 10.5, color: "rgba(14,31,64,0.35)" }}>all time</span>
-                      </div>
-                      {pads.map(p => {
-                        const earn = p.bookings * p.price * 2;
-                        const pct = totalEarnings === 0 ? 0 : (earn / totalEarnings) * 100;
-                        return (
-                          <div key={p.id} style={{ marginBottom: 10 }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                              <span style={{ fontSize: 12.5, fontWeight: 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "65%" }}>{p.name || p.address}</span>
-                              <span style={{ fontSize: 12.5, fontWeight: 700, color: NAVY }}>${earn}</span>
-                            </div>
-                            <div style={{ height: 6, background: "rgba(14,31,64,0.06)", borderRadius: 100, overflow: "hidden" }}>
-                              <div style={{ height: "100%", width: `${pct}%`, background: GREEN, borderRadius: 100 }} />
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
 
                   <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(14,31,64,0.45)", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 10 }}>
                     Your pads
@@ -747,7 +661,6 @@ export default function PadDashboardPage() {
                     {[
                       { l: "Listed", r: pad.since },
                       { l: "Bookings", r: String(pad.bookings) },
-                      { l: "Earnings", r: `$${(pad.bookings * pad.price * 2).toFixed(0)}` },
                     ].map(s => (
                       <div key={s.l} style={{ flex: 1, background: "rgba(14,31,64,0.04)", borderRadius: 10, padding: "8px 10px", border: "1px solid rgba(14,31,64,0.07)" }}>
                         <div style={{ fontSize: 9, color: "rgba(14,31,64,0.30)", fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 3 }}>{s.l}</div>
@@ -808,11 +721,10 @@ export default function PadDashboardPage() {
               {[
                 { l: "Listed", r: openPad.since },
                 { l: "Bookings", r: String(openPad.bookings) },
-                { l: "Earnings", r: `$${(openPad.bookings * openPad.price * 2).toFixed(0)}` },
               ].map(s => (
                 <div key={s.l} style={{ flex: 1, background: "#142A52", borderRadius: 12, padding: "10px 12px", border: "1px solid rgba(255,255,255,0.06)", boxShadow: "0 1px 6px rgba(0,0,0,0.18)" }}>
                   <div style={{ fontSize: 9, color: "rgba(255,255,255,0.38)", fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 3 }}>{s.l}</div>
-                  <div style={{ fontSize: 14, fontWeight: 800, color: s.l === "Earnings" ? GREEN : "#fff", letterSpacing: -0.2 }}>{s.r}</div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: "#fff", letterSpacing: -0.2 }}>{s.r}</div>
                 </div>
               ))}
             </div>

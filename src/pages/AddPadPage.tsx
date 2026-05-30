@@ -45,10 +45,11 @@ export default function AddPadPage() {
   const [pinLng, setPinLng] = useState(0);
   const [pinAddrEditable, setPinAddrEditable] = useState("");
   const [mapType, setMapType] = useState<"roadmap" | "satellite">("roadmap");
-  const mapDivRef   = useRef<HTMLDivElement>(null);
-  const gmapRef     = useRef<any>(null);
-  const markerRef   = useRef<any>(null);
-  const mapsLoading = useRef(false);
+  const mapDivRef      = useRef<HTMLDivElement>(null);
+  const gmapRef        = useRef<any>(null);
+  const markerRef      = useRef<any>(null);
+  const mapsLoading    = useRef(false);
+  const geocodeReqRef  = useRef(0);   // request-ID guard — prevents stale responses
 
   const inputRef = useRef<HTMLInputElement>(null);
   const cityRef  = useRef<HTMLInputElement>(null);
@@ -123,21 +124,28 @@ export default function AddPadPage() {
 
   // ── Map-pin picker ──────────────────────────────────────────────────────────
   const doReverseGeocode = useCallback(async (lat: number, lng: number) => {
+    // Stamp this request so a later call can cancel a stale in-flight fetch
+    const reqId = ++geocodeReqRef.current;
+    // Set coords IMMEDIATELY — button becomes active at once, no waiting for fetch
+    setPinLat(lat);
+    setPinLng(lng);
     setPinLoading(true);
     setPinAddr("");
+    setPinAddrEditable("");
     setPinParsed(null);
     try {
       const r    = await fetch(`/api/reverse-geocode?lat=${lat}&lng=${lng}`);
       const data = await r.json();
+      // Discard if a newer request has already fired (e.g. geolocation beat us)
+      if (reqId !== geocodeReqRef.current) return;
       if (r.ok) {
         const fmt = data.formatted_address || "";
         setPinAddr(fmt);
         setPinAddrEditable(fmt);
         setPinParsed({ street: data.street || "", city: data.city || "", state: data.state || "", zip: data.zip || "" });
-        setPinLat(lat); setPinLng(lng);
       }
     } catch {}
-    finally { setPinLoading(false); }
+    finally { if (reqId === geocodeReqRef.current) setPinLoading(false); }
   }, []);
 
   const [mapError, setMapError] = useState("");
@@ -170,6 +178,15 @@ export default function AddPadPage() {
         const pos = marker.getPosition();
         if (pos) doReverseGeocode(pos.lat(), pos.lng());
       });
+      gmapRef.current   = map;
+      markerRef.current = marker;
+
+      // Fire immediately with the default Houston pin — button active right away,
+      // no waiting for geolocation permission prompt.
+      doReverseGeocode(houston.lat, houston.lng);
+
+      // Try geolocation in the background; if granted, override Houston.
+      // timeout:5000 prevents hanging forever on a pending permission prompt.
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           pos => {
@@ -179,17 +196,10 @@ export default function AddPadPage() {
             marker.setPosition(loc);
             doReverseGeocode(loc.lat, loc.lng);
           },
-          () => {
-            // Geolocation denied or failed — fall back to Houston default
-            doReverseGeocode(houston.lat, houston.lng);
-          }
+          () => { /* already have Houston as fallback */ },
+          { timeout: 5000, maximumAge: 60000 }
         );
-      } else {
-        // Browser has no geolocation — use Houston default immediately
-        doReverseGeocode(houston.lat, houston.lng);
       }
-      gmapRef.current   = map;
-      markerRef.current = marker;
     } catch (e: any) {
       setMapError(`Maps init error: ${e?.message || e}`);
     }

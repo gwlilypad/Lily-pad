@@ -1079,6 +1079,7 @@ export default function FindPage() {
   const supportUserId = useRef<string>(getOrCreateUserId());
   const [activeTicketId, setActiveTicketId] = useState<string | null>(null);
   const [chatDraft, setChatDraft] = useState("");
+  const [shareToast, setShareToast] = useState<string | null>(null);
   const threadEndRef = useRef<HTMLDivElement | null>(null);
 
   // Live ticket sync across same tab, other tabs, and embedded iframes
@@ -2746,17 +2747,17 @@ export default function FindPage() {
                             onPointerDown={e => e.stopPropagation()}
                             onClick={e => { e.stopPropagation(); toggleSave(spot.id); }}
                             style={{
-                              display: "flex", alignItems: "center", gap: 3,
-                              padding: "5px 9px", borderRadius: 20, flexShrink: 0,
-                              background: savedSpots.includes(spot.id) ? "rgba(14,31,64,0.08)" : "transparent",
-                              border: `1px solid ${savedSpots.includes(spot.id) ? "rgba(14,31,64,0.18)" : "rgba(14,31,64,0.14)"}`,
+                              display: "flex", alignItems: "center", gap: 5,
+                              padding: "8px 14px", borderRadius: 100, flexShrink: 0,
+                              background: savedSpots.includes(spot.id) ? "rgba(14,31,64,0.10)" : "transparent",
+                              border: `1.5px solid ${savedSpots.includes(spot.id) ? "rgba(14,31,64,0.28)" : "rgba(14,31,64,0.18)"}`,
                               cursor: "pointer", transition: "all 0.18s",
                             }}
                           >
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill={savedSpots.includes(spot.id) ? "#0E1F40" : "none"} stroke="#0E1F40" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill={savedSpots.includes(spot.id) ? "#0E1F40" : "none"} stroke="#0E1F40" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                               <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
                             </svg>
-                            <span style={{ fontSize: 9.5, fontWeight: 700, color: "#0E1F40", letterSpacing: 0.1, whiteSpace: "nowrap" }}>
+                            <span style={{ fontSize: 11.5, fontWeight: 700, color: "#0E1F40", letterSpacing: 0.1, whiteSpace: "nowrap" }}>
                               {savedSpots.includes(spot.id) ? "Saved" : "Save"}
                             </span>
                           </button>
@@ -2881,6 +2882,65 @@ export default function FindPage() {
                   })()}
                 </div>
               </div>
+
+              {/* Save + Share action row */}
+              {(() => {
+                const isSaved = savedSpots.includes(spot.id as unknown as number);
+                const handleShare = () => {
+                  const url = `${window.location.origin}/find`;
+                  const text = `Check out this parking spot on Lily Pad: ${spot.addr}`;
+                  if (navigator.share) {
+                    navigator.share({ title: "Lily Pad Parking", text, url }).catch(() => {});
+                  } else {
+                    navigator.clipboard.writeText(`${text} — ${url}`).then(() => {
+                      setShareToast("Link copied!");
+                      setTimeout(() => setShareToast(null), 2200);
+                    }).catch(() => {
+                      setShareToast("Copy not supported");
+                      setTimeout(() => setShareToast(null), 2200);
+                    });
+                  }
+                };
+                return (
+                  <div style={{ display: "flex", gap: 10, padding: "0 16px 14px", flexShrink: 0 }}>
+                    <button
+                      onClick={() => toggleSave(spot.id as unknown as number)}
+                      style={{
+                        flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                        minHeight: 48, borderRadius: 100,
+                        background: isSaved ? "rgba(141,214,63,0.14)" : "rgba(255,255,255,0.07)",
+                        border: `1.5px solid ${isSaved ? "rgba(141,214,63,0.40)" : "rgba(255,255,255,0.14)"}`,
+                        cursor: "pointer", transition: "all 0.18s",
+                      }}
+                    >
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill={isSaved ? "#8DD63F" : "none"} stroke={isSaved ? "#8DD63F" : "rgba(255,255,255,0.7)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                      </svg>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: isSaved ? "#8DD63F" : "rgba(255,255,255,0.75)", letterSpacing: -0.1 }}>
+                        {isSaved ? "Saved" : "Save"}
+                      </span>
+                    </button>
+                    <button
+                      onClick={handleShare}
+                      style={{
+                        flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                        minHeight: 48, borderRadius: 100,
+                        background: "rgba(255,255,255,0.07)",
+                        border: "1.5px solid rgba(255,255,255,0.14)",
+                        cursor: "pointer", transition: "all 0.18s",
+                      }}
+                    >
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.75)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+                      </svg>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: "rgba(255,255,255,0.75)", letterSpacing: -0.1 }}>
+                        {shareToast === "Link copied!" ? "Copied!" : "Share"}
+                      </span>
+                    </button>
+                  </div>
+                );
+              })()}
 
               {/* Divider */}
               <div style={{ height: 1, background: "rgba(255,255,255,0.07)", margin: "0 16px 14px", flexShrink: 0 }} />

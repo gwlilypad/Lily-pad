@@ -2079,15 +2079,25 @@ app.get('/staff-login', (req, res) => {
 
 // ── Serve built React/Vite app ─────────────────────────────────────────────────
 const DIST = path.join(__dirname, 'dist');
-app.use(express.static(DIST));
+// index:false so index.html is NOT auto-served — the SPA fallback below
+// injects window.__EARLY_ACCESS__ into every HTML response instead
+app.use(express.static(DIST, { index: false }));
 
-// SPA fallback — all non-API routes serve the Vite-built index.html
+// SPA fallback — inject server-side flags into index.html so React reads them
+// instantly (no async fetch needed, no race conditions)
 app.get('*', (req, res) => {
   const indexHtml = path.join(DIST, 'index.html');
-  if (fs.existsSync(indexHtml)) {
+  if (!fs.existsSync(indexHtml)) {
+    return res.status(503).send('<h1>Building…</h1><p>The app is being compiled. Restart once <code>npm run build</code> completes.</p>');
+  }
+  try {
+    let html = fs.readFileSync(indexHtml, 'utf8');
+    const inject = `<script>window.__EARLY_ACCESS__=${EARLY_ACCESS ? 'true' : 'false'};</script>`;
+    html = html.replace('</head>', inject + '\n</head>');
+    res.setHeader('Content-Type', 'text/html');
+    res.send(html);
+  } catch {
     res.sendFile(indexHtml);
-  } else {
-    res.status(503).send('<h1>Building…</h1><p>The app is being compiled. Restart the workflow once: <code>npm run build</code> completes.</p>');
   }
 });
 

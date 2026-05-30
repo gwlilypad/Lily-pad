@@ -61,11 +61,19 @@ function AppInner() {
   const { role } = useAuth();
   const [fading, setFading] = useState(false);
   const [state, setState] = useState<AppState>(loadInitialState);
-  const [earlyAccess, setEarlyAccess] = useState(false);
-  const [configLoaded, setConfigLoaded] = useState(false);
+  // Read early access flag injected by server into window.__EARLY_ACCESS__
+  // Falls back to /api/config fetch if the window global isn't present
+  const [earlyAccess, setEarlyAccess] = useState<boolean>(
+    () => !!(window as unknown as Record<string, unknown>).__EARLY_ACCESS__
+  );
+  const [configLoaded, setConfigLoaded] = useState(
+    () => typeof (window as unknown as Record<string, unknown>).__EARLY_ACCESS__ !== 'undefined'
+  );
 
-  // Fetch feature flags from server (EARLY_ACCESS env var)
   useEffect(() => {
+    // If window.__EARLY_ACCESS__ was injected by server we already have the value;
+    // only fall back to the API fetch when the global is missing (local dev, etc.)
+    if (typeof (window as unknown as Record<string, unknown>).__EARLY_ACCESS__ !== 'undefined') return;
     fetch("/api/config")
       .then(r => r.json())
       .then(d => { setEarlyAccess(!!d.earlyAccess); })

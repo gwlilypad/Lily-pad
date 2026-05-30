@@ -178,7 +178,7 @@ export default function AddPadPage() {
     setMapType("roadmap");
     setPinAddr(""); setPinAddrEditable(""); setPinParsed(null); setPinLoading(false);
     if (gmapRef.current) { gmapRef.current = null; }
-    if (window.google?.maps) { setTimeout(initGoogleMap, 100); return; }
+    if (window.google?.maps) { setTimeout(initGoogleMap, 200); return; }
     if (mapsLoading.current) return;
     mapsLoading.current = true;
     try {
@@ -516,7 +516,7 @@ export default function AddPadPage() {
 
           {/* Map + overlay toggle */}
           <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
-            <div ref={mapDivRef} style={{ width: "100%", height: "100%" }} />
+            <div ref={mapDivRef} style={{ position: "absolute", inset: 0 }} />
             {/* Map type toggle */}
             <div style={{
               position: "absolute", top: 12, right: 12, zIndex: 10,

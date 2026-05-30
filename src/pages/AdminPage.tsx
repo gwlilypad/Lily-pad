@@ -3067,7 +3067,7 @@ export default function AdminPage() {
                     Open Supabase SQL Editor →
                   </a>
                   <p style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", margin: "8px 0 0" }}>
-                    Paste and run the SQL from <code style={{ background: "rgba(255,255,255,0.08)", padding: "1px 4px", borderRadius: 3 }}>/setup</code> — it includes the new table and is safe to re-run.
+                    Or visit <code style={{ background: "rgba(255,255,255,0.08)", padding: "1px 4px", borderRadius: 3 }}>/early-access-sql</code> in your app to get a clean, minimal SQL snippet (no DO blocks — guaranteed to run without errors).
                   </p>
                 </div>
               ) : earlySignups.length === 0 ? (

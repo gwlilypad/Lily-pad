@@ -352,6 +352,31 @@ app.get('/setup', (req, res) => {
   res.send(SETUP_SQL);
 });
 
+app.get('/early-access-sql', (req, res) => {
+  res.setHeader('Content-Type', 'text/plain');
+  res.send(`-- ▶ Run this in Supabase → SQL Editor to enable Early Access signups
+-- Safe to run multiple times (CREATE TABLE IF NOT EXISTS, etc.)
+
+CREATE TABLE IF NOT EXISTS public.early_access_signups (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name         TEXT NOT NULL DEFAULT '',
+  email        TEXT NOT NULL,
+  role         TEXT NOT NULL DEFAULT 'driver',
+  user_id      UUID,
+  status       TEXT NOT NULL DEFAULT 'pending',
+  notes        TEXT DEFAULT '',
+  submitted_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.early_access_signups ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY ea_signups_svc_all
+  ON public.early_access_signups
+  FOR ALL
+  USING (TRUE);
+`);
+});
+
 app.get('/spots-sql', (req, res) => {
   res.setHeader('Content-Type', 'text/plain');
   res.send(`-- Run this in Supabase → SQL Editor to create the spots table:

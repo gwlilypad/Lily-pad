@@ -10,6 +10,7 @@ const PAD_NAMES = ["Pad 1", "Pad 2", "Pad 3"];
 const HANDLE_R = 22;
 const HANDLE_ARM = 52;
 const CORNER_R = 9;
+const DEL_R = 11;  // radius of the X delete button
 
 interface Box {
   cx: number; cy: number;
@@ -26,6 +27,22 @@ function getCorners(b: Box): { x: number; y: number }[] {
     x: b.cx + lx * cos - ly * sin,
     y: b.cy + lx * sin + ly * cos,
   }));
+}
+
+function isInsideBox(p: { x: number; y: number }, b: Box): boolean {
+  const dx = p.x - b.cx, dy = p.y - b.cy;
+  const cos = Math.cos(-b.angle), sin = Math.sin(-b.angle);
+  const lx = dx * cos - dy * sin;
+  const ly = dx * sin + dy * cos;
+  return Math.abs(lx) < b.w / 2 && Math.abs(ly) < b.h / 2;
+}
+
+// X delete button sits just outside the top-right corner of the (rotated) box
+function getDeleteBtnPos(b: Box): { x: number; y: number } {
+  const lx = b.w / 2 + DEL_R + 4;
+  const ly = -(b.h / 2 + DEL_R + 4);
+  const cos = Math.cos(b.angle), sin = Math.sin(b.angle);
+  return { x: b.cx + lx * cos - ly * sin, y: b.cy + lx * sin + ly * cos };
 }
 
 async function annotatePhoto(photoDataUrl: string, boxes: Box[]): Promise<string> {
@@ -109,6 +126,7 @@ export default function PhotoPage() {
   const [cy, setCy] = useState(0);
   const [rotatingIdx, setRotatingIdx] = useState<number | null>(null);
   const [draggingCorner, setDraggingCorner] = useState<{ boxIdx: number; ci: number } | null>(null);
+  const [draggingBox, setDraggingBox] = useState<{ boxIdx: number; offX: number; offY: number } | null>(null);
 
   // Fullscreen state
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
@@ -168,6 +186,31 @@ export default function PhotoPage() {
     ctx.fillStyle = "#0E1F40";
     ctx.font = "bold 13px DM Sans, sans-serif";
     ctx.fillText(PAD_NAMES[b.pad] || `Pad ${b.pad + 1}`, -b.w / 2 + 8, -b.h / 2 + 16);
+    ctx.restore();
+
+    // ── X delete button — always on every box regardless of active pad ──
+    const { x: dbx, y: dby } = getDeleteBtnPos(b);
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,0.25)";
+    ctx.shadowBlur = 6;
+    ctx.fillStyle = "rgba(220,38,38,0.92)";
+    ctx.beginPath();
+    ctx.arc(dbx, dby, DEL_R, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "rgba(255,255,255,0.7)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.restore();
+    const xi = DEL_R * 0.44;
+    ctx.save();
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(dbx - xi, dby - xi); ctx.lineTo(dbx + xi, dby + xi);
+    ctx.moveTo(dbx + xi, dby - xi); ctx.lineTo(dbx - xi, dby + xi);
+    ctx.stroke();
     ctx.restore();
 
     if (!showHandle) return;
@@ -271,7 +314,20 @@ export default function PhotoPage() {
     const p = getPos(e);
     const boxes = allBoxes[activePhoto] || [];
 
-    // Check corner handles first (active pad only)
+    // 1. Check X delete buttons first — any box, any pad
+    for (let i = 0; i < boxes.length; i++) {
+      const { x: dx, y: dy } = getDeleteBtnPos(boxes[i]);
+      if (Math.sqrt((p.x - dx) ** 2 + (p.y - dy) ** 2) < DEL_R * 2.2) {
+        setAllBoxes(prev => {
+          const updated = (prev[activePhoto] || []).filter((_, idx) => idx !== i);
+          return { ...prev, [activePhoto]: updated };
+        });
+        if ("preventDefault" in e) e.preventDefault();
+        return;
+      }
+    }
+
+    // 2. Check corner handles (active pad only)
     for (let i = 0; i < boxes.length; i++) {
       if (boxes[i].pad !== activePad) continue;
       const corners = getCorners(boxes[i]);
@@ -285,7 +341,7 @@ export default function PhotoPage() {
       }
     }
 
-    // Check rotation handle (active pad only)
+    // 3. Check rotation handle (active pad only)
     for (let i = 0; i < boxes.length; i++) {
       if (boxes[i].pad !== activePad) continue;
       const { x: hx, y: hy } = getHandlePos(boxes[i]);
@@ -296,12 +352,35 @@ export default function PhotoPage() {
       }
     }
 
+    // 4. Check if click is inside any existing box → drag to move it
+    for (let i = 0; i < boxes.length; i++) {
+      if (isInsideBox(p, boxes[i])) {
+        setDraggingBox({ boxIdx: i, offX: p.x - boxes[i].cx, offY: p.y - boxes[i].cy });
+        if ("preventDefault" in e) e.preventDefault();
+        return;
+      }
+    }
+
+    // 5. Otherwise start a new drawing
     setSx(p.x); setSy(p.y); setCx(p.x); setCy(p.y);
     setDrawing(true);
   }
 
   function handleMove(e: React.MouseEvent | React.TouchEvent) {
     const p = getPos(e);
+
+    // Box drag: move entire box
+    if (draggingBox !== null) {
+      const boxes = allBoxes[activePhoto] || [];
+      const b = boxes[draggingBox.boxIdx];
+      if (!b) return;
+      setAllBoxes(prev => {
+        const updated = [...(prev[activePhoto] || [])];
+        updated[draggingBox.boxIdx] = { ...b, cx: p.x - draggingBox.offX, cy: p.y - draggingBox.offY };
+        return { ...prev, [activePhoto]: updated };
+      });
+      return;
+    }
 
     // Corner drag: opposite corner stays fixed, reshape the box
     if (draggingCorner !== null) {
@@ -344,6 +423,7 @@ export default function PhotoPage() {
   }
 
   function handleUp() {
+    if (draggingBox !== null) { setDraggingBox(null); return; }
     if (draggingCorner !== null) { setDraggingCorner(null); return; }
     if (rotatingIdx !== null) { setRotatingIdx(null); return; }
     if (!drawing || activePad === null) return;
@@ -699,7 +779,7 @@ export default function PhotoPage() {
 
           {/* Hint */}
           <p style={{ margin: 0, textAlign: "center", fontSize: 12, color: "rgba(255,255,255,0.4)", padding: "0 0 10px" }}>
-            Drag to draw a box · use ↻ handle to rotate
+            Draw a box · grab box to move · ↻ to rotate · ✕ to delete
           </p>
         </div>
       )}

@@ -202,6 +202,15 @@ export default function AddPadPage() {
     try {
       const keyRes = await fetch("/api/maps-key");
       const { key } = await keyRes.json();
+      // Capture Maps auth failures (RefererNotAllowedMapError, ApiNotActivatedMapError, etc.)
+      (window as any).gm_authFailure = () => {
+        const domain = window.location.hostname;
+        setMapError(
+          `Google Maps auth failed on domain "${domain}". ` +
+          `Error code is in the browser console (look for RefererNotAllowedMapError, ApiNotActivatedMapError, or BillingNotEnabledMapError). ` +
+          `Most likely fix: add "${domain}" to allowed HTTP referrers in Google Cloud Console → Credentials → API key restrictions.`
+        );
+      };
       // Use the canonical callback pattern — Maps JS calls __lilyMapsReady when fully ready
       await new Promise<void>((resolve, reject) => {
         (window as any).__lilyMapsReady = () => {

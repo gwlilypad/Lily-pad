@@ -722,11 +722,19 @@ export default function AdminPage() {
   const [authPassword, setAuthPassword] = useState("");
   const [authError, setAuthError] = useState("");
 
-  // Pad approval queue
-  const [usersSection, setUsersSection]   = useState<"accounts" | "padqueue">("accounts");
+  // Pad approval queue + early access signups
+  const [usersSection, setUsersSection]   = useState<"accounts" | "padqueue" | "pending">("accounts");
   const [pendingSpots, setPendingSpots]   = useState<PendingSpot[]>([]);
   const [loadingPending, setLoadingPending] = useState(false);
   const [approvingSpotId, setApprovingSpotId] = useState<string | null>(null);
+
+  // Early access signups (Pending tab)
+  type EarlySignup = { id: string; name: string; email: string; role: string; status: string; notes: string; submitted_at: string; user_id: string | null; };
+  const [earlySignups, setEarlySignups]       = useState<EarlySignup[]>([]);
+  const [loadingEarlySignups, setLoadingEarlySignups] = useState(false);
+  const [expandedSignupId, setExpandedSignupId] = useState<string | null>(null);
+  const [signupNotes, setSignupNotes]         = useState<Record<string, string>>({});
+  const [savingSignupId, setSavingSignupId]   = useState<string | null>(null);
   const [rejectingSpotId, setRejectingSpotId] = useState<string | null>(null);
   const [selectedSpot, setSelectedSpot]   = useState<PendingSpot | null>(null);
   const [approveConfirmSpot, setApproveConfirmSpot] = useState<PendingSpot | null>(null);
@@ -836,10 +844,81 @@ export default function AdminPage() {
   useEffect(() => { if (view === "service") refreshTickets(); }, [view]);
   useEffect(() => subscribeEmails(() => setEmails(loadEmails())), []);
 
-  // Fetch pending spots whenever the pad queue section is opened
+  // Fetch pending spots / early access signups when the matching section opens
   useEffect(() => {
     if (view === "users" && usersSection === "padqueue") fetchPendingSpots();
+    if (view === "users" && usersSection === "pending")  fetchEarlySignups();
   }, [view, usersSection]);
+
+  const [earlySignupsTableReady, setEarlySignupsTableReady] = useState<boolean | null>(null);
+
+  async function fetchEarlySignups() {
+    setLoadingEarlySignups(true);
+    try {
+      const r = await fetch("/api/admin/early-access-signups");
+      const d = await r.json();
+      if (r.ok) {
+        const signups = Array.isArray(d) ? d : (d.signups || []);
+        const tableReady = Array.isArray(d) ? true : (d.tableReady !== false);
+        setEarlySignups(signups);
+        setEarlySignupsTableReady(tableReady);
+        const notes: Record<string, string> = {};
+        signups.forEach((s: EarlySignup) => { notes[s.id] = s.notes || ""; });
+        setSignupNotes(notes);
+      }
+    } catch { /* silent */ }
+    finally { setLoadingEarlySignups(false); }
+  }
+
+  async function approveEarlySignup(id: string) {
+    setSavingSignupId(id);
+    try {
+      await fetch(`/api/admin/early-access-signups/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "approved" }),
+      });
+      setEarlySignups(prev => prev.map(s => s.id === id ? { ...s, status: "approved" } : s));
+    } catch { /* silent */ }
+    finally { setSavingSignupId(null); }
+  }
+
+  async function saveSignupNotes(id: string) {
+    setSavingSignupId(id);
+    try {
+      await fetch(`/api/admin/early-access-signups/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notes: signupNotes[id] || "" }),
+      });
+      setEarlySignups(prev => prev.map(s => s.id === id ? { ...s, notes: signupNotes[id] || "" } : s));
+    } catch { /* silent */ }
+    finally { setSavingSignupId(null); }
+  }
+
+  function exportEarlySignupsPDF() {
+    const pending  = earlySignups.filter(s => s.status === "pending");
+    const approved = earlySignups.filter(s => s.status === "approved");
+    const rows = (list: EarlySignup[]) => list.map(s => `
+      <tr>
+        <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0">${s.name}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0">${s.email}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-transform:capitalize">${s.role}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0">${new Date(s.submitted_at).toLocaleDateString()}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;color:${s.status==='approved'?'#22c55e':'#f59e0b'};font-weight:700;text-transform:capitalize">${s.status}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;color:#64748b;font-size:12px">${s.notes || "—"}</td>
+      </tr>`).join("");
+    const html = `<!DOCTYPE html><html><head><title>Lily Pad — Early Access Signups</title><style>body{font-family:system-ui,sans-serif;color:#1e293b;padding:32px}h1{font-size:22px;margin-bottom:4px}p.sub{color:#64748b;font-size:13px;margin-bottom:24px}table{border-collapse:collapse;width:100%}th{background:#0E1F40;color:#fff;padding:10px 12px;text-align:left;font-size:13px}td{font-size:13px}h2{font-size:15px;margin:24px 0 8px;color:#0E1F40}</style></head><body>
+      <h1>🪷 Lily Pad — Early Access Signups</h1>
+      <p class="sub">Exported ${new Date().toLocaleString()} · ${earlySignups.length} total signups</p>
+      <h2>Pending (${pending.length})</h2>
+      <table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Submitted</th><th>Status</th><th>Notes</th></tr></thead><tbody>${rows(pending)}</tbody></table>
+      <h2>Approved (${approved.length})</h2>
+      <table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Submitted</th><th>Status</th><th>Notes</th></tr></thead><tbody>${rows(approved)}</tbody></table>
+      </body></html>`;
+    const w = window.open("", "_blank");
+    if (w) { w.document.write(html); w.document.close(); w.focus(); w.print(); }
+  }
 
   async function fetchPendingSpots() {
     setLoadingPending(true);
@@ -2792,11 +2871,12 @@ export default function AdminPage() {
             </div>
           </div>
 
-          {/* Section toggle: ACCOUNTS | PAD QUEUE */}
+          {/* Section toggle: ACCOUNTS | PAD QUEUE | PENDING */}
           <div style={{ background: "#142A52", borderRadius: 12, padding: 4, display: "flex", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)" }}>
             {([
               { id: "accounts" as const, label: "Accounts" },
               { id: "padqueue" as const, label: "Pad Queue", badge: pendingSpots.length },
+              { id: "pending"  as const, label: "Pending", badge: earlySignups.filter(s => s.status === "pending").length },
             ]).map(t => {
               const active = usersSection === t.id;
               return (
@@ -2954,6 +3034,130 @@ export default function AdminPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* ── EARLY ACCESS PENDING SIGNUPS ── */}
+          {usersSection === "pending" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,0.50)", letterSpacing: 0.8, textTransform: "uppercase" }}>
+                  {earlySignups.length} signup{earlySignups.length !== 1 ? "s" : ""} total
+                </span>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button onClick={fetchEarlySignups} style={{ background: "rgba(255,255,255,0.08)", border: "none", borderRadius: 8, padding: "5px 10px", color: "rgba(255,255,255,0.70)", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: '"DM Sans",sans-serif' }}>↻ Refresh</button>
+                  <button onClick={exportEarlySignupsPDF} style={{ background: `${GREEN}22`, border: `1px solid ${GREEN}44`, borderRadius: 8, padding: "5px 10px", color: GREEN, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: '"DM Sans",sans-serif' }}>⬇ Export PDF</button>
+                </div>
+              </div>
+
+              {loadingEarlySignups ? (
+                <div style={{ textAlign: "center", padding: "40px 0", color: "rgba(255,255,255,0.4)", fontSize: 13 }}>Loading…</div>
+              ) : earlySignupsTableReady === false ? (
+                <div style={{ background: "rgba(246,200,0,0.08)", border: "1px solid rgba(246,200,0,0.22)", borderRadius: 14, padding: "18px 16px" }}>
+                  <p style={{ fontSize: 13, fontWeight: 800, color: "#F6C800", margin: "0 0 6px" }}>⚠ Database table not set up yet</p>
+                  <p style={{ fontSize: 12, color: "rgba(255,255,255,0.60)", margin: "0 0 10px", lineHeight: 1.6 }}>
+                    The early access signups table doesn't exist in Supabase yet. Run the setup SQL to enable the Pending tab.
+                  </p>
+                  <a
+                    href="https://supabase.com/dashboard/project/mcfxoimaqgpyntvasbsw/sql/new"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ display: "inline-block", background: "#F6C800", color: "#0E1F40", fontSize: 12, fontWeight: 800, padding: "8px 14px", borderRadius: 8, textDecoration: "none" }}
+                  >
+                    Open Supabase SQL Editor →
+                  </a>
+                  <p style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", margin: "8px 0 0" }}>
+                    Paste and run the SQL from <code style={{ background: "rgba(255,255,255,0.08)", padding: "1px 4px", borderRadius: 3 }}>/setup</code> — it includes the new table and is safe to re-run.
+                  </p>
+                </div>
+              ) : earlySignups.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "48px 20px" }}>
+                  <div style={{ fontSize: 40, marginBottom: 12 }}>🪷</div>
+                  <p style={{ color: "rgba(255,255,255,0.55)", fontSize: 14, fontWeight: 600, margin: 0 }}>No early access signups yet</p>
+                  <p style={{ color: "rgba(255,255,255,0.35)", fontSize: 12, margin: "6px 0 0" }}>Signups will appear here when EARLY_ACCESS mode is enabled</p>
+                </div>
+              ) : earlySignups.map(s => {
+                const expanded = expandedSignupId === s.id;
+                const approved = s.status === "approved";
+                return (
+                  <div key={s.id} style={{ background: "#142A52", borderRadius: 16, overflow: "hidden", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 14px rgba(0,0,0,0.28)" }}>
+                    {/* Row header — always visible */}
+                    <div
+                      onClick={() => setExpandedSignupId(expanded ? null : s.id)}
+                      style={{ padding: "14px 16px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}
+                    >
+                      <div style={{ width: 38, height: 38, borderRadius: "50%", background: approved ? `${GREEN}22` : "rgba(246,200,0,0.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={approved ? GREEN : "#F6C800"} strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: "#fff" }}>{s.name}</p>
+                        <p style={{ margin: "1px 0 0", fontSize: 11.5, color: "rgba(255,255,255,0.50)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.email}</p>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
+                        <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", padding: "2px 8px", borderRadius: 100, background: approved ? `${GREEN}22` : "rgba(246,200,0,0.15)", color: approved ? GREEN : "#F6C800" }}>
+                          {approved ? "Approved" : "Pending"}
+                        </span>
+                        <span style={{ fontSize: 10, fontWeight: 600, color: "rgba(255,255,255,0.35)", textTransform: "capitalize" }}>{s.role === "both" ? "Driver + Host" : s.role}</span>
+                      </div>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="2.5" style={{ flexShrink: 0, transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.18s" }}>
+                        <path d="M9 18l6-6-6-6"/>
+                      </svg>
+                    </div>
+
+                    {/* Expanded detail */}
+                    {expanded && (
+                      <div style={{ padding: "0 16px 16px", borderTop: "1px solid rgba(255,255,255,0.06)", display: "flex", flexDirection: "column", gap: 12, paddingTop: 14 }}>
+                        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                          <div style={{ flex: 1, minWidth: 120, background: "rgba(255,255,255,0.04)", borderRadius: 10, padding: "10px 12px" }}>
+                            <p style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.40)", letterSpacing: "0.1em", textTransform: "uppercase", margin: "0 0 3px" }}>Submitted</p>
+                            <p style={{ fontSize: 13, fontWeight: 600, color: "#fff", margin: 0 }}>{new Date(s.submitted_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
+                          </div>
+                          <div style={{ flex: 1, minWidth: 120, background: "rgba(255,255,255,0.04)", borderRadius: 10, padding: "10px 12px" }}>
+                            <p style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.40)", letterSpacing: "0.1em", textTransform: "uppercase", margin: "0 0 3px" }}>Role</p>
+                            <p style={{ fontSize: 13, fontWeight: 600, color: "#fff", margin: 0, textTransform: "capitalize" }}>{s.role === "both" ? "Driver + Host" : s.role}</p>
+                          </div>
+                        </div>
+
+                        {/* Notes */}
+                        <div>
+                          <p style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.08em", textTransform: "uppercase", margin: "0 0 6px" }}>Notes</p>
+                          <textarea
+                            value={signupNotes[s.id] ?? ""}
+                            onChange={e => setSignupNotes(prev => ({ ...prev, [s.id]: e.target.value }))}
+                            placeholder="Add internal notes…"
+                            rows={2}
+                            style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", borderRadius: 10, border: "1.5px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.05)", color: "#fff", fontSize: 13, fontFamily: '"DM Sans",sans-serif', resize: "vertical", outline: "none" }}
+                          />
+                        </div>
+
+                        <div style={{ display: "flex", gap: 8 }}>
+                          {!approved && (
+                            <button
+                              onClick={() => approveEarlySignup(s.id)}
+                              disabled={savingSignupId === s.id}
+                              style={{ flex: 1, padding: "10px 12px", borderRadius: 10, border: "none", background: savingSignupId === s.id ? "rgba(255,255,255,0.08)" : GREEN, color: savingSignupId === s.id ? "rgba(255,255,255,0.35)" : "#0E1F40", fontSize: 13, fontWeight: 800, cursor: savingSignupId === s.id ? "not-allowed" : "pointer", fontFamily: '"DM Sans",sans-serif' }}
+                            >
+                              {savingSignupId === s.id ? "Saving…" : "✓ Approve"}
+                            </button>
+                          )}
+                          {approved && (
+                            <div style={{ flex: 1, padding: "10px 12px", borderRadius: 10, background: `${GREEN}18`, border: `1px solid ${GREEN}44`, textAlign: "center" }}>
+                              <span style={{ fontSize: 13, fontWeight: 700, color: GREEN }}>✓ Approved</span>
+                            </div>
+                          )}
+                          <button
+                            onClick={() => saveSignupNotes(s.id)}
+                            disabled={savingSignupId === s.id}
+                            style={{ padding: "10px 14px", borderRadius: 10, border: "1.5px solid rgba(255,255,255,0.12)", background: "transparent", color: "rgba(255,255,255,0.70)", fontSize: 13, fontWeight: 700, cursor: savingSignupId === s.id ? "not-allowed" : "pointer", fontFamily: '"DM Sans",sans-serif' }}
+                          >
+                            Save notes
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

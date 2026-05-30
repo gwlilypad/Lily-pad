@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { AppContext, type PageId, type AppState, DEFAULT_STATE, STORAGE_KEY, TRANSIENT_KEYS, loadInitialState } from "@/context/AppContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { AuthGuard } from "@/components/AuthGuard";
@@ -28,6 +28,7 @@ import SignInPage from "@/pages/SignInPage";
 import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
 import EmailVerifyPage from "@/pages/EmailVerifyPage";
 import PWAInstallBanner from "@/components/PWAInstallBanner";
+import EarlyAccessPage from "@/pages/EarlyAccessPage";
 
 const PAGE_ROUTES: Record<PageId, string> = {
   home: "/",
@@ -56,9 +57,21 @@ const PAGE_ROUTES: Record<PageId, string> = {
 
 function AppInner() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { role } = useAuth();
   const [fading, setFading] = useState(false);
   const [state, setState] = useState<AppState>(loadInitialState);
+  const [earlyAccess, setEarlyAccess] = useState(false);
+  const [configLoaded, setConfigLoaded] = useState(false);
+
+  // Fetch feature flags from server (EARLY_ACCESS env var)
+  useEffect(() => {
+    fetch("/api/config")
+      .then(r => r.json())
+      .then(d => { setEarlyAccess(!!d.earlyAccess); })
+      .catch(() => {})
+      .finally(() => setConfigLoaded(true));
+  }, []);
 
   // Sync auth role → accountType whenever the user signs in or profile loads
   useEffect(() => {
@@ -88,6 +101,21 @@ function AppInner() {
       setFading(false);
     }, 180);
   }, [navigate]);
+
+  // ── Early access gate ─────────────────────────────────────────────────────
+  // Admin/staff bypass: /admin path is always accessible, and users with
+  // admin or staff role see the full app even in early access mode.
+  const isAdminPath    = location.pathname.startsWith("/admin");
+  const isAdminOrStaff = role === "admin" || role === "staff";
+  if (configLoaded && earlyAccess && !isAdminPath && !isAdminOrStaff) {
+    return (
+      <AppContext.Provider value={{ goTo, state, setState }}>
+        <div className="screen">
+          <EarlyAccessPage />
+        </div>
+      </AppContext.Provider>
+    );
+  }
 
   return (
     <AppContext.Provider value={{ goTo, state, setState }}>

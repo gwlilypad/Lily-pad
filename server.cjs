@@ -14,6 +14,8 @@ const SVC_KEY       = process.env.SUPABASE_SERVICE_ROLE_KEY  || '';
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '')
   .split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
 
+const EARLY_ACCESS = (process.env.EARLY_ACCESS || '').toLowerCase() === 'true';
+
 const SVC_HEADERS = {
   'apikey'       : SVC_KEY,
   'Authorization': `Bearer ${SVC_KEY}`,
@@ -187,6 +189,23 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- Early access signups (for EARLY_ACCESS launch mode)
+CREATE TABLE IF NOT EXISTS public.early_access_signups (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name         TEXT NOT NULL DEFAULT '',
+  email        TEXT NOT NULL,
+  role         TEXT NOT NULL DEFAULT 'driver',
+  user_id      UUID,
+  status       TEXT NOT NULL DEFAULT 'pending',
+  notes        TEXT DEFAULT '',
+  submitted_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE public.early_access_signups ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='early_access_signups' AND policyname='ea_signups_svc_all')
+    THEN CREATE POLICY ea_signups_svc_all ON public.early_access_signups FOR ALL USING (TRUE); END IF;
+END $$;
 `;
 
 // ── Try running SQL via Supabase Management API ───────────────────────────────
@@ -252,6 +271,23 @@ async function checkDB() {
         await runSQL(`SELECT pg_notify('pgrst', 'reload schema');`);
         console.log('[DB] photo_url column ready, schema cache reloaded');
       }
+      // ── early_access_signups table (always idempotent) ──
+      const earlyRes = await runSQL(`
+CREATE TABLE IF NOT EXISTS public.early_access_signups (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name         TEXT NOT NULL DEFAULT '',
+  email        TEXT NOT NULL,
+  role         TEXT NOT NULL DEFAULT 'driver',
+  user_id      UUID,
+  status       TEXT NOT NULL DEFAULT 'pending',
+  notes        TEXT DEFAULT '',
+  submitted_at TIMESTAMPTZ DEFAULT NOW()
+);
+`).catch(() => ({ ok: false }));
+      if (earlyRes && earlyRes.ok) {
+        await runSQL(`SELECT pg_notify('pgrst', 'reload schema');`).catch(() => {});
+      }
+      console.log('[DB] early_access_signups table ✓');
       return;
     }
     console.log('[DB] spots table missing — attempting auto-create…');
@@ -288,6 +324,21 @@ ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS role  TEXT DEFAULT 'driver'
       console.warn('[DB] Auto-create failed. Run this in Supabase → SQL Editor (visit /spots-sql):\n');
       console.log(SPOTS_SQL);
     }
+    // ── early_access_signups table (idempotent) ──
+    await runSQL(`
+CREATE TABLE IF NOT EXISTS public.early_access_signups (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name        TEXT NOT NULL DEFAULT '',
+  email       TEXT NOT NULL,
+  role        TEXT NOT NULL DEFAULT 'driver',
+  user_id     UUID,
+  status      TEXT NOT NULL DEFAULT 'pending',
+  notes       TEXT DEFAULT '',
+  submitted_at TIMESTAMPTZ DEFAULT NOW()
+);
+`).catch(() => {});
+    console.log('[DB] early_access_signups table ✓');
+
   } catch (e) {
     console.warn('[DB] DB check failed:', e.message);
   }
@@ -330,6 +381,11 @@ END $$;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS phone TEXT DEFAULT '';
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS role  TEXT DEFAULT 'driver';
 `);
+});
+
+// ── Public config — exposes non-secret feature flags to the frontend ──────────
+app.get('/api/config', (req, res) => {
+  res.json({ earlyAccess: EARLY_ACCESS });
 });
 
 // ── Health check — shows masked key status ────────────────────────────────────
@@ -460,6 +516,87 @@ app.post('/api/auth/signup', async (req, res) => {
     }
 
     return res.json({ created: true, session: null });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Early access signup ───────────────────────────────────────────────────────
+app.post('/api/early-access/signup', async (req, res) => {
+  const { name, email, password, role } = req.body || {};
+  if (!email || !password || !name) return res.status(400).json({ error: 'name, email and password required' });
+  const emailLower = email.toLowerCase().trim();
+  try {
+    // Create Supabase auth user (pre-confirmed, no SMTP needed)
+    const authRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
+      method : 'POST',
+      headers: { 'apikey': SVC_KEY, 'Authorization': `Bearer ${SVC_KEY}`, 'Content-Type': 'application/json' },
+      body   : JSON.stringify({
+        email: emailLower, password,
+        email_confirm: true,
+        user_metadata: { full_name: name, account_type: role || 'driver' },
+      }),
+    });
+    const authData = await authRes.json();
+    if (!authRes.ok) {
+      const msg = authData.error_description || authData.message || JSON.stringify(authData);
+      return res.status(authRes.status).json({ error: msg });
+    }
+    const userId = authData.id;
+
+    // Upsert profile row
+    if (userId) {
+      await fetch(`${SUPABASE_URL}/rest/v1/profiles`, {
+        method : 'POST',
+        headers: { ...SVC_HEADERS, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+        body   : JSON.stringify({ id: userId, email: emailLower, full_name: name, account_type: role || 'driver' }),
+      }).catch(() => {});
+    }
+
+    // Insert early_access_signups row
+    await fetch(`${SUPABASE_URL}/rest/v1/early_access_signups`, {
+      method : 'POST',
+      headers: { ...SVC_HEADERS, 'Prefer': 'return=minimal' },
+      body   : JSON.stringify({ name, email: emailLower, role: role || 'driver', user_id: userId || null, status: 'pending' }),
+    }).catch(() => {});
+
+    res.json({ ok: true, userId });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: list early access signups ─────────────────────────────────────────
+app.get('/api/admin/early-access-signups', async (req, res) => {
+  if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/early_access_signups?order=submitted_at.desc&limit=500`,
+      { headers: SVC_HEADERS }
+    );
+    const data = await r.json();
+    if (!r.ok) {
+      const isTableMissing = JSON.stringify(data).includes('PGRST205') || JSON.stringify(data).includes('does not exist');
+      // Return tableReady=false so admin UI can show setup instructions
+      if (isTableMissing) return res.json({ signups: [], tableReady: false });
+      return res.status(r.status).json({ error: JSON.stringify(data) });
+    }
+    res.json({ signups: Array.isArray(data) ? data : [], tableReady: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: update early access signup (approve / add notes) ───────────────────
+app.patch('/api/admin/early-access-signups/:id', async (req, res) => {
+  if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });
+  const { id } = req.params;
+  const { status, notes } = req.body || {};
+  const patch = {};
+  if (status !== undefined) patch.status = status;
+  if (notes  !== undefined) patch.notes  = notes;
+  if (!Object.keys(patch).length) return res.status(400).json({ error: 'nothing to update' });
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/early_access_signups?id=eq.${encodeURIComponent(id)}`,
+      { method: 'PATCH', headers: { ...SVC_HEADERS, 'Prefer': 'return=minimal' }, body: JSON.stringify(patch) }
+    );
+    if (!r.ok) { const d = await r.text(); return res.status(r.status).json({ error: d }); }
+    res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

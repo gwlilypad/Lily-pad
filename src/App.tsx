@@ -58,7 +58,7 @@ const PAGE_ROUTES: Record<PageId, string> = {
 function AppInner() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { role } = useAuth();
+  const { role, loading: authLoading } = useAuth();
   const [fading, setFading] = useState(false);
   const [state, setState] = useState<AppState>(loadInitialState);
   // Read early access flag injected by server into window.__EARLY_ACCESS__
@@ -115,7 +115,7 @@ function AppInner() {
   // admin or staff role see the full app even in early access mode.
   const isAdminPath    = location.pathname.startsWith("/admin");
   const isAdminOrStaff = role === "admin" || role === "staff";
-  if (configLoaded && earlyAccess && !isAdminPath && !isAdminOrStaff) {
+  if (configLoaded && earlyAccess && !isAdminPath && (authLoading || !isAdminOrStaff)) {
     return (
       <AppContext.Provider value={{ goTo, state, setState }}>
         <div className="screen">

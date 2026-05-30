@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 const BANNER_KEY = "lp_pwa_banner";
 const MAX_DISMISSALS = 2;
@@ -12,7 +12,13 @@ interface BannerState {
 
 function load(): BannerState {
   try {
-    return JSON.parse(localStorage.getItem(BANNER_KEY) || "null") ?? { dismissals: 0, lastDismissedAt: null, installed: false };
+    return (
+      JSON.parse(localStorage.getItem(BANNER_KEY) || "null") ?? {
+        dismissals: 0,
+        lastDismissedAt: null,
+        installed: false,
+      }
+    );
   } catch {
     return { dismissals: 0, lastDismissedAt: null, installed: false };
   }
@@ -24,15 +30,18 @@ function save(s: BannerState) {
 
 export default function PWAInstallBanner() {
   const [show, setShow] = useState(false);
-  const [prompt, setPrompt] = useState<any>(null);
   const [isIOS, setIsIOS] = useState(false);
+  const [installing, setInstalling] = useState(false);
+  // Use a ref so the deferred prompt never goes stale across renders
+  const deferredPrompt = useRef<any>(null);
 
   useEffect(() => {
     const s = load();
     if (s.installed || s.dismissals >= MAX_DISMISSALS) return;
     if (s.lastDismissedAt !== null && Date.now() - s.lastDismissedAt < COOLDOWN_MS) return;
 
-    const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const ua = navigator.userAgent;
+    const ios = /iphone|ipad|ipod/i.test(ua);
     const standalone =
       window.matchMedia("(display-mode: standalone)").matches ||
       (navigator as any).standalone === true;
@@ -41,35 +50,55 @@ export default function PWAInstallBanner() {
 
     setIsIOS(ios);
 
-    const onPrompt = (e: Event) => {
+    // Android / Chrome: capture the deferred prompt
+    const onBeforeInstall = (e: Event) => {
       e.preventDefault();
-      setPrompt(e);
+      deferredPrompt.current = e;
       setShow(true);
     };
 
     const onInstalled = () => {
       save({ ...load(), installed: true });
+      deferredPrompt.current = null;
       setShow(false);
     };
 
-    window.addEventListener("beforeinstallprompt", onPrompt);
+    window.addEventListener("beforeinstallprompt", onBeforeInstall);
     window.addEventListener("appinstalled", onInstalled);
 
+    // iOS Safari: no beforeinstallprompt event — show banner with manual instructions
     if (ios) setShow(true);
 
     return () => {
-      window.removeEventListener("beforeinstallprompt", onPrompt);
+      window.removeEventListener("beforeinstallprompt", onBeforeInstall);
       window.removeEventListener("appinstalled", onInstalled);
     };
   }, []);
 
   const handleInstall = async () => {
-    if (prompt) {
-      prompt.prompt();
-      const { outcome } = await prompt.userChoice;
-      if (outcome === "accepted") save({ ...load(), installed: true });
+    const dp = deferredPrompt.current;
+    if (!dp) {
+      // No native prompt — just close (iOS users follow the manual instructions)
+      handleDismiss();
+      return;
     }
-    setShow(false);
+
+    try {
+      setInstalling(true);
+      // prompt() returns a Promise in newer Chrome versions
+      await dp.prompt();
+      const { outcome } = await dp.userChoice;
+      if (outcome === "accepted") {
+        save({ ...load(), installed: true });
+      }
+    } catch {
+      // Prompt failed (e.g. iframe, already shown, permissions)
+      // Do nothing — don't dismiss so user can try again
+    } finally {
+      deferredPrompt.current = null;
+      setInstalling(false);
+      setShow(false);
+    }
   };
 
   const handleDismiss = () => {
@@ -88,57 +117,84 @@ export default function PWAInstallBanner() {
           to   { transform: translateY(0);    opacity: 1; }
         }
       `}</style>
-      <div style={{
-        position: "fixed",
-        bottom: 0,
-        left: 0,
-        right: 0,
-        zIndex: 99999,
-        padding: "14px 16px env(safe-area-inset-bottom, 16px)",
-        background: "#0E1F40",
-        borderTop: "1px solid rgba(141,214,63,0.28)",
-        boxShadow: "0 -6px 32px rgba(0,0,0,0.40)",
-        display: "flex",
-        alignItems: "center",
-        gap: 12,
-        fontFamily: '"DM Sans", sans-serif',
-        animation: "lp-slide-up 0.32s cubic-bezier(0.22,1,0.36,1)",
-      }}>
+      <div
+        style={{
+          position: "fixed",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          zIndex: 99999,
+          padding: "14px 16px env(safe-area-inset-bottom, 16px)",
+          background: "#0E1F40",
+          borderTop: "1px solid rgba(141,214,63,0.28)",
+          boxShadow: "0 -6px 32px rgba(0,0,0,0.40)",
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          fontFamily: '"DM Sans", sans-serif',
+          animation: "lp-slide-up 0.32s cubic-bezier(0.22,1,0.36,1)",
+        }}
+      >
         <img
           src="/icon-192.png"
           alt="Lily Pad"
-          style={{ width: 44, height: 44, borderRadius: 10, flexShrink: 0, boxShadow: "0 2px 8px rgba(0,0,0,0.30)" }}
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 10,
+            flexShrink: 0,
+            boxShadow: "0 2px 8px rgba(0,0,0,0.30)",
+          }}
         />
 
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "#fff", lineHeight: 1.4 }}>
+          <div
+            style={{ fontSize: 13, fontWeight: 700, color: "#fff", lineHeight: 1.4 }}
+          >
             Add Lily Pad to your home screen for the best experience
           </div>
           {isIOS && (
-            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.52)", marginTop: 3, lineHeight: 1.4 }}>
-              Tap <strong style={{ color: "rgba(255,255,255,0.70)" }}>Share</strong> then <strong style={{ color: "rgba(255,255,255,0.70)" }}>Add to Home Screen</strong>
+            <div
+              style={{
+                fontSize: 11,
+                color: "rgba(255,255,255,0.52)",
+                marginTop: 3,
+                lineHeight: 1.5,
+              }}
+            >
+              Tap{" "}
+              <strong style={{ color: "rgba(255,255,255,0.75)" }}>
+                Share ⎋
+              </strong>{" "}
+              then{" "}
+              <strong style={{ color: "rgba(255,255,255,0.75)" }}>
+                Add to Home Screen
+              </strong>
             </div>
           )}
         </div>
 
-        {!isIOS && (
+        {/* Install button — only shown on Android/Chrome where a native prompt is available */}
+        {!isIOS && deferredPrompt.current && (
           <button
             onClick={handleInstall}
+            disabled={installing}
             style={{
-              background: "#8DD63F",
+              background: installing ? "rgba(141,214,63,0.50)" : "#8DD63F",
               color: "#0E1F40",
               border: "none",
               borderRadius: 100,
               padding: "9px 18px",
               fontSize: 13,
               fontWeight: 800,
-              cursor: "pointer",
+              cursor: installing ? "default" : "pointer",
               fontFamily: '"DM Sans", sans-serif',
               flexShrink: 0,
               whiteSpace: "nowrap",
+              transition: "background 0.15s",
             }}
           >
-            Install
+            {installing ? "Adding…" : "Install"}
           </button>
         )}
 
@@ -160,8 +216,16 @@ export default function PWAInstallBanner() {
             padding: 0,
           }}
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-            <path d="M18 6L6 18M6 6l12 12"/>
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+          >
+            <path d="M18 6L6 18M6 6l12 12" />
           </svg>
         </button>
       </div>

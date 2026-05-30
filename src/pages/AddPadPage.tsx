@@ -202,25 +202,44 @@ export default function AddPadPage() {
     try {
       const keyRes = await fetch("/api/maps-key");
       const { key } = await keyRes.json();
-      // Capture Maps auth failures (RefererNotAllowedMapError, ApiNotActivatedMapError, etc.)
+
+      const scriptUrl = `https://maps.googleapis.com/maps/api/js?key=${key}&callback=__lilyMapsReady`;
+
+      // Intercept console.error to capture the exact Maps error code string
+      const capturedErrors: string[] = [];
+      const origConsoleError = console.error;
+      console.error = (...args: any[]) => {
+        origConsoleError(...args);
+        capturedErrors.push(args.map(String).join(" "));
+      };
+
+      // gm_authFailure fires when Maps rejects the key (no parameters passed by Google)
       (window as any).gm_authFailure = () => {
-        const domain = window.location.hostname;
+        console.error = origConsoleError; // restore
+        const errorLine = capturedErrors.find(l =>
+          l.includes("Error") || l.includes("error") || l.includes("Referer") || l.includes("Billing") || l.includes("Api")
+        ) || "(no matching console.error captured)";
         setMapError(
-          `Google Maps auth failed on domain "${domain}". ` +
-          `Error code is in the browser console (look for RefererNotAllowedMapError, ApiNotActivatedMapError, or BillingNotEnabledMapError). ` +
-          `Most likely fix: add "${domain}" to allowed HTTP referrers in Google Cloud Console → Credentials → API key restrictions.`
+          `gm_authFailure fired.\n\n` +
+          `SCRIPT URL: ${scriptUrl}\n\n` +
+          `CAPTURED CONSOLE ERROR:\n${errorLine}\n\n` +
+          `ALL CONSOLE ERRORS (last 5):\n${capturedErrors.slice(-5).join("\n") || "(none)"}`
         );
       };
-      // Use the canonical callback pattern — Maps JS calls __lilyMapsReady when fully ready
+
       await new Promise<void>((resolve, reject) => {
         (window as any).__lilyMapsReady = () => {
+          console.error = origConsoleError; // restore on success
           delete (window as any).__lilyMapsReady;
           resolve();
         };
         const s = document.createElement("script");
-        s.src = `https://maps.googleapis.com/maps/api/js?key=${key}&callback=__lilyMapsReady`;
+        s.src = scriptUrl;
         s.async = true;
-        s.onerror = () => reject(new Error("Script load failed — check API key or network"));
+        s.onerror = () => {
+          console.error = origConsoleError;
+          reject(new Error(`Script tag onerror — URL: ${scriptUrl}`));
+        };
         document.head.appendChild(s);
       });
       initGoogleMap();
@@ -557,10 +576,11 @@ export default function AddPadPage() {
                 position: "absolute", inset: 0, display: "flex", flexDirection: "column",
                 alignItems: "center", justifyContent: "center", padding: 24, background: "#f6f8fc",
               }}>
-                <p style={{ color: "#c0392b", fontWeight: 700, fontSize: 14, textAlign: "center", margin: 0 }}>⚠️ {mapError}</p>
-                <p style={{ color: "rgba(14,31,64,0.5)", fontSize: 12, marginTop: 8, textAlign: "center" }}>
-                  Check that the Maps JavaScript API is enabled in Google Cloud Console and billing is active.
-                </p>
+                <pre style={{
+                  color: "#c0392b", fontWeight: 600, fontSize: 11, textAlign: "left", margin: 0,
+                  whiteSpace: "pre-wrap", wordBreak: "break-all", maxHeight: 320, overflowY: "auto",
+                  background: "#fff3f3", border: "1px solid #f5c6cb", borderRadius: 8, padding: 12, width: "100%",
+                }}>⚠️ {mapError}</pre>
               </div>
             ) : (
               <div ref={mapDivRef} style={{ position: "absolute", inset: 0 }} />

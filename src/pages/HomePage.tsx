@@ -3,7 +3,7 @@ import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { PadSVG } from "@/components/PadSVG";
-import lilypadLogo from "@/assets/lilypad-logo-nobg.png";
+import lilypadLogo from "@/assets/lilypad-logo-full.png";
 
 function AdminSlide({ open }: { open: boolean }) {
   return (
@@ -191,14 +191,8 @@ export default function HomePage() {
         alignItems: "center", padding: "48px 20px 0", boxSizing: "border-box", zIndex: 5,
       }}>
         <div style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-          <div style={{ display: "flex", flexDirection: "column", marginLeft: -2, marginTop: -6 }}>
-            <div style={{ width: 64, height: 50, overflow: "hidden" }}>
-              <img src={lilypadLogo} alt="Lily Pad" style={{ width: 64, height: 118, objectFit: "contain", objectPosition: "top center" }} />
-            </div>
-            <div style={{ paddingLeft: 3 }}>
-              <p style={{ margin: 0, color: "#ffffff", fontSize: 13, fontWeight: 700, letterSpacing: "-0.01em", lineHeight: 1.1 }}>lily pad</p>
-              <p style={{ margin: 0, color: "#8DD63F", fontSize: 7, fontWeight: 700, letterSpacing: "0.13em", textTransform: "uppercase" }}>Parking Marketplace</p>
-            </div>
+          <div style={{ marginLeft: -2, marginTop: -6 }}>
+            <img src={lilypadLogo} alt="Lily Pad" style={{ width: 140, height: "auto", display: "block" }} />
           </div>
         </div>
 

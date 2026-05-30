@@ -377,33 +377,6 @@ export default function EarlyAccessPage() {
             </p>
           </div>
 
-          <div style={{
-            background  : "rgba(255,255,255,0.05)",
-            borderRadius: 16,
-            padding     : "16px 20px",
-            width       : "100%",
-            maxWidth    : 340,
-            boxSizing   : "border-box",
-          }}>
-            <p style={{
-              fontSize     : 11,
-              fontWeight   : 700,
-              color        : "rgba(255,255,255,0.30)",
-              letterSpacing: "0.10em",
-              textTransform: "uppercase",
-              margin       : "0 0 6px",
-            }}>
-              What's next
-            </p>
-            <p style={{
-              fontSize  : 13.5,
-              color     : "rgba(255,255,255,0.55)",
-              margin    : 0,
-              lineHeight: 1.6,
-            }}>
-              Our team reviews every application. You'll get an email when your account is activated.
-            </p>
-          </div>
         </div>
       )}
     </div>

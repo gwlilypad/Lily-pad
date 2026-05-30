@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import lilypadLogo from "@/assets/lilypad-logo-full.png";
+import { validatePassword } from "@/components/PasswordRequirements";
 
 const NAVY  = "#0E1F40";
 const GREEN = "#8DD63F";
@@ -20,7 +21,7 @@ const EA_QUESTIONS: EAQuestion[] = [
   { id: "name",     text: "What's your name?",       type: "text",     placeholder: "Full name"           },
   { id: "phone",    text: "Your phone number?",      type: "tel",      placeholder: "(555) 000-0000"      },
   { id: "email",    text: "What's your email?",      type: "email",    placeholder: "you@email.com"       },
-  { id: "password", text: "Create a password.",      type: "password", placeholder: "Min. 6 characters"   },
+  { id: "password", text: "Create a password.",      type: "password", placeholder: "Create a strong password" },
 ];
 
 /* ─── Role option ─────────────────────────────────────────────────────────── */
@@ -44,6 +45,13 @@ export default function EarlyAccessPage() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const q = EA_QUESTIONS[cur];
+  const isPasswordStep = q.type === "password";
+  const pwValidation = validatePassword({
+    password  : isPasswordStep ? inputVal : "",
+    email     : ans["email"],
+    firstName : (ans["name"] || "").split(" ")[0],
+    lastName  : (ans["name"] || "").split(" ").slice(1).join(" "),
+  });
 
   /* focus input when question changes */
   useEffect(() => {
@@ -67,8 +75,8 @@ export default function EarlyAccessPage() {
       if (q.type === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
         setError("Please enter a valid email address."); return;
       }
-      if (q.type === "password" && value.length < 6) {
-        setError("Password must be at least 6 characters."); return;
+      if (q.type === "password" && !pwValidation.allValid) {
+        setError("Password doesn't meet the requirements below."); return;
       }
       if (q.type === "tel") {
         const digits = value.replace(/\D/g, "");
@@ -133,9 +141,9 @@ export default function EarlyAccessPage() {
   }
 
   const canAdvance =
-    q.type === "role"
-      ? roles.size > 0
-      : inputVal.trim().length > 0;
+    q.type === "role"     ? roles.size > 0 :
+    isPasswordStep        ? pwValidation.allValid :
+                            inputVal.trim().length > 0;
 
   /* ════════════════════════════════════════════════════════════════════════
      WELCOME
@@ -303,6 +311,57 @@ export default function EarlyAccessPage() {
                 <p style={{ fontSize: 12, color: "rgba(255,255,255,0.30)", marginTop: 8 }}>
                   {q.hint}
                 </p>
+              )}
+              {/* password requirements — dark-adapted */}
+              {isPasswordStep && inputVal.length > 0 && (
+                <div style={{
+                  width: "100%", marginTop: 14, padding: "12px 14px",
+                  borderRadius: 14,
+                  background: "rgba(255,255,255,0.05)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  textAlign: "left",
+                }}>
+                  <div style={{
+                    fontSize: 9, fontWeight: 700, color: "rgba(255,255,255,0.28)",
+                    letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 10,
+                  }}>
+                    Password must include
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                    {([
+                      { key: "length",      label: "At least 8 characters"  },
+                      { key: "capital",     label: "1 capital letter (A–Z)" },
+                      { key: "number",      label: "1 number (0–9)"          },
+                      { key: "notIdentity", label: "Not your name or email"  },
+                    ] as const).map(r => {
+                      const ok = pwValidation[r.key];
+                      return (
+                        <div key={r.key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <div style={{
+                            width: 16, height: 16, borderRadius: "50%", flexShrink: 0,
+                            background: ok ? GREEN : "rgba(255,255,255,0.10)",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            transition: "background 0.18s",
+                          }}>
+                            {ok ? (
+                              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                            ) : (
+                              <div style={{ width: 4, height: 4, borderRadius: "50%", background: "rgba(255,255,255,0.35)" }} />
+                            )}
+                          </div>
+                          <span style={{
+                            fontSize: 12.5,
+                            fontWeight: ok ? 600 : 400,
+                            color: ok ? "#fff" : "rgba(255,255,255,0.45)",
+                            transition: "color 0.18s",
+                          }}>
+                            {r.label}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               )}
             </div>
           )}

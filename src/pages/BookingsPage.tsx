@@ -39,7 +39,7 @@ export default function BookingsPage() {
   const [contactFor, setContactFor] = useState<BookingRec | null>(null);
   const [extendFor, setExtendFor] = useState<BookingRec | null>(null);
   const [confirmCancel, setConfirmCancel] = useState<BookingRec | null>(null);
-  const [apiBookings, setApiBookings] = useState<BookingRec[] | null>(null);
+  const [apiBookings, setApiBookings] = useState<BookingRec[]>([]);
   const [loadingBookings, setLoadingBookings] = useState(true);
   const [cancellingId, setCancellingId] = useState<string | number | null>(null);
 
@@ -79,7 +79,7 @@ export default function BookingsPage() {
         }
         setLoadingBookings(false);
       })
-      .catch(() => { setApiBookings(null); setLoadingBookings(false); });
+      .catch(() => { setApiBookings([]); setLoadingBookings(false); });
   }, [user?.id]);
 
   function backToFind() {
@@ -88,7 +88,7 @@ export default function BookingsPage() {
   }
   void backToFind;
 
-  const bookings = apiBookings ?? state.bookings;
+  const bookings = apiBookings;
   const now = Date.now();
   const sorted = [...bookings].sort((a, b) => b.startTs - a.startTs);
   const filtered = sorted.filter(b => {

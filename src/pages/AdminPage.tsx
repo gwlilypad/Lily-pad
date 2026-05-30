@@ -46,6 +46,7 @@ interface PadInfo {
 }
 interface MockUser {
   id: number;
+  uuid: string;
   type: UserType;
   firstName: string;
   lastName: string;
@@ -565,251 +566,20 @@ function PadPhotoCard({
   );
 }
 
-// ── Financial growth chart (W / M / Y) ──────────────────────────────────────
-type GrowthRange = "day" | "week" | "month" | "3months" | "ytd" | "year" | "all";
-const GROWTH_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-const GROWTH_DOW = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-function growthDaysBetween(a: Date, b: Date) {
-  return Math.round((b.getTime() - a.getTime()) / 86400000);
-}
-function buildGrowthSeries(n: number, start: number, end: number, wobbleFrac: number, seed: number): number[] {
-  const out: number[] = [];
-  let s = seed;
-  const rnd = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
-  const span = Math.max(Math.abs(start), Math.abs(end));
-  for (let i = 0; i < n; i++) {
-    const t = n === 1 ? 0 : i / (n - 1);
-    const ease = t * t * (3 - 2 * t);
-    const base = start + (end - start) * ease;
-    const noise = (rnd() - 0.5) * 2 * wobbleFrac * span;
-    out.push(Math.max(0, Math.round(base + noise)));
-  }
-  if (n > 0) {
-    out[0] = Math.round(start);
-    out[n - 1] = Math.round(end);
-  }
-  return out;
-}
-function buildGrowthData(): Record<GrowthRange, { labels: string[]; values: number[]; xLabel: string }> {
-  const today = new Date(2026, 3, 29); // Apr 29, 2026
-
-  // 1D — hourly (24 points)
-  const dayLabels: string[] = [];
-  for (let h = 0; h < 24; h++) {
-    if (h === 0) dayLabels.push("12a");
-    else if (h < 12) dayLabels.push(`${h}a`);
-    else if (h === 12) dayLabels.push("12p");
-    else dayLabels.push(`${h - 12}p`);
-  }
-  const dayValues = buildGrowthSeries(24, 8, 342, 0.05, 7);
-
-  // 1W — daily (7 points)
-  const weekLabels: string[] = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date(today); d.setDate(today.getDate() - i);
-    weekLabels.push(`${GROWTH_DOW[d.getDay()]} ${GROWTH_MONTHS[d.getMonth()]} ${d.getDate()}`);
-  }
-  const weekValues = buildGrowthSeries(7, 142, 287, 0.06, 11);
-
-  // 1M — daily (Apr 1 → Apr 29)
-  const monthDays = today.getDate();
-  const monthLabels: string[] = [];
-  for (let d = 1; d <= monthDays; d++) monthLabels.push(`Apr ${d}`);
-  const monthValues = buildGrowthSeries(monthDays, 820, 1528, 0.04, 17);
-
-  // 3M — daily (Feb 1 → Apr 29)
-  const start3M = new Date(2026, 1, 1);
-  const days3M = growthDaysBetween(start3M, today) + 1;
-  const labels3M: string[] = [];
-  for (let i = 0; i < days3M; i++) {
-    const d = new Date(start3M); d.setDate(start3M.getDate() + i);
-    labels3M.push(`${GROWTH_MONTHS[d.getMonth()]} ${d.getDate()}`);
-  }
-  const values3M = buildGrowthSeries(days3M, 3280, 4218, 0.04, 23);
-
-  // YTD — daily (Jan 1 → Apr 29)
-  const startYTD = new Date(2026, 0, 1);
-  const daysYTD = growthDaysBetween(startYTD, today) + 1;
-  const labelsYTD: string[] = [];
-  for (let i = 0; i < daysYTD; i++) {
-    const d = new Date(startYTD); d.setDate(startYTD.getDate() + i);
-    labelsYTD.push(`${GROWTH_MONTHS[d.getMonth()]} ${d.getDate()}`);
-  }
-  const valuesYTD = buildGrowthSeries(daysYTD, 2840, 4218, 0.05, 31);
-
-  // 1Y — daily (365 points)
-  const startYear = new Date(today); startYear.setDate(today.getDate() - 364);
-  const labelsYear: string[] = [];
-  for (let i = 0; i < 365; i++) {
-    const d = new Date(startYear); d.setDate(startYear.getDate() + i);
-    labelsYear.push(`${GROWTH_MONTHS[d.getMonth()]} ${d.getDate()}, ${String(d.getFullYear()).slice(2)}`);
-  }
-  const valuesYear = buildGrowthSeries(365, 1100, 4218, 0.05, 41);
-
-  // ALL — weekly (~5 years)
-  const startAll = new Date(2021, 4, 2);
-  const weeksAll = Math.floor(growthDaysBetween(startAll, today) / 7) + 1;
-  const labelsAll: string[] = [];
-  for (let i = 0; i < weeksAll; i++) {
-    const d = new Date(startAll); d.setDate(startAll.getDate() + i * 7);
-    labelsAll.push(`${GROWTH_MONTHS[d.getMonth()]} ${d.getDate()}, ${String(d.getFullYear()).slice(2)}`);
-  }
-  const valuesAll = buildGrowthSeries(weeksAll, 4200, 33378, 0.04, 53);
-
-  return {
-    day:       { labels: dayLabels,   values: dayValues,   xLabel: "Today" },
-    week:      { labels: weekLabels,  values: weekValues,  xLabel: "Last 7 days" },
-    month:     { labels: monthLabels, values: monthValues, xLabel: "This month" },
-    "3months": { labels: labels3M,    values: values3M,    xLabel: "Last 3 months" },
-    ytd:       { labels: labelsYTD,   values: valuesYTD,   xLabel: "Year to date" },
-    year:      { labels: labelsYear,  values: valuesYear,  xLabel: "Past 12 months" },
-    all:       { labels: labelsAll,   values: valuesAll,   xLabel: "All time" },
-  };
-}
-const GROWTH_DATA = buildGrowthData();
-const RANGE_ORDER: { key: GrowthRange; label: string }[] = [
-  { key: "day",      label: "1D" },
-  { key: "week",     label: "1W" },
-  { key: "month",    label: "1M" },
-  { key: "3months",  label: "3M" },
-  { key: "ytd",      label: "YTD" },
-  { key: "year",     label: "1Y" },
-  { key: "all",      label: "ALL" },
-];
-function formatDollars(n: number) {
-  return `$${Math.round(n).toLocaleString()}`;
-}
-
+// ── Analytics coming soon — chart will show real data once payment is live ────
 function GrowthChart() {
-  const [range, setRange] = useState<GrowthRange>("month");
-  const [scrubIdx, setScrubIdx] = useState<number | null>(null);
-  const svgRef = useRef<SVGSVGElement | null>(null);
-
-  const data = GROWTH_DATA[range];
-  const W = 320, H = 96, PT = 6, PB = 6, PL = 2, PR = 2;
-  const innerW = W - PL - PR;
-  const innerH = H - PT - PB;
-  const max = Math.max(...data.values);
-  const min = Math.min(...data.values);
-  const range01 = max === min ? 1 : max - min;
-  const n = data.values.length;
-  const stepX = n > 1 ? innerW / (n - 1) : 0;
-  const pts = data.values.map((v, i) => ({
-    x: PL + i * stepX,
-    y: PT + innerH - ((v - min) / range01) * innerH,
-  }));
-  const linePath = pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
-
-  const startVal = data.values[0];
-  const endVal = data.values[n - 1];
-  const overallPct = startVal === 0 ? 0 : ((endVal - startVal) / Math.abs(startVal)) * 100;
-  const overallUp = overallPct >= 0;
-
-  // Reset scrub state when switching ranges.
-  useEffect(() => { setScrubIdx(null); }, [range]);
-
-  // Active display: scrubbed point or overall summary.
-  const activeIdx = scrubIdx ?? n - 1;
-  const activeVal = data.values[activeIdx];
-  const activePt = pts[activeIdx];
-  const scrubbing = scrubIdx !== null;
-  // When scrubbing, change is from start to that point.
-  // When not scrubbing, change is overall from start to end.
-  const cmpVal = scrubbing ? data.values[activeIdx] : endVal;
-  const cmpPct = startVal === 0 ? 0 : ((cmpVal - startVal) / Math.abs(startVal)) * 100;
-  const cmpAbs = cmpVal - startVal;
-  const cmpUp = cmpPct >= 0;
-  const lineColor = overallUp ? GREEN : "#ef4444";
-  const cmpColor = cmpUp ? GREEN : "#ef4444";
-  const startY = pts[0].y;
-
-  function pointerToIdx(clientX: number) {
-    const svg = svgRef.current;
-    if (!svg) return 0;
-    const rect = svg.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    const xInSvg = PL + ratio * innerW;
-    if (stepX === 0) return 0;
-    const idx = Math.round((xInSvg - PL) / stepX);
-    return Math.max(0, Math.min(n - 1, idx));
-  }
-
   return (
     <div style={{
-      background: "#142A52", borderRadius: 18, padding: "16px 18px 14px",
+      background: "#142A52", borderRadius: 18, padding: "28px 20px",
       boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 14px rgba(0,0,0,0.30)",
-      display: "flex", flexDirection: "column", gap: 10,
+      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+      gap: 8, minHeight: 160, textAlign: "center",
     }}>
-      <div style={{ minHeight: 80 }}>
-        <p style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.10em", textTransform: "uppercase", margin: 0 }}>Financial Growth</p>
-        <p style={{ fontSize: 30, fontWeight: 800, color: "#fff", margin: "2px 0 0", letterSpacing: "-0.03em", lineHeight: 1.05, fontVariantNumeric: "tabular-nums" }}>{formatDollars(activeVal)}</p>
-        <p style={{ fontSize: 12, color: cmpColor, fontWeight: 700, margin: "5px 0 0", display: "flex", alignItems: "center", gap: 5, fontVariantNumeric: "tabular-nums" }}>
-          <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" style={{ transform: cmpUp ? "none" : "rotate(180deg)" }}>
-            <polygon points="12 4 22 20 2 20" />
-          </svg>
-          {cmpUp ? "+" : "−"}${Math.abs(cmpAbs).toLocaleString()} ({cmpUp ? "+" : ""}{cmpPct.toFixed(2)}%)
-          <span style={{ color: "rgba(255,255,255,0.55)", fontWeight: 500 }}>
-            {scrubbing ? data.labels[activeIdx] : data.xLabel}
-          </span>
-        </p>
-      </div>
-
-      <svg
-        ref={svgRef}
-        viewBox={`0 0 ${W} ${H}`}
-        preserveAspectRatio="none"
-        style={{ width: "100%", height: 110, display: "block", touchAction: "none", cursor: "crosshair" }}
-        onPointerDown={e => {
-          (e.currentTarget as SVGSVGElement).setPointerCapture(e.pointerId);
-          setScrubIdx(pointerToIdx(e.clientX));
-        }}
-        onPointerMove={e => {
-          if (e.buttons === 0 && e.pointerType === "mouse") return;
-          if (scrubIdx === null && e.pointerType !== "mouse") return;
-          setScrubIdx(pointerToIdx(e.clientX));
-        }}
-        onPointerUp={() => setScrubIdx(null)}
-        onPointerCancel={() => setScrubIdx(null)}
-        onPointerLeave={() => setScrubIdx(null)}
-      >
-        {/* dashed reference at the starting price */}
-        <line x1={PL} x2={W - PR} y1={startY} y2={startY}
-          stroke="rgba(255,255,255,0.20)" strokeWidth={0.6} strokeDasharray="2 3" />
-        {/* line */}
-        <path d={linePath} fill="none" stroke={lineColor} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
-        {/* end dot with subtle halo (when not scrubbing) */}
-        {!scrubbing && (
-          <>
-            <circle cx={pts[n - 1].x} cy={pts[n - 1].y} r={5.5} fill={lineColor} opacity={0.20} />
-            <circle cx={pts[n - 1].x} cy={pts[n - 1].y} r={2.4} fill={lineColor} />
-          </>
-        )}
-        {/* scrub crosshair */}
-        {scrubbing && (
-          <>
-            <line x1={activePt.x} x2={activePt.x} y1={0} y2={H}
-              stroke="rgba(255,255,255,0.45)" strokeWidth={0.6} strokeDasharray="2 2" />
-            <circle cx={activePt.x} cy={activePt.y} r={6} fill={lineColor} opacity={0.22} />
-            <circle cx={activePt.x} cy={activePt.y} r={2.6} fill="#fff" stroke={lineColor} strokeWidth={1.2} />
-          </>
-        )}
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.22)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
       </svg>
-
-      <div style={{ display: "flex", gap: 2, marginTop: 2, justifyContent: "space-between" }}>
-        {RANGE_ORDER.map(({ key, label }) => {
-          const active = range === key;
-          return (
-            <button key={key} onClick={() => setRange(key)} style={{
-              background: active ? "rgba(141,214,63,0.18)" : "transparent",
-              color: active ? GREEN : "rgba(255,255,255,0.62)",
-              border: "none", borderRadius: 100, padding: "5px 9px",
-              fontSize: 10.5, fontWeight: 800, cursor: "pointer",
-              fontFamily: '"DM Sans",sans-serif', letterSpacing: "0.04em",
-              flex: 1, minWidth: 0,
-            }}>{label}</button>
-          );
-        })}
-      </div>
+      <p style={{ fontSize: 14, fontWeight: 700, color: "rgba(255,255,255,0.55)", margin: 0 }}>Financial Analytics</p>
+      <p style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", margin: 0, maxWidth: 240 }}>Revenue trends will appear here once real bookings are processed</p>
     </div>
   );
 }
@@ -937,6 +707,9 @@ export default function AdminPage() {
 
   const [view, setView] = useState<View>("dashboard");
   const [users, setUsers] = useState<MockUser[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  type AdminStats = { totalSpots: number; activeSpots: number; pendingSpots: number; totalUsers: number; newUsersThisWeek: number; totalBookings: number };
+  const [adminStats, setAdminStats] = useState<AdminStats | null>(null);
   const [adminView, setAdminView] = useState<AdminView>("renters");
   const [search, setSearch] = useState("");
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
@@ -1298,11 +1071,67 @@ export default function AdminPage() {
   const [forgotAccessToken, setForgotAccessToken] = useState<string | null>(null);
   function closeForgot() { setForgotOpen(false); setForgotStep("email"); setForgotEmail(""); setForgotError(""); setForgotOtp(""); setForgotOtpError(""); setForgotNewPassword(""); setForgotNewPasswordError(""); setForgotLoading(false); setForgotAccessToken(null); }
 
-  // Persist admin users + login flag.
+  // Fetch real admin stats from Supabase.
+  async function fetchAdminStats() {
+    try {
+      const r = await fetch("/api/admin/stats");
+      if (r.ok) setAdminStats(await r.json());
+    } catch {}
+  }
+
+  // Fetch real users from Supabase profiles.
+  async function fetchRealUsers() {
+    setLoadingUsers(true);
+    try {
+      const r = await fetch("/api/admin/users");
+      if (!r.ok) return;
+      const data = await r.json();
+      if (!Array.isArray(data)) return;
+      const mapped: MockUser[] = data.map((p: Record<string, unknown>) => {
+        const uuid = String(p.id || "");
+        const numId = uuid ? (parseInt(uuid.replace(/-/g, "").slice(0, 8), 16) || 0) : 0;
+        const nameParts = (String(p.full_name || "")).trim().split(" ");
+        const firstName = nameParts[0] || "User";
+        const lastName = nameParts.slice(1).join(" ") || "";
+        const acct = String(p.account_type || "driver");
+        const type: UserType = acct === "host" || acct === "padRenter" ? "host" : acct === "both" ? "both" : "driver";
+        const joined = p.created_at ? new Date(String(p.created_at)).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Unknown";
+        return {
+          id: numId,
+          uuid,
+          type,
+          firstName,
+          lastName,
+          email: String(p.email || ""),
+          phone: String(p.phone || ""),
+          bookingsThisMonth: Number(p.booking_count) || 0,
+          earningsThisMonth: 0,
+          totalSpent: Number(p.spend_total) || 0,
+          joined,
+          verified: String(p.status) === "active",
+          status: String(p.status) === "suspended" ? "suspended" : "active",
+        };
+      });
+      setUsers(mapped);
+    } catch {}
+    finally { setLoadingUsers(false); }
+  }
+
+  // Fetch stats and users once logged in.
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    try { window.localStorage.setItem(ADMIN_USERS_KEY, JSON.stringify(users)); } catch {}
-  }, [users]);
+    if (!loggedIn) return;
+    fetchAdminStats();
+    fetchRealUsers();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loggedIn]);
+
+  // Refresh user list when navigating to users view.
+  useEffect(() => {
+    if (loggedIn && view === "users") fetchRealUsers();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
+
+  // Persist admin login flag (users now come from real API, not localStorage).
   useEffect(() => {
     if (typeof window === "undefined") return;
     try { window.localStorage.setItem(STAFF_ACCOUNTS_KEY, JSON.stringify(staffList)); } catch {}
@@ -1422,6 +1251,18 @@ export default function AdminPage() {
 
   function updateUser(id: number, patch: Partial<MockUser>) {
     setUsers(prev => prev.map(u => u.id === id ? { ...u, ...patch } : u));
+    const user = users.find(u => u.id === id);
+    if (!user?.uuid) return;
+    const apiPatch: Record<string, unknown> = {};
+    if (patch.status !== undefined) apiPatch.status = patch.status;
+    if (patch.email !== undefined) apiPatch.email = patch.email;
+    if (patch.phone !== undefined) apiPatch.phone = patch.phone;
+    if (Object.keys(apiPatch).length === 0) return;
+    fetch(`/api/admin/users/${user.uuid}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(apiPatch),
+    }).catch(() => {});
   }
 
   function updateStaff(id: string, patch: Partial<StaffAccount>) {
@@ -1775,16 +1616,16 @@ export default function AdminPage() {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <StatCard
               label="Total Pads"
-              value="142"
-              breakdown={[
-                { label: "Active", value: "118", dot: GREEN },
-                { label: "Currently booked", value: "37", dot: NAVY },
-              ]}
+              value={adminStats ? String(adminStats.totalSpots) : "—"}
+              breakdown={adminStats ? [
+                { label: "Active", value: String(adminStats.activeSpots), dot: GREEN },
+                { label: "Pending review", value: String(adminStats.pendingSpots), dot: "#F59E0B" },
+              ] : []}
             />
             <StatCard
-              label="Drivers"
-              value="218"
-              sub="↑ 12 this week"
+              label="Users"
+              value={adminStats ? String(adminStats.totalUsers) : "—"}
+              sub={adminStats ? `↑ ${adminStats.newUsersThisWeek} this week` : "Loading…"}
             />
           </div>
 
@@ -1882,33 +1723,11 @@ export default function AdminPage() {
           {/* Revenue & Payouts — admin only */}
           {role === "admin" && (
             <div>
-              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", margin: "0 0 10px" }}>
-                <p style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.10em", textTransform: "uppercase", margin: 0 }}>Revenue & Payouts</p>
-                <p style={{ fontSize: 11, color: "rgba(255,255,255,0.52)", fontWeight: 500, margin: 0 }}>This month</p>
-              </div>
-
-              <div style={{ background: "#142A52", borderRadius: 18, padding: "18px 20px", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 14px rgba(0,0,0,0.30)", display: "flex", flexDirection: "column" }}>
-                <div style={{ background: "#0A1A36", borderRadius: 14, padding: "16px 18px", marginBottom: 10, display: "flex", alignItems: "center", justifyContent: "space-between", border: "1px solid rgba(141,214,63,0.18)" }}>
-                  <div>
-                    <p style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,0.5)", letterSpacing: "0.10em", textTransform: "uppercase", margin: 0 }}>Gross Revenue</p>
-                    <p style={{ fontSize: 28, fontWeight: 800, color: "#fff", margin: "2px 0 0", letterSpacing: "-0.03em" }}>$4,218.50</p>
-                  </div>
-                  <div style={{ textAlign: "right" }}>
-                    <p style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,0.5)", letterSpacing: "0.10em", textTransform: "uppercase", margin: 0 }}>Bookings</p>
-                    <p style={{ fontSize: 16, fontWeight: 700, color: GREEN, margin: "2px 0 0" }}>218</p>
-                  </div>
-                </div>
-                <RevenueRow label="Host payouts" value="$3,374.80" hint="80% to lily pad hosts" />
-                <RevenueRow label="Stripe processing fees" value="−$143.43" hint="2.9% + $0.30 per booking" />
-                <RevenueRow label="Refunds & adjustments" value="−$48.20" hint="3 refunds this month" />
-                <RevenueRow label="Platform take-home" value="$652.07" hint="Net after payouts & fees" accent />
-                <div style={{ marginTop: 12, background: "rgba(141,214,63,0.08)", border: "1px solid rgba(141,214,63,0.25)", borderRadius: 12, padding: "10px 14px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <div>
-                    <p style={{ fontSize: 11, fontWeight: 700, color: "#fff", margin: 0, letterSpacing: "0.04em" }}>Pending payouts</p>
-                    <p style={{ fontSize: 10.5, color: "rgba(255,255,255,0.62)", margin: "1px 0 0" }}>Releases Friday</p>
-                  </div>
-                  <p style={{ fontSize: 14, fontWeight: 700, color: "#fff", margin: 0 }}>$412.30</p>
-                </div>
+              <p style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.10em", textTransform: "uppercase", margin: "0 0 10px" }}>Revenue & Payouts</p>
+              <div style={{ background: "#142A52", borderRadius: 18, padding: "28px 20px", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 14px rgba(0,0,0,0.30)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 120, textAlign: "center" }}>
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.22)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                <p style={{ fontSize: 14, fontWeight: 700, color: "rgba(255,255,255,0.55)", margin: 0 }}>Payment Analytics Coming Soon</p>
+                <p style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", margin: 0, maxWidth: 260 }}>Revenue and payout data will appear here once payment processing is configured</p>
               </div>
             </div>
           )}

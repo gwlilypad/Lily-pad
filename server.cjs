@@ -1720,6 +1720,29 @@ app.get('/api/bookings/:userId', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Admin: live stats from real Supabase data ─────────────────────────────────
+app.get('/api/admin/stats', async (req, res) => {
+  if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });
+  try {
+    const [spotsR, usersR, bookingsR] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/spots?select=status`, { headers: SVC_HEADERS }),
+      fetch(`${SUPABASE_URL}/rest/v1/profiles?select=id,created_at`, { headers: SVC_HEADERS }),
+      fetch(`${SUPABASE_URL}/rest/v1/bookings?select=id`, { headers: SVC_HEADERS }),
+    ]);
+    const spots    = await spotsR.json();
+    const users    = await usersR.json();
+    const bookings = await bookingsR.json();
+    const weekAgo  = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const totalSpots       = Array.isArray(spots)    ? spots.length : 0;
+    const activeSpots      = Array.isArray(spots)    ? spots.filter(s => s.status === 'active').length  : 0;
+    const pendingSpots     = Array.isArray(spots)    ? spots.filter(s => s.status === 'pending').length : 0;
+    const totalUsers       = Array.isArray(users)    ? users.length : 0;
+    const newUsersThisWeek = Array.isArray(users)    ? users.filter(u => new Date(u.created_at) >= weekAgo).length : 0;
+    const totalBookings    = Array.isArray(bookings) ? bookings.length : 0;
+    res.json({ totalSpots, activeSpots, pendingSpots, totalUsers, newUsersThisWeek, totalBookings });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Admin: list all real users with booking counts ────────────────────────────
 app.get('/api/admin/users', async (req, res) => {
   if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });

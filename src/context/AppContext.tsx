@@ -53,7 +53,7 @@ export const DEFAULT_STATE: AppState = {
 };
 
 export const STORAGE_KEY = "lilypad.appState.v1";
-export const TRANSIENT_KEYS: (keyof AppState)[] = ["addingExtraPad", "openAcctOnFind", "adminPreview", "adminPreviewRole"];
+export const TRANSIENT_KEYS: (keyof AppState)[] = ["addingExtraPad", "openAcctOnFind", "adminPreview", "adminPreviewRole", "bookings"];
 
 export function loadInitialState(): AppState {
   if (typeof window === "undefined") return DEFAULT_STATE;

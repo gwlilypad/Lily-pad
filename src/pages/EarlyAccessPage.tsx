@@ -232,9 +232,33 @@ export default function EarlyAccessPage() {
     <div style={outerStyle}>
       <style>{animCSS}</style>
 
-      {/* tiny logo top-left */}
-      <div style={{ padding: "22px 24px 0", flexShrink: 0 }}>
-        <img src={lilypadLogo} alt="Lily Pad" style={{ width: 80, height: "auto" }} />
+      {/* logo — same large centered style as welcome, plus back button overlay */}
+      <div style={{ position: "relative", flexShrink: 0, overflow: "hidden", height: 160 }}>
+        <img
+          src={lilypadLogo}
+          alt="Lily Pad"
+          style={{
+            width: "160%", maxWidth: 700, height: "auto",
+            position: "absolute", left: "50%", top: "50%",
+            transform: "translate(-50%, -40%)",
+          }}
+        />
+        {/* back button — top-left */}
+        <button
+          onClick={() => {
+            if (cur === 0) { setStep("welcome"); }
+            else { setCur(c => c - 1); setAnimKey(k => k + 1); setError(""); setInputVal(ans[EA_QUESTIONS[cur - 1].id] ?? ""); }
+          }}
+          style={{
+            position: "absolute", top: 18, left: 18,
+            background: "rgba(255,255,255,0.10)", border: "none",
+            borderRadius: 50, width: 36, height: 36,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            cursor: "pointer", color: "#fff", fontSize: 16,
+          }}
+        >
+          ←
+        </button>
       </div>
 
       {/* centered question zone */}
@@ -271,7 +295,8 @@ export default function EarlyAccessPage() {
 
           {/* ROLE pill chooser */}
           {q.type === "role" && (
-            <div style={{ display: "flex", gap: 10, marginBottom: 4 }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
+            <div style={{ display: "flex", gap: 10 }}>
               {ROLE_OPTIONS.map(r => {
                 const on = roles.has(r.id);
                 return (
@@ -300,6 +325,13 @@ export default function EarlyAccessPage() {
                   </button>
                 );
               })}
+            </div>
+            <p style={{
+              fontSize: 11.5, color: "rgba(255,255,255,0.32)",
+              margin: 0, fontStyle: "italic",
+            }}>
+              You can select both!
+            </p>
             </div>
           )}
 

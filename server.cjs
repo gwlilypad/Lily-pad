@@ -2017,6 +2017,24 @@ app.patch('/api/bookings/:id/cancel', async (req, res) => {
 });
 
 // ── Bookings: extend (update end_ts inside booking_data JSONB) ─────────────────
+app.patch('/api/bookings/:id/reschedule', async (req, res) => {
+  const { start_ts, end_ts } = req.body || {};
+  if (!start_ts || !end_ts) return res.status(400).json({ error: 'start_ts and end_ts required' });
+  try {
+    const getR = await fetch(`${SUPABASE_URL}/rest/v1/bookings?id=eq.${req.params.id}&select=booking_data`, { headers: SVC_HEADERS });
+    const rows = await getR.json();
+    if (!getR.ok || !Array.isArray(rows) || !rows[0]) return res.status(404).json({ error: 'Not found' });
+    const merged = { ...(rows[0].booking_data || {}), start_ts, end_ts };
+    const patchR = await fetch(
+      `${SUPABASE_URL}/rest/v1/bookings?id=eq.${req.params.id}`,
+      { method: 'PATCH', headers: { ...SVC_HEADERS, 'Prefer': 'return=minimal' }, body: JSON.stringify({ booking_data: merged }) }
+    );
+    if (!patchR.ok) { const e = await patchR.json(); return res.status(patchR.status).json({ error: e }); }
+    console.log(`[booking] rescheduled ${req.params.id} → ${start_ts} – ${end_ts}`);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.patch('/api/bookings/:id/extend', async (req, res) => {
   const { new_end_ts } = req.body || {};
   if (!new_end_ts) return res.status(400).json({ error: 'new_end_ts required' });

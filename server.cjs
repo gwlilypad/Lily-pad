@@ -30,6 +30,10 @@ function pruneActivationCodes() {
   for (const [k, v] of activationCodes) { if (v.expires < now) activationCodes.delete(k); }
 }
 
+// ── In-memory beta password-reset code store (TTL 15 min) ─────────────────────
+// Map<emailLower, { code: string, expires: number }>
+const betaResetCodes = new Map();
+
 // ── Email helper (Resend) ────────────────────────────────────────────────────
 async function sendEmail(to, subject, html) {
   const key = process.env.RESEND_API_KEY;
@@ -2305,6 +2309,68 @@ app.post('/api/beta/check', async (req, res) => {
     console.error('[beta/check] unexpected:', err.message);
     return res.json({ isBetaTester: false });
   }
+});
+
+// ── Beta: send password-reset code via Resend ──────────────────────────────────
+app.post('/api/beta/send-reset-code', async (req, res) => {
+  const { email } = req.body || {};
+  if (!email) return res.status(400).json({ error: 'email required' });
+  const em = email.trim().toLowerCase();
+  try {
+    // Only allow beta testers
+    const chk = await fetch(`${SUPABASE_URL}/rest/v1/beta_testers?email=eq.${encodeURIComponent(em)}&select=email`, { headers: SVC_HEADERS });
+    const rows = await chk.json();
+    if (!Array.isArray(rows) || rows.length === 0) return res.status(403).json({ error: 'Not a beta tester.' });
+
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    betaResetCodes.set(em, { code, expires: Date.now() + 15 * 60 * 1000 });
+
+    await sendEmail(em, 'Your lily pad password reset code', `
+      <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#0E1F40;border-radius:16px;color:#fff;">
+        <p style="font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#8DD63F;margin:0 0 8px;">lily pad — beta access</p>
+        <h1 style="font-size:24px;font-weight:800;margin:0 0 8px;">Password reset code</h1>
+        <p style="color:rgba(255,255,255,0.6);font-size:14px;margin:0 0 28px;">Use this code to reset your password. It expires in 15 minutes.</p>
+        <div style="background:rgba(255,255,255,0.07);border-radius:12px;padding:24px;text-align:center;letter-spacing:0.22em;font-size:32px;font-weight:800;color:#fff;">${code}</div>
+        <p style="color:rgba(255,255,255,0.35);font-size:12px;margin:24px 0 0;">If you didn't request this, you can ignore this email.</p>
+      </div>
+    `);
+    console.log(`[beta/reset] Code sent to ${em}`);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Beta: verify code + set new password ───────────────────────────────────────
+app.post('/api/beta/reset-password', async (req, res) => {
+  const { email, code, password } = req.body || {};
+  if (!email || !code || !password) return res.status(400).json({ error: 'email, code, and password required' });
+  if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+  const em = email.trim().toLowerCase();
+
+  const stored = betaResetCodes.get(em);
+  if (!stored || stored.code !== code.trim() || stored.expires < Date.now()) {
+    return res.status(400).json({ error: 'Invalid or expired code.' });
+  }
+
+  try {
+    // Find user by email via admin API
+    const uRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/users?email=${encodeURIComponent(em)}&per_page=1`, { headers: SVC_HEADERS });
+    const uData = await uRes.json();
+    const user = uData?.users?.[0];
+    if (!user) return res.status(404).json({ error: 'Account not found.' });
+
+    // Update password via admin API
+    const pRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${user.id}`, {
+      method: 'PUT',
+      headers: SVC_HEADERS,
+      body: JSON.stringify({ password }),
+    });
+    const pData = await pRes.json();
+    if (!pRes.ok) return res.status(pRes.status).json({ error: pData.message || 'Failed to update password.' });
+
+    betaResetCodes.delete(em);
+    console.log(`[beta/reset] Password updated for ${em}`);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ── Staff login page ───────────────────────────────────────────────────────────

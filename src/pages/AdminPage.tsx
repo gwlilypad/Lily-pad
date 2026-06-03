@@ -1264,8 +1264,13 @@ export default function AdminPage() {
     if (!testEmail.trim()) { setTestError("Enter your email above first."); return; }
     setTestError(""); setTestResetLoading(true);
     try {
-      const { error: otpErr } = await supabase.auth.signInWithOtp({ email: testEmail.trim().toLowerCase(), options: { shouldCreateUser: false } });
-      if (otpErr) { setTestError(otpErr.message || "Failed to send code."); return; }
+      const r = await fetch("/api/beta/send-reset-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: testEmail.trim().toLowerCase() }),
+      });
+      const data = await r.json();
+      if (!r.ok) { setTestError(data.error || "Failed to send code."); return; }
       setTestResetStep("otp");
     } catch { setTestError("Network error. Please try again."); }
     finally { setTestResetLoading(false); }
@@ -1273,25 +1278,18 @@ export default function AdminPage() {
 
   async function handleTestPortalVerifyOtp() {
     if (!testResetOtp.trim()) { setTestError("Enter the code from your email."); return; }
-    setTestError(""); setTestResetLoading(true);
-    try {
-      const { data, error: vErr } = await supabase.auth.verifyOtp({ email: testEmail.trim().toLowerCase(), token: testResetOtp.trim(), type: "email" });
-      if (vErr) { setTestError(vErr.message || "Invalid or expired code."); return; }
-      setTestResetAccessToken(data?.session?.access_token ?? null);
-      setTestResetStep("password");
-    } catch { setTestError("Network error. Please try again."); }
-    finally { setTestResetLoading(false); }
+    setTestError("");
+    setTestResetStep("password");
   }
 
   async function handleTestPortalSetPassword() {
     if (testResetNewPw.trim().length < 8) { setTestError("Password must be at least 8 characters."); return; }
-    if (!testResetAccessToken) { setTestError("Session expired. Request a new code."); return; }
     setTestError(""); setTestResetLoading(true);
     try {
-      const r = await fetch("/api/auth/update-password", {
+      const r = await fetch("/api/beta/reset-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ access_token: testResetAccessToken, password: testResetNewPw }),
+        body: JSON.stringify({ email: testEmail.trim().toLowerCase(), code: testResetOtp.trim(), password: testResetNewPw }),
       });
       const data = await r.json();
       if (!r.ok) { setTestError(data.error || "Failed to update password."); return; }

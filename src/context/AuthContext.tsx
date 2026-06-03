@@ -19,6 +19,7 @@ interface AuthCtx {
   profile: UserProfile | null;
   loading: boolean;
   role: string | null;
+  isBetaTester: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string, fullName: string, role?: string) => Promise<{ error: string | null; confirmEmail?: boolean }>;
   verifyOtp: (email: string, token: string) => Promise<{ error: string | null }>;
@@ -28,7 +29,7 @@ interface AuthCtx {
 }
 
 const AuthContext = createContext<AuthCtx>({
-  user: null, session: null, profile: null, loading: true, role: null,
+  user: null, session: null, profile: null, loading: true, role: null, isBetaTester: false,
   signIn: async () => ({ error: null }),
   signUp: async () => ({ error: null }),
   verifyOtp: async () => ({ error: null }),
@@ -43,6 +44,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [role, setRole] = useState<string | null>(null);
+  const [isBetaTester, setIsBetaTester] = useState(false);
+
+  async function checkBetaTester(email: string) {
+    try {
+      const res = await fetch("/api/beta/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setIsBetaTester(!!data.isBetaTester);
+      }
+    } catch {
+      // non-critical — fail silently
+    }
+  }
 
   async function fetchProfile(userId: string) {
     try {
@@ -52,9 +70,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (data) {
           const nameParts = (data.full_name || "").split(" ");
           const userRole = data.account_type || data.role || "driver";
+          const email = data.email || "";
           setProfile({
             id: data.id,
-            email: data.email || "",
+            email,
             full_name: data.full_name || "",
             first_name: nameParts[0] || "",
             last_name: nameParts.slice(1).join(" ") || "",
@@ -63,6 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             avatar_url: data.avatar_url || "",
           });
           setRole(userRole);
+          if (email) checkBetaTester(email);
         }
       }
     } catch {
@@ -86,6 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setProfile(null);
         setRole(null);
+        setIsBetaTester(false);
         setLoading(false);
       }
     });
@@ -140,7 +161,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, profile, loading, role, signIn, signUp, verifyOtp, signOut, forgotPassword, refreshProfile }}>
+    <AuthContext.Provider value={{ user, session, profile, loading, role, isBetaTester, signIn, signUp, verifyOtp, signOut, forgotPassword, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );

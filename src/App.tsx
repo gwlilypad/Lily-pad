@@ -58,7 +58,7 @@ const PAGE_ROUTES: Record<PageId, string> = {
 function AppInner() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { role, loading: authLoading } = useAuth();
+  const { role, loading: authLoading, isBetaTester } = useAuth();
   const [fading, setFading] = useState(false);
   const [state, setState] = useState<AppState>(loadInitialState);
   // Read early access flag injected by server into window.__EARLY_ACCESS__
@@ -114,10 +114,18 @@ function AppInner() {
   // Admin/staff bypass: /admin and /signin paths are always accessible, and
   // users with admin or staff role see the full app even in early access mode.
   // adminPreview flag also bypasses so admins can simulate customer pages.
+  // Beta testers bypass early access and see the full customer app.
   const isAdminPath    = location.pathname.startsWith("/admin");
   const isSignInPath   = location.pathname.startsWith("/signin") || location.pathname.startsWith("/forgot");
   const isAdminOrStaff = role === "admin" || role === "staff";
-  if (configLoaded && earlyAccess && !isAdminPath && !isSignInPath && !state.adminPreview && (authLoading || !isAdminOrStaff)) {
+
+  // Beta testers get the customer app but cannot access admin
+  if (isBetaTester && isAdminPath) {
+    navigate("/find", { replace: true });
+    return null;
+  }
+
+  if (configLoaded && earlyAccess && !isAdminPath && !isSignInPath && !state.adminPreview && !isBetaTester && (authLoading || !isAdminOrStaff)) {
     return (
       <AppContext.Provider value={{ goTo, state, setState }}>
         <div className="screen">

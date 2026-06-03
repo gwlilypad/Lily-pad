@@ -2286,6 +2286,27 @@ app.patch('/api/support/conversations/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Beta tester check ──────────────────────────────────────────────────────────
+app.post('/api/beta/check', async (req, res) => {
+  const { email } = req.body || {};
+  if (!email) return res.json({ isBetaTester: false });
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('beta_testers')
+      .select('email')
+      .eq('email', email.trim().toLowerCase())
+      .maybeSingle();
+    if (error) {
+      console.error('[beta/check] error:', error.message);
+      return res.json({ isBetaTester: false });
+    }
+    return res.json({ isBetaTester: !!data });
+  } catch (err) {
+    console.error('[beta/check] unexpected:', err.message);
+    return res.json({ isBetaTester: false });
+  }
+});
+
 // ── Staff login page ───────────────────────────────────────────────────────────
 app.get('/staff-login', (req, res) => {
   res.sendFile(path.join(__dirname, 'staff-login.html'));

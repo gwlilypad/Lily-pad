@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import lilypadLogo from "@/assets/lilypad-logo-full.png";
+import lilypadLogoNew from "@/assets/LP_Logo_PNG_3_1780451751504.png";
 import { validatePassword } from "@/components/PasswordRequirements";
 
 const NAVY  = "#0E1F40";
@@ -159,13 +160,9 @@ export default function EarlyAccessPage() {
           paddingTop: 48, height: 210,
         }}>
           <img
-            src={lilypadLogo}
+            src={lilypadLogoNew}
             alt="lily pad"
-            style={{
-              width: "80%", maxWidth: 320, height: "auto",
-              clipPath: "inset(0 0 38% 0)",
-              transform: "translateY(-10%)",
-            }}
+            style={{ width: "80%", maxWidth: 320, height: "auto" }}
           />
         </div>
 

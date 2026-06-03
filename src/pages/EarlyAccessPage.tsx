@@ -162,7 +162,7 @@ export default function EarlyAccessPage() {
           <img
             src={lilypadLogo}
             alt="lily pad"
-            style={{ width: "75%", maxWidth: 338, height: "auto" }}
+            style={{ width: "86%", maxWidth: 389, height: "auto" }}
           />
         </div>
 

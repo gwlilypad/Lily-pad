@@ -113,10 +113,11 @@ function AppInner() {
   // ── Early access gate ─────────────────────────────────────────────────────
   // Admin/staff bypass: /admin and /signin paths are always accessible, and
   // users with admin or staff role see the full app even in early access mode.
+  // adminPreview flag also bypasses so admins can simulate customer pages.
   const isAdminPath    = location.pathname.startsWith("/admin");
   const isSignInPath   = location.pathname.startsWith("/signin") || location.pathname.startsWith("/forgot");
   const isAdminOrStaff = role === "admin" || role === "staff";
-  if (configLoaded && earlyAccess && !isAdminPath && !isSignInPath && (authLoading || !isAdminOrStaff)) {
+  if (configLoaded && earlyAccess && !isAdminPath && !isSignInPath && !state.adminPreview && (authLoading || !isAdminOrStaff)) {
     return (
       <AppContext.Provider value={{ goTo, state, setState }}>
         <div className="screen">
@@ -125,6 +126,75 @@ function AppInner() {
       </AppContext.Provider>
     );
   }
+
+  // ── Admin simulation toolbar (shown on customer pages when adminPreview active) ──
+  const CUSTOMER_PATHS = ["/find", "/bookings", "/account", "/driveraccount", "/paddashboard", "/savedspots", "/customerservice"];
+  const isCustomerPage = CUSTOMER_PATHS.some(p => location.pathname.startsWith(p));
+  const GREEN_SIM = "#8DD63F";
+  const adminSimBar = state.adminPreview && isCustomerPage ? (
+    <div style={{
+      position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 19999,
+      background: "rgba(10,20,45,0.97)",
+      borderTop: "1px solid rgba(141,214,63,0.35)",
+      boxShadow: "0 -4px 28px rgba(0,0,0,0.55)",
+      padding: "8px 10px env(safe-area-inset-bottom, 8px)",
+      display: "flex", alignItems: "center", gap: 6,
+      fontFamily: '"DM Sans", sans-serif',
+      backdropFilter: "blur(12px)",
+      WebkitBackdropFilter: "blur(12px)",
+    }}>
+      {/* label pill */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 5,
+        background: "rgba(141,214,63,0.12)", border: "1px solid rgba(141,214,63,0.30)",
+        borderRadius: 100, padding: "4px 8px", flexShrink: 0,
+      }}>
+        <span style={{ width: 5, height: 5, borderRadius: "50%", background: GREEN_SIM, flexShrink: 0 }} />
+        <span style={{ fontSize: 9, fontWeight: 800, color: GREEN_SIM, letterSpacing: "0.14em", textTransform: "uppercase", whiteSpace: "nowrap" }}>
+          {state.adminPreviewRole === "staff" ? "Staff sim" : "Admin sim"}
+        </span>
+      </div>
+
+      {/* customer area tabs */}
+      {([
+        { label: "Map",      page: "find"          as PageId, match: "/find"          },
+        { label: "Bookings", page: "bookings"       as PageId, match: "/bookings"      },
+        { label: "Driver",   page: "driveraccount"  as PageId, match: "/driveraccount" },
+        { label: "Host",     page: "account"        as PageId, match: "/account"       },
+      ] as { label: string; page: PageId; match: string }[]).map(item => {
+        const active = location.pathname.startsWith(item.match);
+        return (
+          <button key={item.label} onClick={() => goTo(item.page)} style={{
+            flex: 1, padding: "5px 2px",
+            background: active ? "rgba(141,214,63,0.15)" : "rgba(255,255,255,0.04)",
+            border: `1px solid ${active ? "rgba(141,214,63,0.45)" : "rgba(255,255,255,0.08)"}`,
+            borderRadius: 8,
+            color: active ? GREEN_SIM : "rgba(255,255,255,0.50)",
+            fontSize: 10, fontWeight: active ? 700 : 500,
+            cursor: "pointer", fontFamily: '"DM Sans", sans-serif',
+            letterSpacing: "0.01em", transition: "all 0.15s",
+          }}>{item.label}</button>
+        );
+      })}
+
+      {/* back to admin */}
+      <button
+        onClick={() => {
+          setState(s => ({ ...s, adminPreview: false, adminPreviewRole: null }));
+          goTo("admin");
+        }}
+        style={{
+          flexShrink: 0, padding: "5px 10px",
+          background: "rgba(255,255,255,0.06)",
+          border: "1px solid rgba(255,255,255,0.18)",
+          borderRadius: 8, color: "rgba(255,255,255,0.80)",
+          fontSize: 10, fontWeight: 700,
+          cursor: "pointer", fontFamily: '"DM Sans", sans-serif',
+          letterSpacing: "0.02em", whiteSpace: "nowrap",
+        }}
+      >↩ Admin</button>
+    </div>
+  ) : null;
 
   return (
     <AppContext.Provider value={{ goTo, state, setState }}>
@@ -156,6 +226,7 @@ function AppInner() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
+      {adminSimBar}
     </AppContext.Provider>
   );
 }

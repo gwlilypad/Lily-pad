@@ -162,7 +162,7 @@ export default function EarlyAccessPage() {
             src={lilypadLogo}
             alt="lily pad"
             style={{
-              width: "80%", maxWidth: 340, height: "auto", transform: "translateY(-8%)",
+              width: "80%", maxWidth: 340, height: "auto", transform: "translateY(-18%)",
               clipPath: "inset(0 0 28% 0)",
             }}
           />
@@ -171,7 +171,7 @@ export default function EarlyAccessPage() {
         {/* bottom half — tagline + CTA */}
         <div style={{
           flex: 1, display: "flex", flexDirection: "column", alignItems: "center",
-          justifyContent: "center", padding: "0 32px 52px", textAlign: "center", gap: 0,
+          justifyContent: "center", padding: "0 32px 20px", textAlign: "center", gap: 0,
         }}>
           <h1 style={{
             fontSize: 24, fontWeight: 800, color: "#fff",

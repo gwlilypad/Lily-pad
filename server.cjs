@@ -2295,16 +2295,15 @@ app.post('/api/beta/check', async (req, res) => {
   const { email } = req.body || {};
   if (!email) return res.json({ isBetaTester: false });
   try {
-    const { data, error } = await supabaseAdmin
-      .from('beta_testers')
-      .select('email')
-      .eq('email', email.trim().toLowerCase())
-      .maybeSingle();
-    if (error) {
-      console.error('[beta/check] error:', error.message);
-      return res.json({ isBetaTester: false });
-    }
-    return res.json({ isBetaTester: !!data });
+    const em = email.trim().toLowerCase();
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/beta_testers?select=email&email=ilike.${encodeURIComponent(em)}`,
+      { headers: SVC_HEADERS }
+    );
+    const rows = await r.json();
+    const found = Array.isArray(rows) && rows.length > 0;
+    console.log(`[beta/check] ${em} → isBetaTester=${found}`);
+    return res.json({ isBetaTester: found });
   } catch (err) {
     console.error('[beta/check] unexpected:', err.message);
     return res.json({ isBetaTester: false });

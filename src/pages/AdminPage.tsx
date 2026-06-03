@@ -710,8 +710,11 @@ export default function AdminPage() {
   const [testPassword, setTestPassword]     = useState("");
   const [testError, setTestError]           = useState("");
   const [testLoading, setTestLoading]       = useState(false);
-  const [testResetLoading, setTestResetLoading] = useState(false);
-  const [testResetSent, setTestResetSent]       = useState(false);
+  const [testResetLoading, setTestResetLoading]       = useState(false);
+  const [testResetStep, setTestResetStep]             = useState<"idle"|"otp"|"password"|"done">("idle");
+  const [testResetOtp, setTestResetOtp]               = useState("");
+  const [testResetNewPw, setTestResetNewPw]           = useState("");
+  const [testResetAccessToken, setTestResetAccessToken] = useState<string|null>(null);
 
   const [view, setView] = useState<View>("dashboard");
   const [users, setUsers] = useState<MockUser[]>([]);
@@ -1257,17 +1260,42 @@ export default function AdminPage() {
 
   const selectedUser = users.find(u => u.id === selectedUserId) || null;
 
-  async function handleTestPortalReset() {
+  async function handleTestPortalSendCode() {
     if (!testEmail.trim()) { setTestError("Enter your email above first."); return; }
-    setTestError("");
-    setTestResetLoading(true);
+    setTestError(""); setTestResetLoading(true);
     try {
-      const { error: resetErr } = await supabase.auth.resetPasswordForEmail(
-        testEmail.trim().toLowerCase(),
-        { redirectTo: `${window.location.origin}/reset-password` }
-      );
-      if (resetErr) { setTestError("Couldn't send reset email. Try again."); return; }
-      setTestResetSent(true);
+      const { error: otpErr } = await supabase.auth.signInWithOtp({ email: testEmail.trim().toLowerCase(), options: { shouldCreateUser: false } });
+      if (otpErr) { setTestError(otpErr.message || "Failed to send code."); return; }
+      setTestResetStep("otp");
+    } catch { setTestError("Network error. Please try again."); }
+    finally { setTestResetLoading(false); }
+  }
+
+  async function handleTestPortalVerifyOtp() {
+    if (!testResetOtp.trim()) { setTestError("Enter the code from your email."); return; }
+    setTestError(""); setTestResetLoading(true);
+    try {
+      const { data, error: vErr } = await supabase.auth.verifyOtp({ email: testEmail.trim().toLowerCase(), token: testResetOtp.trim(), type: "email" });
+      if (vErr) { setTestError(vErr.message || "Invalid or expired code."); return; }
+      setTestResetAccessToken(data?.session?.access_token ?? null);
+      setTestResetStep("password");
+    } catch { setTestError("Network error. Please try again."); }
+    finally { setTestResetLoading(false); }
+  }
+
+  async function handleTestPortalSetPassword() {
+    if (testResetNewPw.trim().length < 8) { setTestError("Password must be at least 8 characters."); return; }
+    if (!testResetAccessToken) { setTestError("Session expired. Request a new code."); return; }
+    setTestError(""); setTestResetLoading(true);
+    try {
+      const r = await fetch("/api/auth/update-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ access_token: testResetAccessToken, password: testResetNewPw }),
+      });
+      const data = await r.json();
+      if (!r.ok) { setTestError(data.error || "Failed to update password."); return; }
+      setTestResetStep("done");
     } catch { setTestError("Network error. Please try again."); }
     finally { setTestResetLoading(false); }
   }
@@ -1708,18 +1736,68 @@ export default function AdminPage() {
                       {testLoading ? "Signing in…" : "Enter as tester"}
                     </button>
 
-                    {testResetSent ? (
-                      <p style={{ fontSize: 11, color: GREEN, margin: 0, textAlign: "center", fontFamily: '"DM Sans",sans-serif' }}>
-                        Reset link sent — check your email.
-                      </p>
-                    ) : (
+                    {testResetStep === "idle" && (
                       <button
-                        onClick={handleTestPortalReset}
+                        onClick={handleTestPortalSendCode}
                         disabled={testResetLoading}
                         style={{ background: "none", border: "none", padding: 0, cursor: testResetLoading ? "not-allowed" : "pointer", color: "rgba(255,255,255,0.35)", fontFamily: '"DM Sans",sans-serif', fontSize: 11, fontWeight: 500, textAlign: "center", textDecoration: "underline", textUnderlineOffset: 3 }}
                       >
                         {testResetLoading ? "Sending…" : "Forgot password?"}
                       </button>
+                    )}
+
+                    {testResetStep === "otp" && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 7, borderTop: "1px solid rgba(255,255,255,0.07)", paddingTop: 10 }}>
+                        <p style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", margin: 0, textAlign: "center", fontFamily: '"DM Sans",sans-serif' }}>
+                          Code sent to <strong style={{ color: "rgba(255,255,255,0.75)" }}>{testEmail}</strong>
+                        </p>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="Enter code"
+                          value={testResetOtp}
+                          onChange={e => { setTestResetOtp(e.target.value.replace(/\D/g, "")); setTestError(""); }}
+                          onKeyDown={e => { if (e.key === "Enter") handleTestPortalVerifyOtp(); }}
+                          style={{ ...inputStyle, fontSize: 18, fontWeight: 700, textAlign: "center", letterSpacing: "0.18em", padding: "10px 14px" }}
+                        />
+                        <button
+                          onClick={handleTestPortalVerifyOtp}
+                          disabled={testResetLoading}
+                          style={{ background: testResetLoading ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 100, padding: "10px", color: "#fff", fontSize: 13, fontWeight: 700, cursor: testResetLoading ? "not-allowed" : "pointer", fontFamily: '"DM Sans",sans-serif' }}
+                        >
+                          {testResetLoading ? "Verifying…" : "Verify code"}
+                        </button>
+                        <button onClick={() => { setTestResetStep("idle"); setTestResetOtp(""); setTestError(""); }} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "rgba(255,255,255,0.30)", fontFamily: '"DM Sans",sans-serif', fontSize: 11, textAlign: "center" }}>
+                          ← Back
+                        </button>
+                      </div>
+                    )}
+
+                    {testResetStep === "password" && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 7, borderTop: "1px solid rgba(255,255,255,0.07)", paddingTop: 10 }}>
+                        <p style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", margin: 0, textAlign: "center", fontFamily: '"DM Sans",sans-serif' }}>Set a new password</p>
+                        <input
+                          type="password"
+                          placeholder="New password (min 8 chars)"
+                          value={testResetNewPw}
+                          onChange={e => { setTestResetNewPw(e.target.value); setTestError(""); }}
+                          onKeyDown={e => { if (e.key === "Enter") handleTestPortalSetPassword(); }}
+                          style={{ ...inputStyle, fontSize: 13, padding: "10px 14px" }}
+                        />
+                        <button
+                          onClick={handleTestPortalSetPassword}
+                          disabled={testResetLoading}
+                          style={{ background: testResetLoading ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 100, padding: "10px", color: "#fff", fontSize: 13, fontWeight: 700, cursor: testResetLoading ? "not-allowed" : "pointer", fontFamily: '"DM Sans",sans-serif' }}
+                        >
+                          {testResetLoading ? "Saving…" : "Set new password"}
+                        </button>
+                      </div>
+                    )}
+
+                    {testResetStep === "done" && (
+                      <p style={{ fontSize: 11, color: GREEN, margin: 0, textAlign: "center", fontFamily: '"DM Sans",sans-serif' }}>
+                        Password updated — sign in above.
+                      </p>
                     )}
                   </div>
                 )}

@@ -2351,23 +2351,26 @@ app.post('/api/beta/reset-password', async (req, res) => {
   }
 
   try {
-    // Find user by email via admin API
-    const uRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/users?email=${encodeURIComponent(em)}&per_page=1`, { headers: SVC_HEADERS });
-    const uData = await uRes.json();
-    const user = uData?.users?.[0];
-    if (!user) return res.status(404).json({ error: 'Account not found.' });
+    // Look up user ID from profiles table (reliable case-insensitive email match)
+    const pRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/profiles?email=ilike.${encodeURIComponent(em)}&select=id&limit=1`,
+      { headers: SVC_HEADERS }
+    );
+    const profiles = await pRes.json();
+    const userId = profiles?.[0]?.id;
+    if (!userId) return res.status(404).json({ error: 'Account not found.' });
 
-    // Update password via admin API
-    const pRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${user.id}`, {
+    // Update password via admin API using the confirmed user ID
+    const uRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
       method: 'PUT',
       headers: SVC_HEADERS,
       body: JSON.stringify({ password }),
     });
-    const pData = await pRes.json();
-    if (!pRes.ok) return res.status(pRes.status).json({ error: pData.message || 'Failed to update password.' });
+    const uData = await uRes.json();
+    if (!uRes.ok) return res.status(uRes.status).json({ error: uData.message || 'Failed to update password.' });
 
     betaResetCodes.delete(em);
-    console.log(`[beta/reset] Password updated for ${em}`);
+    console.log(`[beta/reset] Password updated for ${em} (id=${userId})`);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

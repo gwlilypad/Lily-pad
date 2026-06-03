@@ -154,48 +154,41 @@ export default function EarlyAccessPage() {
       <div style={outerStyle}>
         <style>{animCSS}</style>
 
-        {/* logo — fixed height at top */}
+        {/* logo — top section */}
         <div style={{
           flexShrink: 0, display: "flex", justifyContent: "center",
-          paddingTop: 48, height: 210,
+          paddingTop: 52,
         }}>
           <img
-            src={lilypadLogoNew}
+            src={lilypadLogo}
             alt="lily pad"
-            style={{ width: "80%", maxWidth: 320, height: "auto" }}
+            style={{ width: "58%", maxWidth: 260, height: "auto" }}
           />
         </div>
 
-        {/* text — centered in remaining space */}
+        {/* text + CTA — centered in remaining space */}
         <div style={{
           flex: 1, display: "flex", flexDirection: "column", alignItems: "center",
-          justifyContent: "center", padding: "0 32px", textAlign: "center",
+          justifyContent: "center", padding: "0 32px 80px", textAlign: "center",
         }}>
           <h1 style={{
-            fontSize: 24, fontWeight: 800, color: "#fff",
-            margin: "0 0 10px", letterSpacing: "-0.02em", lineHeight: 1.3, maxWidth: 320,
+            fontSize: 26, fontWeight: 800, color: "#fff",
+            margin: "0 0 10px", letterSpacing: "-0.02em", lineHeight: 1.3,
           }}>
-            Houston's premiere parking marketplace coming soon.
+            Coming to Houston Soon.
           </h1>
           <p style={{
-            fontSize: 16, fontWeight: 300, color: "rgba(255,255,255,0.70)",
-            margin: 0, letterSpacing: "-0.01em",
+            fontSize: 15, fontWeight: 400, color: "rgba(255,255,255,0.75)",
+            margin: "0 0 28px", letterSpacing: "-0.01em",
           }}>
             Start Earning. Start Parking.
           </p>
-        </div>
-
-        {/* CTA — pinned at bottom */}
-        <div style={{
-          flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center",
-          padding: "0 32px 72px", textAlign: "center",
-        }}>
-          <button onClick={() => setStep("form")} style={greenBtnStyle}>
+          <button onClick={() => setStep("form")} style={{
+            ...greenBtnStyle,
+            width: "auto", padding: "16px 40px",
+          }}>
             Join the Pre-Launch
           </button>
-          <p style={{ fontSize: 12, color: "rgba(255,255,255,0.22)", marginTop: 14 }}>
-            Free to join.
-          </p>
         </div>
       </div>
     );

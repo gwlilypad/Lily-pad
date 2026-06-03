@@ -161,7 +161,10 @@ export default function EarlyAccessPage() {
           <img
             src={lilypadLogo}
             alt="lily pad"
-            style={{ width: "80%", maxWidth: 340, height: "auto", transform: "translateY(-8%)" }}
+            style={{
+              width: "80%", maxWidth: 340, height: "auto", transform: "translateY(-8%)",
+              clipPath: "inset(0 0 28% 0)",
+            }}
           />
         </div>
 

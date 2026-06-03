@@ -1707,34 +1707,35 @@ export default function AdminPage() {
 
                 {showTestPortal && (
                   <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
-                    <input
-                      type="email"
-                      placeholder="Tester email"
-                      value={testEmail}
-                      onChange={e => { setTestEmail(e.target.value); setTestError(""); }}
-                      onKeyDown={e => { if (e.key === "Enter") handleTestPortalLogin(); }}
-                      style={{ ...inputStyle, fontSize: 13, padding: "10px 14px" }}
-                    />
-                    <input
-                      type="password"
-                      placeholder="Password"
-                      value={testPassword}
-                      onChange={e => { setTestPassword(e.target.value); setTestError(""); }}
-                      onKeyDown={e => { if (e.key === "Enter") handleTestPortalLogin(); }}
-                      style={{ ...inputStyle, fontSize: 13, padding: "10px 14px" }}
-                    />
-                    {testError && (
-                      <p style={{ fontSize: 11, color: "#ef4444", margin: 0, textAlign: "center", fontFamily: '"DM Sans",sans-serif' }}>{testError}</p>
-                    )}
-                    <button
-                      onClick={handleTestPortalLogin}
-                      disabled={testLoading}
-                      style={{ background: testLoading ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 100, padding: "10px", color: "#fff", fontSize: 13, fontWeight: 700, cursor: testLoading ? "not-allowed" : "pointer", fontFamily: '"DM Sans",sans-serif' }}
-                    >
-                      {testLoading ? "Signing in…" : "Enter as tester"}
-                    </button>
 
-                    {testResetStep === "idle" && (
+                    {/* ── Sign-in form (only when not in reset flow) ── */}
+                    {testResetStep === "idle" && (<>
+                      <input
+                        type="email"
+                        placeholder="Tester email"
+                        value={testEmail}
+                        onChange={e => { setTestEmail(e.target.value); setTestError(""); }}
+                        onKeyDown={e => { if (e.key === "Enter") handleTestPortalLogin(); }}
+                        style={{ ...inputStyle, fontSize: 13, padding: "10px 14px" }}
+                      />
+                      <input
+                        type="password"
+                        placeholder="Password"
+                        value={testPassword}
+                        onChange={e => { setTestPassword(e.target.value); setTestError(""); }}
+                        onKeyDown={e => { if (e.key === "Enter") handleTestPortalLogin(); }}
+                        style={{ ...inputStyle, fontSize: 13, padding: "10px 14px" }}
+                      />
+                      {testError && (
+                        <p style={{ fontSize: 11, color: "#ef4444", margin: 0, textAlign: "center", fontFamily: '"DM Sans",sans-serif' }}>{testError}</p>
+                      )}
+                      <button
+                        onClick={handleTestPortalLogin}
+                        disabled={testLoading}
+                        style={{ background: testLoading ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 100, padding: "10px", color: "#fff", fontSize: 13, fontWeight: 700, cursor: testLoading ? "not-allowed" : "pointer", fontFamily: '"DM Sans",sans-serif' }}
+                      >
+                        {testLoading ? "Signing in…" : "Enter as tester"}
+                      </button>
                       <button
                         onClick={handleTestPortalSendCode}
                         disabled={testResetLoading}
@@ -1742,39 +1743,45 @@ export default function AdminPage() {
                       >
                         {testResetLoading ? "Sending…" : "Forgot password?"}
                       </button>
-                    )}
+                    </>)}
 
+                    {/* ── OTP entry ── */}
                     {testResetStep === "otp" && (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 7, borderTop: "1px solid rgba(255,255,255,0.07)", paddingTop: 10 }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                         <p style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", margin: 0, textAlign: "center", fontFamily: '"DM Sans",sans-serif' }}>
                           Code sent to <strong style={{ color: "rgba(255,255,255,0.75)" }}>{testEmail}</strong>
                         </p>
                         <input
+                          autoFocus
                           type="text"
                           inputMode="numeric"
-                          placeholder="Enter code"
+                          placeholder="Enter 6-digit code"
                           value={testResetOtp}
                           onChange={e => { setTestResetOtp(e.target.value.replace(/\D/g, "")); setTestError(""); }}
                           onKeyDown={e => { if (e.key === "Enter") handleTestPortalVerifyOtp(); }}
-                          style={{ ...inputStyle, fontSize: 18, fontWeight: 700, textAlign: "center", letterSpacing: "0.18em", padding: "10px 14px" }}
+                          style={{ ...inputStyle, fontSize: 22, fontWeight: 700, textAlign: "center", letterSpacing: "0.20em", padding: "12px 14px" }}
                         />
+                        {testError && (
+                          <p style={{ fontSize: 11, color: "#ef4444", margin: 0, textAlign: "center", fontFamily: '"DM Sans",sans-serif' }}>{testError}</p>
+                        )}
                         <button
                           onClick={handleTestPortalVerifyOtp}
-                          disabled={testResetLoading}
-                          style={{ background: testResetLoading ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 100, padding: "10px", color: "#fff", fontSize: 13, fontWeight: 700, cursor: testResetLoading ? "not-allowed" : "pointer", fontFamily: '"DM Sans",sans-serif' }}
+                          style={{ background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 100, padding: "10px", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: '"DM Sans",sans-serif' }}
                         >
-                          {testResetLoading ? "Verifying…" : "Verify code"}
+                          Continue
                         </button>
                         <button onClick={() => { setTestResetStep("idle"); setTestResetOtp(""); setTestError(""); }} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "rgba(255,255,255,0.30)", fontFamily: '"DM Sans",sans-serif', fontSize: 11, textAlign: "center" }}>
-                          ← Back
+                          ← Back to sign in
                         </button>
                       </div>
                     )}
 
+                    {/* ── New password ── */}
                     {testResetStep === "password" && (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 7, borderTop: "1px solid rgba(255,255,255,0.07)", paddingTop: 10 }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                         <p style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", margin: 0, textAlign: "center", fontFamily: '"DM Sans",sans-serif' }}>Set a new password</p>
                         <input
+                          autoFocus
                           type="password"
                           placeholder="New password (min 8 chars)"
                           value={testResetNewPw}
@@ -1782,6 +1789,9 @@ export default function AdminPage() {
                           onKeyDown={e => { if (e.key === "Enter") handleTestPortalSetPassword(); }}
                           style={{ ...inputStyle, fontSize: 13, padding: "10px 14px" }}
                         />
+                        {testError && (
+                          <p style={{ fontSize: 11, color: "#ef4444", margin: 0, textAlign: "center", fontFamily: '"DM Sans",sans-serif' }}>{testError}</p>
+                        )}
                         <button
                           onClick={handleTestPortalSetPassword}
                           disabled={testResetLoading}
@@ -1792,11 +1802,18 @@ export default function AdminPage() {
                       </div>
                     )}
 
+                    {/* ── Done ── */}
                     {testResetStep === "done" && (
-                      <p style={{ fontSize: 11, color: GREEN, margin: 0, textAlign: "center", fontFamily: '"DM Sans",sans-serif' }}>
-                        Password updated — sign in above.
-                      </p>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        <p style={{ fontSize: 12, color: GREEN, margin: 0, textAlign: "center", fontFamily: '"DM Sans",sans-serif', fontWeight: 700 }}>
+                          Password updated ✓
+                        </p>
+                        <button onClick={() => { setTestResetStep("idle"); setTestResetOtp(""); setTestResetNewPw(""); setTestError(""); }} style={{ background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 100, padding: "10px", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: '"DM Sans",sans-serif' }}>
+                          Sign in now
+                        </button>
+                      </div>
                     )}
+
                   </div>
                 )}
               </div>

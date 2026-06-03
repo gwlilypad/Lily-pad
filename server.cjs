@@ -22,6 +22,14 @@ const SVC_HEADERS = {
   'Content-Type' : 'application/json',
 };
 
+// ── In-memory activation code store (TTL 10 min) ─────────────────────────────
+// Map<emailLower, { code: string, role: string, expires: number }>
+const activationCodes = new Map();
+function pruneActivationCodes() {
+  const now = Date.now();
+  for (const [k, v] of activationCodes) { if (v.expires < now) activationCodes.delete(k); }
+}
+
 // ── Email helper (Resend) ────────────────────────────────────────────────────
 async function sendEmail(to, subject, html) {
   const key = process.env.RESEND_API_KEY;
@@ -835,6 +843,143 @@ app.post('/api/staff/update-status', async (req, res) => {
       body: JSON.stringify({ status }),
     });
     res.json({ updated: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Staff/admin activation — step 1: send 6-digit code via Resend ────────────
+app.post('/api/staff/send-activation-code', async (req, res) => {
+  if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });
+  const { email } = req.body || {};
+  if (!email) return res.status(400).json({ error: 'email required' });
+  const emailLower = email.toLowerCase().trim();
+  try {
+    pruneActivationCodes();
+
+    // 1. Whitelist check
+    let detectedRole = null;
+    for (const [table, r] of [['admin_whitelist', 'admin'], ['staff_whitelist', 'staff']]) {
+      const chk = await fetch(
+        `${SUPABASE_URL}/rest/v1/${table}?email=eq.${encodeURIComponent(emailLower)}&select=email`,
+        { headers: SVC_HEADERS }
+      );
+      const rows = await chk.json().catch(() => []);
+      if (chk.ok && Array.isArray(rows) && rows.length) { detectedRole = r; break; }
+    }
+    if (!detectedRole)
+      return res.status(403).json({ error: 'This email is not on the approved team list. Contact your admin.' });
+
+    // 2. Generate 6-digit code
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    activationCodes.set(emailLower, { code, role: detectedRole, expires: Date.now() + 10 * 60 * 1000 });
+
+    // 3. Send via Resend
+    const RESEND_KEY = process.env.RESEND_API_KEY || '';
+    if (!RESEND_KEY) {
+      console.warn('[Activation] RESEND_API_KEY not set — logging code for dev:', code);
+      return res.json({ ok: true, role: detectedRole, devCode: code });
+    }
+    const roleLabel = detectedRole === 'admin' ? 'Admin' : 'Staff';
+    const emailRes = await fetch('https://api.resend.com/emails', {
+      method : 'POST',
+      headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
+      body   : JSON.stringify({
+        from   : 'Lily Pad <noreply@lilypadparking.com>',
+        to     : [emailLower],
+        subject: `Your Lily Pad ${roleLabel} activation code`,
+        html   : `
+<div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;background:#0E1F40;border-radius:20px;padding:40px 32px;color:#fff;">
+  <p style="font-size:11px;font-weight:700;letter-spacing:0.18em;color:#8DD63F;text-transform:uppercase;margin:0 0 8px;">Lily Pad Parking</p>
+  <h1 style="font-size:26px;font-weight:800;margin:0 0 16px;letter-spacing:-0.02em;">Your activation code</h1>
+  <p style="font-size:15px;color:rgba(255,255,255,0.78);line-height:1.6;margin:0 0 24px;">
+    Use this code to activate your Lily Pad <strong style="color:#fff;">${roleLabel}</strong> account.
+    It expires in <strong style="color:#fff;">10 minutes</strong>.
+  </p>
+  <div style="text-align:center;background:rgba(141,214,63,0.12);border:1.5px solid rgba(141,214,63,0.40);border-radius:16px;padding:24px;margin-bottom:28px;">
+    <span style="font-size:42px;font-weight:800;letter-spacing:0.25em;color:#8DD63F;">${code}</span>
+  </div>
+  <p style="font-size:12px;color:rgba(255,255,255,0.40);line-height:1.6;margin:0;text-align:center;">
+    If you weren't expecting this email, you can safely ignore it.
+  </p>
+</div>`,
+      }),
+    });
+    if (!emailRes.ok) {
+      const emailErr = await emailRes.json().catch(() => ({}));
+      console.error('[Activation] Resend failed:', emailErr);
+      return res.status(500).json({ error: emailErr.message || 'Failed to send activation code. Try again.' });
+    }
+    console.log(`[Activation] Code sent to ${emailLower} (${detectedRole})`);
+    res.json({ ok: true, role: detectedRole });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Staff/admin activation — step 2: verify code + create account ─────────────
+app.post('/api/staff/verify-activation-code', async (req, res) => {
+  if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });
+  const { email, code } = req.body || {};
+  if (!email || !code) return res.status(400).json({ error: 'email and code required' });
+  const emailLower = email.toLowerCase().trim();
+  try {
+    pruneActivationCodes();
+    const stored = activationCodes.get(emailLower);
+    if (!stored) return res.status(400).json({ error: 'No active code for this email. Request a new one.' });
+    if (Date.now() > stored.expires) {
+      activationCodes.delete(emailLower);
+      return res.status(400).json({ error: 'Code expired. Please request a new one.' });
+    }
+    if (stored.code !== String(code).trim()) {
+      return res.status(400).json({ error: 'Incorrect code. Check your email and try again.' });
+    }
+    // Code is valid — consume it
+    activationCodes.delete(emailLower);
+    const role = stored.role;
+
+    // Create/prepare auth user (email_confirm: true, temp pw, sign in for access_token)
+    const tempPw = Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10) + 'Aa1!';
+    let userId = null;
+
+    const createRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
+      method : 'POST',
+      headers: { 'apikey': SVC_KEY, 'Authorization': `Bearer ${SVC_KEY}`, 'Content-Type': 'application/json' },
+      body   : JSON.stringify({ email: emailLower, email_confirm: true, password: tempPw, user_metadata: { account_type: role } }),
+    });
+    const createData = await createRes.json();
+    if (createRes.ok) {
+      userId = createData.id;
+    } else {
+      // User already exists — look up + reset to tempPw
+      const listRes = await fetch(
+        `${SUPABASE_URL}/auth/v1/admin/users?email=${encodeURIComponent(emailLower)}&per_page=10`,
+        { headers: SVC_HEADERS }
+      );
+      const listData = await listRes.json().catch(() => ({}));
+      const existing = (listData.users || []).find(u => u.email?.toLowerCase() === emailLower);
+      if (!existing?.id) {
+        const msg = createData.message || createData.error_description || 'Failed to prepare account.';
+        return res.status(400).json({ error: msg });
+      }
+      userId = existing.id;
+      await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
+        method : 'PUT',
+        headers: { 'apikey': SVC_KEY, 'Authorization': `Bearer ${SVC_KEY}`, 'Content-Type': 'application/json' },
+        body   : JSON.stringify({ password: tempPw, email_confirm: true }),
+      });
+    }
+
+    // Sign in with tempPw to get a real access_token the client can use to set their real password
+    const signInRes = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+      method : 'POST',
+      headers: { 'apikey': SUPABASE_ANON, 'Content-Type': 'application/json' },
+      body   : JSON.stringify({ email: emailLower, password: tempPw }),
+    });
+    const signInData = await signInRes.json();
+    if (!signInRes.ok || !signInData.access_token) {
+      const msg = signInData.error_description || signInData.message || 'Failed to create session.';
+      return res.status(400).json({ error: msg });
+    }
+
+    console.log(`[Activation] Code verified + account ready for ${emailLower} (${role})`);
+    res.json({ ok: true, userId, role, access_token: signInData.access_token });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

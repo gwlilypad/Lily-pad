@@ -1458,7 +1458,7 @@ export default function AdminPage() {
             </div>
           </div>
           <p style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", margin: 0, lineHeight: 1.5 }}>
-            Enter the email address your manager added to the team list. You'll be taken directly to set your password.
+            Enter the email address your manager added to the team list. You'll receive a 6-digit code to activate your account.
           </p>
           <div style={{ background: "#142A52", borderRadius: 18, padding: "18px", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 14px rgba(0,0,0,0.30)", display: "flex", flexDirection: "column", gap: 14 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -1536,10 +1536,11 @@ export default function AdminPage() {
                     const otp = inviteOtpDigits.join("");
                     setInviteLoading(true); setInviteError("");
                     try {
-                      const { data: vData, error: vErr } = await supabase.auth.verifyOtp({ email: inviteEmail.trim().toLowerCase(), token: otp, type: "email" });
-                      if (vErr) { setInviteError(vErr.message || "Invalid or expired code."); return; }
-                      setInviteUserId(vData?.user?.id ?? null);
-                      setInviteAccessToken(vData?.session?.access_token ?? null);
+                      const vRes = await fetch("/api/staff/verify-activation-code", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: inviteEmail.trim().toLowerCase(), code: otp }) });
+                      const vData = await vRes.json();
+                      if (!vRes.ok) { setInviteError(vData.error || "Invalid or expired code."); return; }
+                      setInviteUserId(vData.userId ?? null);
+                      setInviteAccessToken(vData.access_token ?? null);
                       setInviteStep("password");
                     } catch { setInviteError("Network error. Try again."); }
                     finally { setInviteLoading(false); }
@@ -1569,24 +1570,17 @@ export default function AdminPage() {
                     if (!em || !em.includes("@")) { setInviteError("Enter a valid email address."); return; }
                     setInviteLoading(true); setInviteError("");
                     try {
-                      const chk = await fetch("/api/staff/check-whitelist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: em }) });
-                      const chkData = await chk.json();
-                      if (!chk.ok) { setInviteError(chkData.error || "Email not on the approved list."); return; }
-                      const detectedRole = chkData.role;
-                      setInviteRole(detectedRole);
-                      // Create/prepare the account server-side (no Supabase SMTP needed)
-                      const actRes = await fetch("/api/staff/create-activation", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: em, role: detectedRole }) });
-                      const actData = await actRes.json();
-                      if (!actRes.ok) { setInviteError(actData.error || "Failed to prepare account. Try again."); return; }
-                      setInviteUserId(actData.userId ?? null);
-                      setInviteAccessToken(actData.access_token ?? null);
-                      setInviteStep("password");
+                      const r = await fetch("/api/staff/send-activation-code", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: em }) });
+                      const d = await r.json();
+                      if (!r.ok) { setInviteError(d.error || "Email not on the approved list."); return; }
+                      setInviteRole(d.role);
+                      setInviteStep("otp");
                     } catch { setInviteError("Network error. Try again."); }
                     finally { setInviteLoading(false); }
                   }}
                   style={{ width: "100%", padding: "11px", borderRadius: 100, border: "none", background: inviteLoading ? "rgba(141,214,63,0.50)" : GREEN, color: NAVY, fontWeight: 800, fontSize: 13, fontFamily: '"DM Sans",sans-serif', cursor: inviteLoading ? "not-allowed" : "pointer" }}
                 >
-                  {inviteLoading ? "Setting up…" : "Continue"}
+                  {inviteLoading ? "Sending…" : "Send code"}
                 </button>
               </>
             )}

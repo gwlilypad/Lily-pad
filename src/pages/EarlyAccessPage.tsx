@@ -190,7 +190,7 @@ export default function EarlyAccessPage() {
             Join the Pre-Launch
           </button>
           <p style={{ fontSize: 12, color: "rgba(255,255,255,0.22)", marginTop: 14 }}>
-            Free to join · No credit card needed
+            Free to join.
           </p>
         </div>
       </div>

@@ -188,7 +188,7 @@ export default function EarlyAccessPage() {
         {/* CTA — pinned at bottom */}
         <div style={{
           flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center",
-          padding: "0 32px 48px", textAlign: "center",
+          padding: "0 32px 72px", textAlign: "center",
         }}>
           <button onClick={() => setStep("form")} style={greenBtnStyle}>
             Join the Pre-Launch

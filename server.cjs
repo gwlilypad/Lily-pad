@@ -838,6 +838,75 @@ app.post('/api/staff/update-status', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Staff/admin activation — no-SMTP account creation ────────────────────────
+// Called after whitelist check passes. Creates (or finds) the auth user with
+// email_confirm:true, sets a short-lived temp password, signs in to get a real
+// access_token, and returns it so the client can set the user's real password.
+// No Supabase SMTP is involved at any point.
+app.post('/api/staff/create-activation', async (req, res) => {
+  if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });
+  const { email, role } = req.body || {};
+  if (!email || !role) return res.status(400).json({ error: 'email and role required' });
+  const emailLower = email.toLowerCase().trim();
+  try {
+    // Generate a random temp password (will be replaced immediately by the user)
+    const tempPw = Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10) + 'Aa1!';
+
+    let userId = null;
+
+    // 1. Try to create a brand-new user (admin API, email pre-confirmed, no SMTP)
+    const createRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
+      method : 'POST',
+      headers: { 'apikey': SVC_KEY, 'Authorization': `Bearer ${SVC_KEY}`, 'Content-Type': 'application/json' },
+      body   : JSON.stringify({
+        email: emailLower,
+        email_confirm: true,
+        password: tempPw,
+        user_metadata: { full_name: '', account_type: role },
+      }),
+    });
+    const createData = await createRes.json();
+
+    if (createRes.ok) {
+      userId = createData.id;
+    } else {
+      // User already exists — look them up and reset to temp password
+      const listRes = await fetch(
+        `${SUPABASE_URL}/auth/v1/admin/users?email=${encodeURIComponent(emailLower)}&per_page=10`,
+        { headers: SVC_HEADERS }
+      );
+      const listData = await listRes.json().catch(() => ({}));
+      const existing = (listData.users || []).find(u => u.email?.toLowerCase() === emailLower);
+      if (!existing?.id) {
+        const msg = createData.message || createData.error_description || 'Failed to prepare account.';
+        return res.status(400).json({ error: msg });
+      }
+      userId = existing.id;
+      // Update their password to tempPw so we can sign them in momentarily
+      await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
+        method : 'PUT',
+        headers: { 'apikey': SVC_KEY, 'Authorization': `Bearer ${SVC_KEY}`, 'Content-Type': 'application/json' },
+        body   : JSON.stringify({ password: tempPw, email_confirm: true }),
+      });
+    }
+
+    // 2. Sign in with the temp password to get a real session access_token
+    const signInRes = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+      method : 'POST',
+      headers: { 'apikey': SUPABASE_ANON, 'Content-Type': 'application/json' },
+      body   : JSON.stringify({ email: emailLower, password: tempPw }),
+    });
+    const signInData = await signInRes.json();
+    if (!signInRes.ok || !signInData.access_token) {
+      const msg = signInData.error_description || signInData.message || 'Failed to create session.';
+      return res.status(400).json({ error: msg });
+    }
+
+    console.log(`[Activation] Account prepared for ${emailLower} (${role}), userId=${userId}`);
+    res.json({ ok: true, userId, access_token: signInData.access_token });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Staff/admin activation — step 2: verify OTP, create account ──────────────
 app.post('/api/staff/verify-activation', async (req, res) => {
   if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });

@@ -153,15 +153,15 @@ export default function EarlyAccessPage() {
       <div style={outerStyle}>
         <style>{animCSS}</style>
 
-        {/* top half — logo centered */}
+        {/* top half — logo centered, scaled down & raised */}
         <div style={{
           flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
-          padding: "24px 0 0", overflow: "hidden",
+          padding: "16px 0 0", overflow: "hidden",
         }}>
           <img
             src={lilypadLogo}
-            alt="Lily Pad"
-            style={{ width: "160%", maxWidth: 700, height: "auto", transform: "translateY(4%)" }}
+            alt="lily pad"
+            style={{ width: "80%", maxWidth: 340, height: "auto", transform: "translateY(-8%)" }}
           />
         </div>
 
@@ -171,13 +171,19 @@ export default function EarlyAccessPage() {
           justifyContent: "center", padding: "0 32px 52px", textAlign: "center", gap: 0,
         }}>
           <h1 style={{
-            fontSize: 26, fontWeight: 800, color: "#fff",
-            margin: "0 0 36px", letterSpacing: "-0.025em", lineHeight: 1.25, maxWidth: 300,
+            fontSize: 24, fontWeight: 800, color: "#fff",
+            margin: "0 0 10px", letterSpacing: "-0.02em", lineHeight: 1.3, maxWidth: 320,
           }}>
-            Lily Pad. Your neighbor<br />saved you a spot.
+            Houston's premiere parking marketplace coming soon.
           </h1>
+          <p style={{
+            fontSize: 16, fontWeight: 300, color: "rgba(255,255,255,0.70)",
+            margin: "0 0 32px", letterSpacing: "-0.01em",
+          }}>
+            Start earning. Start parking.
+          </p>
           <button onClick={() => setStep("form")} style={greenBtnStyle}>
-            Sign up for Lily Pad
+            Join the pre-launch
           </button>
           <p style={{ fontSize: 12, color: "rgba(255,255,255,0.22)", marginTop: 14 }}>
             Free to join · No credit card needed
@@ -215,7 +221,7 @@ export default function EarlyAccessPage() {
               fontSize: 14.5, color: "rgba(255,255,255,0.50)",
               margin: 0, lineHeight: 1.65, maxWidth: 300,
             }}>
-              We'll reach out as soon as your Lily Pad account is ready.
+              We'll reach out as soon as your lily pad account is ready.
             </p>
           </div>
         </div>

@@ -183,10 +183,10 @@ export default function EarlyAccessPage() {
             fontSize: 16, fontWeight: 300, color: "rgba(255,255,255,0.70)",
             margin: "0 0 32px", letterSpacing: "-0.01em",
           }}>
-            Start earning. Start parking.
+            Start Earning. Start Parking.
           </p>
           <button onClick={() => setStep("form")} style={greenBtnStyle}>
-            Join the pre-launch
+            Join the Pre-Launch
           </button>
           <p style={{ fontSize: 12, color: "rgba(255,255,255,0.22)", marginTop: 14 }}>
             Free to join · No credit card needed

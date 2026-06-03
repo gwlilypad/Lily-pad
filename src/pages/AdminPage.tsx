@@ -705,6 +705,12 @@ export default function AdminPage() {
   const [pwFocus, setPwFocus]     = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
 
+  const [showTestPortal, setShowTestPortal] = useState(false);
+  const [testEmail, setTestEmail]           = useState("");
+  const [testPassword, setTestPassword]     = useState("");
+  const [testError, setTestError]           = useState("");
+  const [testLoading, setTestLoading]       = useState(false);
+
   const [view, setView] = useState<View>("dashboard");
   const [users, setUsers] = useState<MockUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
@@ -1249,6 +1255,35 @@ export default function AdminPage() {
 
   const selectedUser = users.find(u => u.id === selectedUserId) || null;
 
+  async function handleTestPortalLogin() {
+    if (!testEmail.trim() || !testPassword.trim()) {
+      setTestError("Please enter your email and password.");
+      return;
+    }
+    setTestError("");
+    setTestLoading(true);
+    try {
+      const { error: authErr } = await supabase.auth.signInWithPassword({
+        email: testEmail.trim().toLowerCase(),
+        password: testPassword,
+      });
+      if (authErr) { setTestError("Incorrect email or password."); return; }
+      const res = await fetch("/api/beta/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: testEmail.trim().toLowerCase() }),
+      });
+      const data = await res.json();
+      if (!data.isBetaTester) {
+        await supabase.auth.signOut();
+        setTestError("This account is not a beta tester.");
+        return;
+      }
+      goTo("find");
+    } catch { setTestError("Network error. Please try again."); }
+    finally { setTestLoading(false); }
+  }
+
   async function handleLogin() {
     if (!email.trim() || !password.trim()) {
       setError("Please enter your email and password.");
@@ -1617,6 +1652,47 @@ export default function AdminPage() {
               }}>
                 New here? Activate your account →
               </button>
+
+              {/* ── Test Portal ── */}
+              <div style={{ borderTop: "1px solid rgba(255,255,255,0.07)", paddingTop: 14, marginTop: 2 }}>
+                <button
+                  onClick={() => { setShowTestPortal(p => !p); setTestEmail(""); setTestPassword(""); setTestError(""); }}
+                  style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "rgba(255,255,255,0.30)", fontFamily: '"DM Sans",sans-serif', fontSize: 11, fontWeight: 600, textAlign: "center", width: "100%", letterSpacing: "0.04em" }}
+                >
+                  {showTestPortal ? "Hide test portal" : "Test Portal"}
+                </button>
+
+                {showTestPortal && (
+                  <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+                    <input
+                      type="email"
+                      placeholder="Tester email"
+                      value={testEmail}
+                      onChange={e => { setTestEmail(e.target.value); setTestError(""); }}
+                      onKeyDown={e => { if (e.key === "Enter") handleTestPortalLogin(); }}
+                      style={{ ...inputStyle, fontSize: 13, padding: "10px 14px" }}
+                    />
+                    <input
+                      type="password"
+                      placeholder="Password"
+                      value={testPassword}
+                      onChange={e => { setTestPassword(e.target.value); setTestError(""); }}
+                      onKeyDown={e => { if (e.key === "Enter") handleTestPortalLogin(); }}
+                      style={{ ...inputStyle, fontSize: 13, padding: "10px 14px" }}
+                    />
+                    {testError && (
+                      <p style={{ fontSize: 11, color: "#ef4444", margin: 0, textAlign: "center", fontFamily: '"DM Sans",sans-serif' }}>{testError}</p>
+                    )}
+                    <button
+                      onClick={handleTestPortalLogin}
+                      disabled={testLoading}
+                      style={{ background: testLoading ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 100, padding: "10px", color: "#fff", fontSize: 13, fontWeight: 700, cursor: testLoading ? "not-allowed" : "pointer", fontFamily: '"DM Sans",sans-serif' }}
+                    >
+                      {testLoading ? "Signing in…" : "Enter as tester"}
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

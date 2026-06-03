@@ -153,25 +153,26 @@ export default function EarlyAccessPage() {
       <div style={outerStyle}>
         <style>{animCSS}</style>
 
-        {/* top half — logo centered, scaled down & raised */}
+        {/* logo — fixed height at top */}
         <div style={{
-          flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
-          padding: "16px 0 0", overflow: "hidden",
+          flexShrink: 0, display: "flex", justifyContent: "center",
+          paddingTop: 48, height: 210,
         }}>
           <img
             src={lilypadLogo}
             alt="lily pad"
             style={{
-              width: "80%", maxWidth: 340, height: "auto", transform: "translateY(-18%)",
-              clipPath: "inset(0 0 28% 0)",
+              width: "80%", maxWidth: 320, height: "auto",
+              clipPath: "inset(0 0 38% 0)",
+              transform: "translateY(-10%)",
             }}
           />
         </div>
 
-        {/* bottom half — tagline + CTA */}
+        {/* text + CTA — centered in all remaining space */}
         <div style={{
           flex: 1, display: "flex", flexDirection: "column", alignItems: "center",
-          justifyContent: "center", padding: "0 32px 20px", textAlign: "center", gap: 0,
+          justifyContent: "center", padding: "0 32px 40px", textAlign: "center",
         }}>
           <h1 style={{
             fontSize: 24, fontWeight: 800, color: "#fff",

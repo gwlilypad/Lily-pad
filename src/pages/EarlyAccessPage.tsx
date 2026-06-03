@@ -169,10 +169,10 @@ export default function EarlyAccessPage() {
           />
         </div>
 
-        {/* text + CTA — centered in all remaining space */}
+        {/* text — centered in remaining space */}
         <div style={{
           flex: 1, display: "flex", flexDirection: "column", alignItems: "center",
-          justifyContent: "center", padding: "0 32px 40px", textAlign: "center",
+          justifyContent: "center", padding: "0 32px", textAlign: "center",
         }}>
           <h1 style={{
             fontSize: 24, fontWeight: 800, color: "#fff",
@@ -182,10 +182,17 @@ export default function EarlyAccessPage() {
           </h1>
           <p style={{
             fontSize: 16, fontWeight: 300, color: "rgba(255,255,255,0.70)",
-            margin: "0 0 32px", letterSpacing: "-0.01em",
+            margin: 0, letterSpacing: "-0.01em",
           }}>
             Start Earning. Start Parking.
           </p>
+        </div>
+
+        {/* CTA — pinned at bottom */}
+        <div style={{
+          flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center",
+          padding: "0 32px 48px", textAlign: "center",
+        }}>
           <button onClick={() => setStep("form")} style={greenBtnStyle}>
             Join the Pre-Launch
           </button>

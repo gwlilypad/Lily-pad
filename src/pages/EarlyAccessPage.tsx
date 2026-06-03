@@ -191,15 +191,11 @@ export default function EarlyAccessPage() {
           }}>
             Join the Pre-Launch
           </button>
-        </div>
-
-        {/* subtle sign-in for admin/staff */}
-        <div style={{ flexShrink: 0, textAlign: "center", paddingBottom: 28 }}>
           <button
             onClick={() => navigate("/signin")}
             style={{
-              background: "none", border: "none",
-              color: "rgba(255,255,255,0.30)", fontSize: 13,
+              marginTop: 20, background: "none", border: "none",
+              color: "rgba(255,255,255,0.35)", fontSize: 13,
               cursor: "pointer", fontFamily: '"DM Sans", sans-serif',
               letterSpacing: "0.01em",
             }}

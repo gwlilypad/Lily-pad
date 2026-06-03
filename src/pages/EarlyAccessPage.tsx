@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import lilypadLogo from "@/assets/lilypad-logo-full.png";
 import lilypadLogoNew from "@/assets/LP_Logo_PNG_3_1780451751504.png";
@@ -33,6 +34,7 @@ const ROLE_OPTIONS = [
 
 export default function EarlyAccessPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   const [step,     setStep]     = useState<Step>(user ? "thanks" : "welcome");
   const [cur,      setCur]      = useState(0);
@@ -188,6 +190,21 @@ export default function EarlyAccessPage() {
             width: "auto", padding: "16px 40px",
           }}>
             Join the Pre-Launch
+          </button>
+        </div>
+
+        {/* subtle sign-in for admin/staff */}
+        <div style={{ flexShrink: 0, textAlign: "center", paddingBottom: 28 }}>
+          <button
+            onClick={() => navigate("/signin")}
+            style={{
+              background: "none", border: "none",
+              color: "rgba(255,255,255,0.30)", fontSize: 13,
+              cursor: "pointer", fontFamily: '"DM Sans", sans-serif',
+              letterSpacing: "0.01em",
+            }}
+          >
+            Sign In
           </button>
         </div>
       </div>

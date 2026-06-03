@@ -111,11 +111,12 @@ function AppInner() {
   }, [navigate]);
 
   // ── Early access gate ─────────────────────────────────────────────────────
-  // Admin/staff bypass: /admin path is always accessible, and users with
-  // admin or staff role see the full app even in early access mode.
+  // Admin/staff bypass: /admin and /signin paths are always accessible, and
+  // users with admin or staff role see the full app even in early access mode.
   const isAdminPath    = location.pathname.startsWith("/admin");
+  const isSignInPath   = location.pathname.startsWith("/signin") || location.pathname.startsWith("/forgot");
   const isAdminOrStaff = role === "admin" || role === "staff";
-  if (configLoaded && earlyAccess && !isAdminPath && (authLoading || !isAdminOrStaff)) {
+  if (configLoaded && earlyAccess && !isAdminPath && !isSignInPath && (authLoading || !isAdminOrStaff)) {
     return (
       <AppContext.Provider value={{ goTo, state, setState }}>
         <div className="screen">

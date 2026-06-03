@@ -710,6 +710,8 @@ export default function AdminPage() {
   const [testPassword, setTestPassword]     = useState("");
   const [testError, setTestError]           = useState("");
   const [testLoading, setTestLoading]       = useState(false);
+  const [testResetLoading, setTestResetLoading] = useState(false);
+  const [testResetSent, setTestResetSent]       = useState(false);
 
   const [view, setView] = useState<View>("dashboard");
   const [users, setUsers] = useState<MockUser[]>([]);
@@ -1255,6 +1257,21 @@ export default function AdminPage() {
 
   const selectedUser = users.find(u => u.id === selectedUserId) || null;
 
+  async function handleTestPortalReset() {
+    if (!testEmail.trim()) { setTestError("Enter your email above first."); return; }
+    setTestError("");
+    setTestResetLoading(true);
+    try {
+      const { error: resetErr } = await supabase.auth.resetPasswordForEmail(
+        testEmail.trim().toLowerCase(),
+        { redirectTo: `${window.location.origin}/reset-password` }
+      );
+      if (resetErr) { setTestError("Couldn't send reset email. Try again."); return; }
+      setTestResetSent(true);
+    } catch { setTestError("Network error. Please try again."); }
+    finally { setTestResetLoading(false); }
+  }
+
   async function handleTestPortalLogin() {
     if (!testEmail.trim() || !testPassword.trim()) {
       setTestError("Please enter your email and password.");
@@ -1690,6 +1707,20 @@ export default function AdminPage() {
                     >
                       {testLoading ? "Signing in…" : "Enter as tester"}
                     </button>
+
+                    {testResetSent ? (
+                      <p style={{ fontSize: 11, color: GREEN, margin: 0, textAlign: "center", fontFamily: '"DM Sans",sans-serif' }}>
+                        Reset link sent — check your email.
+                      </p>
+                    ) : (
+                      <button
+                        onClick={handleTestPortalReset}
+                        disabled={testResetLoading}
+                        style={{ background: "none", border: "none", padding: 0, cursor: testResetLoading ? "not-allowed" : "pointer", color: "rgba(255,255,255,0.35)", fontFamily: '"DM Sans",sans-serif', fontSize: 11, fontWeight: 500, textAlign: "center", textDecoration: "underline", textUnderlineOffset: 3 }}
+                      >
+                        {testResetLoading ? "Sending…" : "Forgot password?"}
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

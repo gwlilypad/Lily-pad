@@ -192,7 +192,7 @@ export default function EarlyAccessPage() {
             Join the Pre-Launch
           </button>
           <button
-            onClick={() => navigate("/signin")}
+            onClick={() => navigate("/signin?redirect=/admin")}
             style={{
               marginTop: 20, background: "none", border: "none",
               color: "rgba(255,255,255,0.35)", fontSize: 13,

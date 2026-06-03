@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 
 export default function SignInPage() {
   const { signIn } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -21,7 +22,8 @@ export default function SignInPage() {
     if (err) {
       setError(err.includes("Invalid") ? "Incorrect email or password." : err);
     } else {
-      navigate("/find");
+      const redirect = searchParams.get("redirect");
+      navigate(redirect || "/find");
     }
   }
 

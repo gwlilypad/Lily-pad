@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import lilypadLogo from "@/assets/lilypad-logo-full.png";
@@ -32,6 +32,8 @@ const ROLE_OPTIONS = [
   { id: "host",   label: "Host"   },
 ];
 
+const DRAG_THRESHOLD = 150; // px right before it locks
+
 export default function EarlyAccessPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -45,7 +47,58 @@ export default function EarlyAccessPage() {
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState("");
 
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef    = useRef<HTMLInputElement>(null);
+
+  /* ── drag-to-admin gesture state ─────────────────────────────────────── */
+  const [dragX,     setDragX]     = useState(0);
+  const [dragging,  setDragging]  = useState(false);
+  const [triggered, setTriggered] = useState(false);
+  const dragStartX  = useRef(0);
+  const dragActive  = useRef(false); // ref mirror so callbacks are always current
+
+  const getX = (e: MouseEvent | TouchEvent): number =>
+    "touches" in e ? (e.touches[0]?.clientX ?? 0) : e.clientX;
+
+  const onDragMove = useCallback((clientX: number) => {
+    if (!dragActive.current) return;
+    const delta   = Math.max(0, clientX - dragStartX.current);
+    const clamped = Math.min(delta, DRAG_THRESHOLD + 16);
+    setDragX(clamped);
+    setTriggered(clamped >= DRAG_THRESHOLD);
+  }, []);
+
+  const onDragEnd = useCallback(() => {
+    if (!dragActive.current) return;
+    dragActive.current = false;
+    setDragging(false);
+    setTriggered(prev => {
+      if (prev) {
+        // small delay so user sees the lock-in glow before navigating
+        setTimeout(() => navigate("/admin"), 200);
+      } else {
+        setDragX(0);
+      }
+      return prev;
+    });
+  }, [navigate]);
+
+  useEffect(() => {
+    if (!dragging) return;
+    const onMove  = (e: MouseEvent | TouchEvent) => onDragMove(getX(e));
+    const onUp    = () => onDragEnd();
+    window.addEventListener("mousemove",  onMove,  { passive: true });
+    window.addEventListener("mouseup",   onUp);
+    window.addEventListener("touchmove",  onMove,  { passive: true });
+    window.addEventListener("touchend",  onUp);
+    window.addEventListener("touchcancel", onUp);
+    return () => {
+      window.removeEventListener("mousemove",  onMove);
+      window.removeEventListener("mouseup",   onUp);
+      window.removeEventListener("touchmove",  onMove);
+      window.removeEventListener("touchend",  onUp);
+      window.removeEventListener("touchcancel", onUp);
+    };
+  }, [dragging, onDragMove, onDragEnd]);
 
   const q = EA_QUESTIONS[cur];
   const isPasswordStep = q.type === "password";
@@ -151,24 +204,89 @@ export default function EarlyAccessPage() {
   /* ════════════════════════════════════════════════════════════════════════
      WELCOME
   ═══════════════════════════════════════════════════════════════════════════ */
+  /* drag progress 0→1 */
+  const progress = Math.min(dragX / DRAG_THRESHOLD, 1);
+
   if (step === "welcome") {
     return (
       <div style={outerStyle}>
         <style>{animCSS}</style>
 
-        {/* logo — top section */}
+        {/* ── draggable logo zone ── */}
         <div style={{
-          flexShrink: 0, display: "flex", justifyContent: "center",
+          flexShrink: 0,
+          display: "flex",
+          justifyContent: "center",
           paddingTop: 52,
+          /* clip so the logo can't overflow the screen edge while dragging */
+          overflow: "hidden",
+          position: "relative",
         }}>
+          {/* subtle right-arrow track hint — fades in as you drag */}
+          <div style={{
+            position: "absolute",
+            right: 18,
+            top: "50%",
+            transform: "translateY(-50%)",
+            opacity: progress * 0.85,
+            transition: dragging ? "none" : "opacity 0.4s ease",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 4,
+            pointerEvents: "none",
+          }}>
+            {[0,1,2].map(i => (
+              <svg key={i} width="18" height="18" viewBox="0 0 24 24" fill="none"
+                stroke={triggered ? GREEN : "rgba(255,255,255,0.55)"}
+                strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                style={{
+                  opacity: triggered ? 1 : 0.4 + i * 0.2,
+                  transition: "stroke 0.2s",
+                }}>
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            ))}
+          </div>
+
+          {/* the logo itself — draggable */}
           <img
             src={lilypadLogo}
             alt="lily pad"
-            style={{ width: "86%", maxWidth: 389, height: "auto" }}
+            draggable={false}
+            onMouseDown={e => {
+              e.preventDefault();
+              dragStartX.current = e.clientX;
+              dragActive.current = true;
+              setDragging(true);
+              setTriggered(false);
+            }}
+            onTouchStart={e => {
+              dragStartX.current = e.touches[0]?.clientX ?? 0;
+              dragActive.current = true;
+              setDragging(true);
+              setTriggered(false);
+            }}
+            style={{
+              width: "86%",
+              maxWidth: 389,
+              height: "auto",
+              cursor: dragging ? "grabbing" : "grab",
+              userSelect: "none",
+              WebkitUserSelect: "none",
+              transform: `translateX(${dragX}px)`,
+              transition: dragging ? "none" : "transform 0.55s cubic-bezier(0.34,1.56,0.64,1)",
+              filter: triggered
+                ? `drop-shadow(0 0 22px ${GREEN}CC) drop-shadow(0 0 8px ${GREEN}88)`
+                : progress > 0
+                  ? `drop-shadow(0 0 ${Math.round(progress * 18)}px rgba(141,214,63,${(progress * 0.6).toFixed(2)}))`
+                  : "none",
+              willChange: "transform",
+            }}
           />
         </div>
 
-        {/* text + CTA — centered in remaining space */}
+        {/* text + CTA */}
         <div style={{
           flex: 1, display: "flex", flexDirection: "column", alignItems: "center",
           justifyContent: "center", padding: "0 32px 80px", textAlign: "center",
@@ -190,17 +308,6 @@ export default function EarlyAccessPage() {
             width: "auto", padding: "16px 40px",
           }}>
             Join the Pre-Launch
-          </button>
-          <button
-            onClick={() => navigate("/admin")}
-            style={{
-              marginTop: 20, background: "none", border: "none",
-              color: "rgba(255,255,255,0.35)", fontSize: 13,
-              cursor: "pointer", fontFamily: '"DM Sans", sans-serif',
-              letterSpacing: "0.01em",
-            }}
-          >
-            Sign In
           </button>
         </div>
       </div>

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
+import { useApp } from "@/context/AppContext";
 
 interface AuthGuardProps {
   children: ReactNode;
@@ -9,6 +10,7 @@ interface AuthGuardProps {
 
 export function AuthGuard({ children, requireAdmin }: AuthGuardProps) {
   const { user, loading, role } = useAuth();
+  const { state } = useApp();
 
   if (loading) {
     return (
@@ -26,7 +28,8 @@ export function AuthGuard({ children, requireAdmin }: AuthGuardProps) {
     );
   }
 
-  if (!user) return <Navigate to="/signin" replace />;
+  const adminPreviewActive = state.adminPreview || sessionStorage.getItem("lp_admin_preview") === "1";
+  if (!user && !adminPreviewActive) return <Navigate to="/signin" replace />;
   if (requireAdmin && role !== "admin" && role !== "staff") return <Navigate to="/find" replace />;
 
   return <>{children}</>;

@@ -3654,7 +3654,7 @@ export default function AdminPage() {
             {
               label: "MAP",
               active: false,
-              onClick: () => { setState(s => ({ ...s, adminPreview: true, adminPreviewRole: role })); goTo("find"); },
+              onClick: () => { sessionStorage.setItem("lp_admin_preview", "1"); setState(s => ({ ...s, adminPreview: true, adminPreviewRole: role })); goTo("find"); },
               svg: <><polygon points="1 6 8 3 16 6 23 3 23 18 16 21 8 18 1 21 1 6"/><line x1="8" y1="3" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="21"/></>,
             },
             {

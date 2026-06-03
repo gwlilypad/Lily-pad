@@ -2095,7 +2095,8 @@ export default function FindPage() {
       {!globeMode && (
         <button
           onClick={() => {
-            if (state.adminPreview) {
+            if (state.adminPreview || sessionStorage.getItem("lp_admin_preview") === "1") {
+              sessionStorage.removeItem("lp_admin_preview");
               setAppState(s => ({ ...s, adminPreview: false, adminPreviewRole: null }));
               goTo("admin");
             } else {

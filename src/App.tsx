@@ -180,6 +180,7 @@ function AppInner() {
       {/* back to admin */}
       <button
         onClick={() => {
+          sessionStorage.removeItem("lp_admin_preview");
           setState(s => ({ ...s, adminPreview: false, adminPreviewRole: null }));
           goTo("admin");
         }}

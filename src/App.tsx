@@ -61,12 +61,15 @@ function AppInner() {
   const { role, loading: authLoading, isBetaTester } = useAuth();
   const [fading, setFading] = useState(false);
   const [state, setState] = useState<AppState>(loadInitialState);
-  // Read early access flag injected by server into window.__EARLY_ACCESS__
-  // Falls back to /api/config fetch if the window global isn't present
-  const [earlyAccess, setEarlyAccess] = useState<boolean>(
-    () => !!(window as unknown as Record<string, unknown>).__EARLY_ACCESS__
-  );
-  const [configLoaded, setConfigLoaded] = useState(
+  // Read early access flag injected by server into window.__EARLY_ACCESS__.
+  // Default to true (early access ON) as a fail-safe so the main app never
+  // flashes while we're still determining the config state.
+  const [earlyAccess, setEarlyAccess] = useState<boolean>(() => {
+    const w = window as unknown as Record<string, unknown>;
+    if (typeof w.__EARLY_ACCESS__ !== 'undefined') return !!w.__EARLY_ACCESS__;
+    return true; // fail-safe: assume early access until server says otherwise
+  });
+  const [configLoaded, setConfigLoaded] = useState<boolean>(
     () => typeof (window as unknown as Record<string, unknown>).__EARLY_ACCESS__ !== 'undefined'
   );
 
@@ -77,7 +80,7 @@ function AppInner() {
     fetch("/api/config")
       .then(r => r.json())
       .then(d => { setEarlyAccess(!!d.earlyAccess); })
-      .catch(() => {})
+      .catch(() => { setEarlyAccess(false); }) // if fetch fails, open the app
       .finally(() => setConfigLoaded(true));
   }, []);
 
@@ -125,7 +128,17 @@ function AppInner() {
     return null;
   }
 
-  if (configLoaded && earlyAccess && !isAdminPath && !isSignInPath && !state.adminPreview && !isBetaTester && (authLoading || !isAdminOrStaff)) {
+  // While we don't yet know the early-access state, show a blank navy screen
+  // so the main app never flashes through before the gate evaluates.
+  if (!configLoaded) {
+    return (
+      <AppContext.Provider value={{ goTo, state, setState }}>
+        <div className="screen" style={{ background: "#0E1F40" }} />
+      </AppContext.Provider>
+    );
+  }
+
+  if (earlyAccess && !isAdminPath && !isSignInPath && !state.adminPreview && !isBetaTester && (authLoading || !isAdminOrStaff)) {
     return (
       <AppContext.Provider value={{ goTo, state, setState }}>
         <div className="screen">

@@ -2417,8 +2417,9 @@ app.get('*', (req, res) => {
     html = html.replace('</head>', inject + '\n</head>');
     res.setHeader('Content-Type', 'text/html');
     res.send(html);
-  } catch {
-    res.sendFile(indexHtml);
+  } catch (err) {
+    // Never serve unmodified HTML — that omits window.__EARLY_ACCESS__ and causes a flash.
+    res.status(503).send('<h1>App loading…</h1><p>Please refresh in a moment.</p>');
   }
 });
 

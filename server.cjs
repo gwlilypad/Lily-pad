@@ -2400,33 +2400,271 @@ app.get('/staff-login', (req, res) => {
 
 // ── Serve built React/Vite app ─────────────────────────────────────────────────
 const DIST = path.join(__dirname, 'dist');
-// index:false so index.html is NOT auto-served — the SPA fallback below
-// injects window.__EARLY_ACCESS__ into every HTML response instead
+// index:false so index.html is NOT auto-served — the SPA fallback below handles it
 app.use(express.static(DIST, { index: false }));
 
-// SPA fallback — inject server-side flags into index.html so React reads them
-// instantly (no async fetch needed, no race conditions).
-// Cache-Control: no-store ensures mobile browsers never serve a cached copy
-// that is missing the window.__EARLY_ACCESS__ injection.
+// ── Server-rendered early access page (pure HTML — no React bundle sent) ───────
+// When EARLY_ACCESS=true the browser never receives the main app at all.
+function buildEarlyAccessHtml(logoUrl) {
+  return '<!DOCTYPE html>\n' +
+'<html lang="en">\n' +
+'<head>\n' +
+'<meta charset="UTF-8">\n' +
+'<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">\n' +
+'<title>lily pad \u2014 Parking Marketplace</title>\n' +
+'<link rel="preconnect" href="https://fonts.googleapis.com">\n' +
+'<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n' +
+'<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&display=swap" rel="stylesheet">\n' +
+'<style>\n' +
+'*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}\n' +
+'html,body{height:100%;overflow:hidden;background:#0E1F40}\n' +
+'body{font-family:"DM Sans",sans-serif;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center}\n' +
+'#app{width:100%;max-width:430px;height:100dvh;height:100vh;display:flex;flex-direction:column;overflow:hidden;position:relative}\n' +
+'.screen{position:absolute;inset:0;display:flex;flex-direction:column;transition:opacity .22s,transform .22s;will-change:opacity,transform}\n' +
+'.screen.hidden{opacity:0;pointer-events:none;transform:translateY(12px)}\n' +
+'.green-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:16px 40px;border-radius:100px;background:#8DD63F;border:none;color:#0E1F40;font-family:"DM Sans",sans-serif;font-size:15px;font-weight:700;cursor:pointer;transition:opacity .15s}\n' +
+'.green-btn:active{opacity:.85}\n' +
+'.pill-input{width:100%;padding:14px 20px;border-radius:100px;border:1.5px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:#fff;font-family:"DM Sans",sans-serif;font-size:16px;font-weight:400;outline:none;transition:border-color .18s}\n' +
+'.pill-input::placeholder{color:rgba(255,255,255,.35)}\n' +
+'.pill-input:focus{border-color:rgba(141,214,63,.6)}\n' +
+'.role-btn{padding:11px 30px;border-radius:100px;border:1.5px solid rgba(255,255,255,.20);background:rgba(255,255,255,.06);color:rgba(255,255,255,.60);font-family:"DM Sans",sans-serif;font-size:15px;font-weight:400;cursor:pointer;transition:all .16s}\n' +
+'.role-btn.on{border-color:#8DD63F;background:#8DD63F;color:#0E1F40;font-weight:700}\n' +
+'.continue-btn{width:100%;padding:15px 0;border-radius:100px;background:#fff;color:#0E1F40;font-family:"DM Sans",sans-serif;font-size:15px;font-weight:700;border:none;cursor:pointer;transition:opacity .15s}\n' +
+'.continue-btn:disabled{opacity:.45;cursor:not-allowed}\n' +
+'.continue-btn:active{opacity:.85}\n' +
+'@keyframes slide-in{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}\n' +
+'.animate{animation:slide-in .28s cubic-bezier(.22,.68,0,1.2) both}\n' +
+'@keyframes fade-in{from{opacity:0}to{opacity:1}}\n' +
+'</style>\n' +
+'</head>\n' +
+'<body>\n' +
+'<div id="app">\n' +
+
+// ── WELCOME ──────────────────────────────────────────────────────────────────
+'<div id="s-welcome" class="screen">\n' +
+'  <div id="logo-zone" style="flex-shrink:0;display:flex;justify-content:center;padding-top:52px;overflow:hidden;position:relative">\n' +
+'    <img id="logo-img" src="' + logoUrl + '" alt="lily pad" draggable="false"\n' +
+'      style="width:86%;max-width:389px;height:auto;cursor:grab;user-select:none;-webkit-user-select:none;will-change:transform;transition:transform .55s cubic-bezier(.34,1.56,.64,1)">\n' +
+'  </div>\n' +
+'  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 32px 80px;text-align:center">\n' +
+'    <h1 style="font-size:26px;font-weight:800;color:#fff;margin:0 0 10px;letter-spacing:-.02em;line-height:1.3">Coming to Houston Soon.</h1>\n' +
+'    <p style="font-size:15px;font-weight:400;color:rgba(255,255,255,.75);margin:0 0 28px;letter-spacing:-.01em">Start Earning. Start Parking.</p>\n' +
+'    <button class="green-btn" onclick="showForm()">Join the Pre-Launch</button>\n' +
+'  </div>\n' +
+'</div>\n' +
+
+// ── FORM ─────────────────────────────────────────────────────────────────────
+'<div id="s-form" class="screen hidden">\n' +
+'  <div style="flex-shrink:0;overflow:hidden;height:200px;position:relative">\n' +
+'    <img src="' + logoUrl + '" alt="lily pad"\n' +
+'      style="width:160%;max-width:700px;height:auto;position:absolute;left:50%;top:50%;transform:translate(-50%,-46%);pointer-events:none">\n' +
+'    <button onclick="stepBack()" style="position:absolute;top:18px;left:18px;background:rgba(255,255,255,.10);border:none;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#fff;font-size:16px;font-family:inherit">\u2190</button>\n' +
+'  </div>\n' +
+'  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 28px 16px;width:100%">\n' +
+'    <div id="q-card" class="animate" style="width:100%;max-width:400px;display:flex;flex-direction:column;align-items:center;text-align:center">\n' +
+'      <p id="q-step" style="font-size:10px;font-weight:400;letter-spacing:.18em;color:rgba(255,255,255,.30);text-transform:uppercase;margin:0 0 14px"></p>\n' +
+'      <p id="q-text" style="font-size:24px;font-weight:200;color:#fff;line-height:1.3;margin:0 0 28px;letter-spacing:-.01em"></p>\n' +
+'      <div id="q-role" style="display:none;flex-direction:column;align-items:center;gap:10px;width:100%">\n' +
+'        <div style="display:flex;gap:10px">\n' +
+'          <button class="role-btn" id="btn-driver" onclick="toggleRole(\'driver\')">Driver</button>\n' +
+'          <button class="role-btn" id="btn-host" onclick="toggleRole(\'host\')">Host</button>\n' +
+'        </div>\n' +
+'        <p style="font-size:11.5px;color:rgba(255,255,255,.32);margin:0;font-style:italic">You can select both!</p>\n' +
+'      </div>\n' +
+'      <div id="q-input" style="display:none;width:100%">\n' +
+'        <input id="the-input" class="pill-input" autocomplete="off"\n' +
+'          oninput="onInput()" onkeydown="if(event.key===\'Enter\')advance()">\n' +
+'        <div id="pw-reqs" style="display:none;margin-top:14px;padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);text-align:left">\n' +
+'          <div style="font-size:9px;font-weight:700;color:rgba(255,255,255,.28);letter-spacing:.12em;text-transform:uppercase;margin-bottom:10px">Password must include</div>\n' +
+'          <div id="pw-list" style="display:flex;flex-direction:column;gap:7px"></div>\n' +
+'        </div>\n' +
+'      </div>\n' +
+'      <p id="q-error" style="font-size:12.5px;color:#ff7070;font-weight:600;margin:10px 0 0;min-height:18px"></p>\n' +
+'      <div id="q-cta" style="width:100%;padding-top:18px;animation:fade-in .18s ease both">\n' +
+'        <button class="continue-btn" id="continue-btn" onclick="advance()">Continue</button>\n' +
+'      </div>\n' +
+'    </div>\n' +
+'  </div>\n' +
+'</div>\n' +
+
+// ── THANKS ───────────────────────────────────────────────────────────────────
+'<div id="s-thanks" class="screen hidden">\n' +
+'  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:0 32px">\n' +
+'    <img src="' + logoUrl + '" alt="lily pad" style="width:175px;height:auto">\n' +
+'    <div style="width:60px;height:60px;border-radius:50%;background:rgba(141,214,63,.11);display:flex;align-items:center;justify-content:center">\n' +
+'      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#8DD63F" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>\n' +
+'    </div>\n' +
+'    <div style="text-align:center">\n' +
+'      <h1 style="font-size:26px;font-weight:800;color:#fff;margin:0 0 10px;letter-spacing:-.03em;line-height:1.2">You\'re on the list!</h1>\n' +
+'      <p style="font-size:14.5px;color:rgba(255,255,255,.50);margin:0;line-height:1.65;max-width:300px">We\'ll reach out as soon as your lily pad account is ready.</p>\n' +
+'    </div>\n' +
+'  </div>\n' +
+'</div>\n' +
+
+'</div>\n' + // #app
+
+'<script>\n' +
+'var QUESTIONS=[{id:"role",text:"I\'m signing up as a\u2026",type:"role"},{id:"name",text:"What\'s your name?",type:"text",ph:"Full name"},{id:"phone",text:"Your phone number?",type:"tel",ph:"(555) 000-0000"},{id:"email",text:"What\'s your email?",type:"email",ph:"you@email.com"},{id:"password",text:"Create a password.",type:"password",ph:"Create a strong password"}];\n' +
+'var cur=0,ans={},roles=new Set(),loading=false;\n' +
+'function show(id){["s-welcome","s-form","s-thanks"].forEach(function(s){var el=document.getElementById(s);el.classList.toggle("hidden",s!==id);});}\n' +
+'function showForm(){show("s-form");renderQ();}\n' +
+'function showThanks(){show("s-thanks");}\n' +
+'function stepBack(){if(cur===0){show("s-welcome");}else{cur--;renderQ();}}\n' +
+'function renderQ(){\n' +
+'  var q=QUESTIONS[cur];\n' +
+'  document.getElementById("q-step").textContent=(cur+1)+" of "+QUESTIONS.length;\n' +
+'  document.getElementById("q-text").textContent=q.text;\n' +
+'  document.getElementById("q-error").textContent="";\n' +
+'  var card=document.getElementById("q-card");card.classList.remove("animate");void card.offsetWidth;card.classList.add("animate");\n' +
+'  var isRole=q.type==="role",isInput=q.type!=="role";\n' +
+'  document.getElementById("q-role").style.display=isRole?"flex":"none";\n' +
+'  document.getElementById("q-input").style.display=isInput?"block":"none";\n' +
+'  if(isInput){\n' +
+'    var inp=document.getElementById("the-input");\n' +
+'    inp.type=q.type==="tel"?"tel":q.type==="email"?"email":q.type==="password"?"password":"text";\n' +
+'    inp.placeholder=q.ph||"";\n' +
+'    inp.autocomplete=q.type==="password"?"new-password":q.type==="email"?"email":q.type==="tel"?"tel":"name";\n' +
+'    if(q.type==="password"){inp.value="";}else{inp.value=ans[q.id]||"";}\n' +
+'    document.getElementById("pw-reqs").style.display="none";\n' +
+'    setTimeout(function(){inp.focus();},60);\n' +
+'  }\n' +
+'  updateCta();\n' +
+'}\n' +
+'function toggleRole(id){\n' +
+'  if(roles.has(id))roles.delete(id);else roles.add(id);\n' +
+'  document.getElementById("btn-driver").classList.toggle("on",roles.has("driver"));\n' +
+'  document.getElementById("btn-host").classList.toggle("on",roles.has("host"));\n' +
+'  document.getElementById("q-error").textContent="";\n' +
+'  updateCta();\n' +
+'}\n' +
+'function onInput(){\n' +
+'  document.getElementById("q-error").textContent="";\n' +
+'  var q=QUESTIONS[cur];\n' +
+'  if(q.type==="password"){\n' +
+'    var val=document.getElementById("the-input").value;\n' +
+'    if(val.length>0){showPwReqs(val);}else{document.getElementById("pw-reqs").style.display="none";}\n' +
+'  }\n' +
+'  updateCta();\n' +
+'}\n' +
+'function updateCta(){\n' +
+'  var q=QUESTIONS[cur],btn=document.getElementById("continue-btn"),can=false;\n' +
+'  if(q.type==="role"){can=roles.size>0;}\n' +
+'  else if(q.type==="password"){var v=document.getElementById("the-input").value;can=v.length>0&&validatePw(v,ans["email"]||"",ans["name"]||"").allValid;}\n' +
+'  else{can=(document.getElementById("the-input").value.trim().length>0);}\n' +
+'  btn.disabled=!can;\n' +
+'  btn.textContent=cur===QUESTIONS.length-1?(loading?"Joining\u2026":"Join the Pre-Launch"):"Continue";\n' +
+'}\n' +
+'function validatePw(pw,email,name){\n' +
+'  var length=pw.length>=8,capital=/[A-Z]/.test(pw),number=/[0-9]/.test(pw);\n' +
+'  var lp=pw.toLowerCase(),fn=(name.split(" ")[0]||"").toLowerCase(),ln=(name.split(" ").slice(1).join(" ")||"").toLowerCase(),em=email.toLowerCase();\n' +
+'  var notIdentity=!(lp.includes(fn)&&fn.length>1)&&!(ln.length>1&&lp.includes(ln))&&!(em.length>1&&lp.includes(em.split("@")[0]));\n' +
+'  return{length:length,capital:capital,number:number,notIdentity:notIdentity,allValid:length&&capital&&number&&notIdentity};\n' +
+'}\n' +
+'function showPwReqs(val){\n' +
+'  var box=document.getElementById("pw-reqs"),list=document.getElementById("pw-list");\n' +
+'  box.style.display="block";\n' +
+'  var res=validatePw(val,ans["email"]||"",ans["name"]||"");\n' +
+'  var rules=[{key:"length",label:"At least 8 characters"},{key:"capital",label:"1 capital letter (A-Z)"},{key:"number",label:"1 number (0-9)"},{key:"notIdentity",label:"Not your name or email"}];\n' +
+'  list.innerHTML=rules.map(function(r){\n' +
+'    var ok=res[r.key];\n' +
+'    return \'<div style="display:flex;align-items:center;gap:8px"><div style="width:16px;height:16px;border-radius:50%;flex-shrink:0;background:\'+( ok?"#8DD63F":"rgba(255,255,255,.10)")+\';display:flex;align-items:center;justify-content:center">\'+(ok?\'<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#0E1F40" stroke-width="3.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>\':\'<div style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,.35)"></div>\')+\'</div><span style="font-size:12.5px;font-weight:\'+(ok?"600":"400")+\';color:\'+(ok?"#fff":"rgba(255,255,255,.45)")+\'">\'+ r.label +\'</span></div>\';\n' +
+'  }).join("");\n' +
+'}\n' +
+'function advance(){\n' +
+'  if(loading)return;\n' +
+'  var q=QUESTIONS[cur],err="";\n' +
+'  if(q.type==="role"){if(roles.size===0){err="Please select at least one.";}else{var arr=Array.from(roles);ans[q.id]=arr.length===2?"both":arr[0];}}\n' +
+'  else{\n' +
+'    var val=document.getElementById("the-input").value.trim();\n' +
+'    if(!val){err="This field is required.";}\n' +
+'    else if(q.type==="email"&&!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(val)){err="Please enter a valid email address.";}\n' +
+'    else if(q.type==="password"&&!validatePw(val,ans["email"]||"",ans["name"]||"").allValid){err="Password doesn\'t meet the requirements.";}\n' +
+'    else if(q.type==="tel"&&val.replace(/\\D/g,"").length<10){err="Please enter a valid phone number.";}\n' +
+'    else{ans[q.id]=val;}\n' +
+'  }\n' +
+'  if(err){document.getElementById("q-error").textContent=err;return;}\n' +
+'  var next=cur+1;\n' +
+'  if(next>=QUESTIONS.length){doSubmit();}else{cur=next;renderQ();}\n' +
+'}\n' +
+'async function doSubmit(){\n' +
+'  loading=true;updateCta();\n' +
+'  document.getElementById("q-error").textContent="";\n' +
+'  try{\n' +
+'    var res=await fetch("/api/early-access/signup",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:ans["name"]||"",email:ans["email"]||"",password:ans["password"]||"",phone:ans["phone"]||"",role:ans["role"]||"driver"})});\n' +
+'    var data=await res.json();\n' +
+'    if(!res.ok){document.getElementById("q-error").textContent=data.error||"Something went wrong. Try again.";loading=false;updateCta();return;}\n' +
+'    showThanks();\n' +
+'  }catch(e){\n' +
+'    document.getElementById("q-error").textContent="Network error. Please try again.";\n' +
+'    loading=false;updateCta();\n' +
+'  }\n' +
+'}\n' +
+// Drag-to-admin: tap logo 7 times quickly
+'var _tapCount=0,_tapTimer=null;\n' +
+'document.getElementById("logo-img").addEventListener("click",function(){\n' +
+'  _tapCount++;clearTimeout(_tapTimer);\n' +
+'  _tapTimer=setTimeout(function(){_tapCount=0;},1800);\n' +
+'  if(_tapCount>=7){window.location.href="/admin";}\n' +
+'});\n' +
+'// drag-to-admin gesture on logo\n' +
+'(function(){\n' +
+'  var img=document.getElementById("logo-img"),startX=0,active=false,THRESH=150;\n' +
+'  function getX(e){return e.touches?e.touches[0].clientX:e.clientX;}\n' +
+'  img.addEventListener("mousedown",function(e){e.preventDefault();startX=e.clientX;active=true;img.style.cursor="grabbing";});\n' +
+'  img.addEventListener("touchstart",function(e){startX=e.touches[0].clientX;active=true;},{passive:true});\n' +
+'  window.addEventListener("mousemove",function(e){if(!active)return;var d=Math.min(Math.max(0,e.clientX-startX),THRESH+16);img.style.transition="none";img.style.transform="translateX("+d+"px)";if(d>=THRESH){img.style.filter="drop-shadow(0 0 22px #8DD63F) drop-shadow(0 0 8px #8DD63FAA)";}else{img.style.filter="none";}},{passive:true});\n' +
+'  window.addEventListener("touchmove",function(e){if(!active)return;var d=Math.min(Math.max(0,e.touches[0].clientX-startX),THRESH+16);img.style.transition="none";img.style.transform="translateX("+d+"px)";if(d>=THRESH){img.style.filter="drop-shadow(0 0 22px #8DD63F)";}else{img.style.filter="none";}},{passive:true});\n' +
+'  function end(){if(!active)return;active=false;img.style.cursor="grab";\n' +
+'    var cur=parseFloat(img.style.transform.replace("translateX(","").replace("px)",""))||0;\n' +
+'    if(cur>=THRESH){setTimeout(function(){window.location.href="/admin";},200);}else{img.style.transition="transform .55s cubic-bezier(.34,1.56,.64,1)";img.style.transform="translateX(0px)";img.style.filter="none";}\n' +
+'  }\n' +
+'  window.addEventListener("mouseup",end);\n' +
+'  window.addEventListener("touchend",end);\n' +
+'  window.addEventListener("touchcancel",end);\n' +
+'})();\n' +
+'</script>\n' +
+'</body>\n' +
+'</html>';
+}
+
+// SPA fallback — when EARLY_ACCESS=true serve the early access page directly
+// (no React bundle sent to browser). Admin/auth paths always get the React app.
+const REACT_ONLY_PATHS = ['/admin', '/signin', '/forgot', '/verify'];
 app.get('*', (req, res) => {
-  const indexHtml = path.join(DIST, 'index.html');
-  if (!fs.existsSync(indexHtml)) {
-    return res.status(503).send('<h1>Building…</h1><p>The app is being compiled. Restart once <code>npm run build</code> completes.</p>');
-  }
-  try {
-    let html = fs.readFileSync(indexHtml, 'utf8');
-    // Inject at the very top of <head> so it runs before any other script
-    const inject = `<script>window.__EARLY_ACCESS__=${EARLY_ACCESS ? 'true' : 'false'};</script>`;
-    html = html.replace('<head>', '<head>\n' + inject);
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    // Prevent all caching of the HTML shell — it contains server-injected flags
+  const noCacheHeaders = () => {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
+  };
+
+  // ── Early access: serve pure HTML, never the React bundle ──────────────────
+  const needsReact = REACT_ONLY_PATHS.some(p => req.path.startsWith(p));
+  if (EARLY_ACCESS && !needsReact) {
+    let logoUrl = '/assets/lilypad-logo-full-D8TgQcmp.png'; // known build hash
+    try {
+      const assetFiles = fs.readdirSync(path.join(DIST, 'assets'));
+      const f = assetFiles.find(n => n.startsWith('lilypad-logo-full') && n.endsWith('.png'));
+      if (f) logoUrl = '/assets/' + f;
+    } catch {}
+    noCacheHeaders();
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.send(buildEarlyAccessHtml(logoUrl));
+  }
+
+  // ── Normal React app ────────────────────────────────────────────────────────
+  const indexHtml = path.join(DIST, 'index.html');
+  if (!fs.existsSync(indexHtml)) {
+    return res.status(503).send('<h1>Building\u2026</h1><p>Restart once <code>npm run build</code> completes.</p>');
+  }
+  try {
+    let html = fs.readFileSync(indexHtml, 'utf8');
+    const inject = '<script>window.__EARLY_ACCESS__=false;</script>';
+    html = html.replace('<head>', '<head>\n' + inject);
+    noCacheHeaders();
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(html);
-  } catch (err) {
-    // Never serve unmodified HTML — that omits window.__EARLY_ACCESS__ and causes a flash.
-    res.status(503).send('<h1>App loading…</h1><p>Please refresh in a moment.</p>');
+  } catch {
+    res.status(503).send('<h1>App loading\u2026</h1><p>Please refresh in a moment.</p>');
   }
 });
 

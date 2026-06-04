@@ -2405,7 +2405,9 @@ const DIST = path.join(__dirname, 'dist');
 app.use(express.static(DIST, { index: false }));
 
 // SPA fallback — inject server-side flags into index.html so React reads them
-// instantly (no async fetch needed, no race conditions)
+// instantly (no async fetch needed, no race conditions).
+// Cache-Control: no-store ensures mobile browsers never serve a cached copy
+// that is missing the window.__EARLY_ACCESS__ injection.
 app.get('*', (req, res) => {
   const indexHtml = path.join(DIST, 'index.html');
   if (!fs.existsSync(indexHtml)) {
@@ -2413,9 +2415,14 @@ app.get('*', (req, res) => {
   }
   try {
     let html = fs.readFileSync(indexHtml, 'utf8');
+    // Inject at the very top of <head> so it runs before any other script
     const inject = `<script>window.__EARLY_ACCESS__=${EARLY_ACCESS ? 'true' : 'false'};</script>`;
-    html = html.replace('</head>', inject + '\n</head>');
-    res.setHeader('Content-Type', 'text/html');
+    html = html.replace('<head>', '<head>\n' + inject);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    // Prevent all caching of the HTML shell — it contains server-injected flags
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     res.send(html);
   } catch (err) {
     // Never serve unmodified HTML — that omits window.__EARLY_ACCESS__ and causes a flash.

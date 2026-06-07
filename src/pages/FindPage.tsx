@@ -3973,7 +3973,74 @@ export default function FindPage() {
               </div>
             </div>
 
-            {/* ── WHITE ROUNDED SHEET ── */}
+            {/* ── EARNINGS SUMMARY (on navy) ── */}
+            <div style={{ padding: "0 20px 4px", flexShrink: 0 }}>
+              <div style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,0.32)", letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>
+                {earningsRange === 'D' ? "Today" : earningsRange === 'W' ? "This Week" : earningsRange === 'M' ? "This Month" : earningsRange === 'Y' ? "This Year" : "All Time"}
+              </div>
+              <div style={{ fontSize: 38, fontWeight: 800, color: "#fff", letterSpacing: -1.8, lineHeight: 1 }}>
+                ${(scrubPt ? scrubPt.earnings : totalEarnings).toFixed(2)}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 5 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: DASH_GREEN }}>
+                  +{bookingCount} booking{bookingCount !== 1 ? 's' : ''}
+                </span>
+                {bookingCount === 0 && (
+                  <span style={{ fontSize: 11, color: "rgba(255,255,255,0.28)", fontWeight: 400 }}>· List a spot to start earning</span>
+                )}
+              </div>
+            </div>
+
+            {/* ── CHART (full-bleed on navy) ── */}
+            <div style={{ width: "100%", touchAction: "none", flexShrink: 0, marginTop: 12 }}>
+              <svg
+                viewBox={`0 0 ${CW} ${CH}`}
+                style={{ width: "100%", display: "block", userSelect: "none" }}
+                onPointerDown={onCDown}
+                onPointerMove={onCMove}
+                onPointerUp={() => setChartScrubIdx(null)}
+                onPointerLeave={() => setChartScrubIdx(null)}
+              >
+                <defs>
+                  <linearGradient id="hEarnGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={DASH_GREEN} stopOpacity="0.24"/>
+                    <stop offset="90%" stopColor={DASH_GREEN} stopOpacity="0.01"/>
+                  </linearGradient>
+                </defs>
+                {areaPath && <path d={areaPath} fill="url(#hEarnGrad)"/>}
+                {linePath && <path d={linePath} fill="none" stroke={DASH_GREEN} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>}
+                {labelIdxs.map(i => (
+                  <text key={i} x={pts[i]?.x ?? 0} y={CH - 7}
+                    textAnchor="middle" fontSize="8" fill="rgba(255,255,255,0.22)"
+                    fontFamily="DM Sans,sans-serif" fontWeight="600"
+                  >{pts[i]?.label ?? ''}</text>
+                ))}
+                {scrubPt && (
+                  <>
+                    <line x1={scrubPt.x} y1={PT} x2={scrubPt.x} y2={PT + ch}
+                      stroke="rgba(255,255,255,0.28)" strokeWidth="1"/>
+                    <circle cx={scrubPt.x} cy={scrubPt.y} r="3.5" fill={DASH_GREEN} stroke="#0a1628" strokeWidth="2"/>
+                  </>
+                )}
+              </svg>
+
+              {/* Range tabs (on navy) */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 2, padding: "2px 16px 14px" }}>
+                {(['D','W','M','Y','ALL'] as const).map(r => (
+                  <button key={r} onClick={() => { setEarningsRange(r); setChartScrubIdx(null); }} style={{
+                    padding: "5px 13px", borderRadius: 20,
+                    background: earningsRange === r ? "rgba(255,255,255,0.14)" : "transparent",
+                    border: "none",
+                    color: earningsRange === r ? "#fff" : "rgba(255,255,255,0.32)",
+                    fontSize: 12, fontWeight: earningsRange === r ? 700 : 400,
+                    cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+                    transition: "all 0.15s",
+                  }}>{r}</button>
+                ))}
+              </div>
+            </div>
+
+            {/* ── WHITE CARD — buttons only ── */}
             <div style={{
               flex: 1, overflowY: "auto",
               background: "#F4F6FA",
@@ -3982,85 +4049,11 @@ export default function FindPage() {
               paddingBottom: "calc(env(safe-area-inset-bottom) + 20px)",
             }}>
               {/* Handle */}
-              <div style={{ display: "flex", justifyContent: "center", paddingTop: 10, paddingBottom: 2 }}>
+              <div style={{ display: "flex", justifyContent: "center", paddingTop: 10, paddingBottom: 14 }}>
                 <div style={{ width: 34, height: 4, borderRadius: 2, background: "rgba(14,31,64,0.12)" }}/>
               </div>
 
-              {/* ── EARNINGS SUMMARY ── */}
-              <div style={{ padding: "14px 20px 4px" }}>
-                <div style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(14,31,64,0.38)", letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>
-                  {earningsRange === 'D' ? "Today" : earningsRange === 'W' ? "This Week" : earningsRange === 'M' ? "This Month" : earningsRange === 'Y' ? "This Year" : "All Time"}
-                </div>
-                <div style={{ fontSize: 38, fontWeight: 800, color: DASH_NAVY, letterSpacing: -1.8, lineHeight: 1 }}>
-                  ${(scrubPt ? scrubPt.earnings : totalEarnings).toFixed(2)}
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 5 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: "#3a6b0f" }}>
-                    +{bookingCount} booking{bookingCount !== 1 ? 's' : ''}
-                  </span>
-                  {bookingCount === 0 && (
-                    <span style={{ fontSize: 11, color: "rgba(14,31,64,0.35)", fontWeight: 400 }}>· List a spot to start earning</span>
-                  )}
-                </div>
-              </div>
-
-              {/* ── CHART CARD (dark navy embedded in white sheet) ── */}
-              <div style={{ margin: "14px 16px 0", borderRadius: 18, overflow: "hidden", background: "#0a1628", touchAction: "none" }}>
-                <svg
-                  viewBox={`0 0 ${CW} ${CH}`}
-                  style={{ width: "100%", display: "block", userSelect: "none" }}
-                  onPointerDown={onCDown}
-                  onPointerMove={onCMove}
-                  onPointerUp={() => setChartScrubIdx(null)}
-                  onPointerLeave={() => setChartScrubIdx(null)}
-                >
-                  <defs>
-                    <linearGradient id="hEarnGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={DASH_GREEN} stopOpacity="0.28"/>
-                      <stop offset="90%" stopColor={DASH_GREEN} stopOpacity="0.01"/>
-                    </linearGradient>
-                  </defs>
-                  {areaPath && <path d={areaPath} fill="url(#hEarnGrad)"/>}
-                  {linePath && <path d={linePath} fill="none" stroke={DASH_GREEN} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>}
-                  {labelIdxs.map(i => (
-                    <text key={i} x={pts[i]?.x ?? 0} y={CH - 7}
-                      textAnchor="middle" fontSize="8" fill="rgba(255,255,255,0.22)"
-                      fontFamily="DM Sans,sans-serif" fontWeight="600"
-                    >{pts[i]?.label ?? ''}</text>
-                  ))}
-                  {scrubPt && (
-                    <>
-                      <line x1={scrubPt.x} y1={PT} x2={scrubPt.x} y2={PT + ch}
-                        stroke="rgba(255,255,255,0.30)" strokeWidth="1"/>
-                      <circle cx={scrubPt.x} cy={scrubPt.y} r="3.5" fill={DASH_GREEN} stroke="#0a1628" strokeWidth="2"/>
-                    </>
-                  )}
-                </svg>
-
-                {/* Range tabs — inside the dark card */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 2, padding: "2px 16px 12px" }}>
-                  {(['D','W','M','Y','ALL'] as const).map(r => (
-                    <button key={r} onClick={() => { setEarningsRange(r); setChartScrubIdx(null); }} style={{
-                      padding: "5px 13px", borderRadius: 20,
-                      background: earningsRange === r ? "rgba(255,255,255,0.14)" : "transparent",
-                      border: "none",
-                      color: earningsRange === r ? "#fff" : "rgba(255,255,255,0.32)",
-                      fontSize: 12, fontWeight: earningsRange === r ? 700 : 400,
-                      cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
-                      transition: "all 0.15s",
-                    }}>{r}</button>
-                  ))}
-                </div>
-              </div>
-
-              {/* ── SECTION LABEL ── */}
-              <div style={{ padding: "22px 20px 8px" }}>
-                <div style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(14,31,64,0.38)", letterSpacing: 1, textTransform: "uppercase" }}>
-                  Quick Links
-                </div>
-              </div>
-
-              {/* ── ACTION ROWS (light bg, like Settings rows) ── */}
+              {/* Action rows */}
               <div style={{ margin: "0 16px", background: "#fff", borderRadius: 16, overflow: "hidden", border: "1px solid rgba(14,31,64,0.07)" }}>
                 {actions.map((a, idx) => (
                   <div key={a.label}>

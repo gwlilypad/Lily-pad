@@ -170,7 +170,7 @@ export default function HomePage() {
         </div>
 
         {/* Bottom content: headline + button + FOR DRIVERS */}
-        <div style={{ width: "100%", paddingBottom: 22, display: "flex", flexDirection: "column", alignItems: "center" }}>
+        <div style={{ width: "100%", paddingBottom: "8vh", display: "flex", flexDirection: "column", alignItems: "center" }}>
           <h1 style={{
             textAlign: "center", margin: "0 0 20px",
             fontSize: 27, fontWeight: 800, color: "#fff",

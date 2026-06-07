@@ -49,11 +49,7 @@ export default function AccountPage() {
           <div className="thumb-nav-row"><span className="thumb-nav-lbl">Earnings</span><span className="thumb-nav-arrow">›</span></div>
         </div>
 
-        <span className="section-header">Settings</span>
-        <div className="thumb-nav-card">
-          <div className="thumb-nav-row"><span className="thumb-nav-lbl">Notifications</span><span className="thumb-nav-arrow">›</span></div>
-          <div className="thumb-nav-row"><span className="thumb-nav-lbl">Payment info</span><span className="thumb-nav-arrow">›</span></div>
-          <div className="thumb-nav-row"><span className="thumb-nav-lbl">Privacy & terms</span><span className="thumb-nav-arrow">›</span></div>
+        <div className="thumb-nav-card" style={{ marginTop: 16 }}>
           <div className="thumb-nav-row" onClick={handleSignOut}><span className="thumb-nav-lbl" style={{ color: "rgba(229,57,53,0.8)" }}>Sign out</span><span className="thumb-nav-arrow">›</span></div>
         </div>
       </div>

@@ -43,17 +43,10 @@ export default function DriverAccountPage() {
 
         <span className="section-header">Bookings</span>
         <div className="thumb-nav-card">
-          <div className="thumb-nav-row" onClick={() => goTo("find")}><span className="thumb-nav-lbl">Find a spot</span><span className="thumb-nav-arrow">›</span></div>
-          <div className="thumb-nav-row" onClick={() => goTo("bookings")}><span className="thumb-nav-lbl">Upcoming bookings</span><span className="thumb-nav-arrow">›</span></div>
           <div className="thumb-nav-row" onClick={() => goTo("bookings")}><span className="thumb-nav-lbl">Past bookings</span><span className="thumb-nav-arrow">›</span></div>
-          <div className="thumb-nav-row"><span className="thumb-nav-lbl">Favorites</span><span className="thumb-nav-arrow">›</span></div>
         </div>
 
-        <span className="section-header">Settings</span>
-        <div className="thumb-nav-card">
-          <div className="thumb-nav-row"><span className="thumb-nav-lbl">Notifications</span><span className="thumb-nav-arrow">›</span></div>
-          <div className="thumb-nav-row"><span className="thumb-nav-lbl">Payment methods</span><span className="thumb-nav-arrow">›</span></div>
-          <div className="thumb-nav-row"><span className="thumb-nav-lbl">Privacy & terms</span><span className="thumb-nav-arrow">›</span></div>
+        <div className="thumb-nav-card" style={{ marginTop: 16 }}>
           <div className="thumb-nav-row" onClick={handleSignOut}><span className="thumb-nav-lbl" style={{ color: "rgba(229,57,53,0.8)" }}>Sign out</span><span className="thumb-nav-arrow">›</span></div>
         </div>
       </div>

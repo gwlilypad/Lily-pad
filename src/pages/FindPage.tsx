@@ -1969,8 +1969,8 @@ export default function FindPage() {
     ? Math.max(-_acctMax, Math.min(0, acctTransY))
     : (acctOpen ? 0 : -_acctMax);
   const acctFullness   = Math.max(0, Math.min(1, (acctLiveTransY + _acctMax) / _acctMax));
-  const acctBgAlpha    = 0.93 + acctFullness * 0.07;
-  const acctBlurPx     = Math.round(6 + acctFullness * 20);
+  const acctBgAlpha    = 0.07 + acctFullness * 0.93;
+  const acctBlurPx     = Math.round(22 + acctFullness * 4);
   // Pointer-events guard: the account swipe-down should be grabbable whenever
   // its handle is visible at the top of the screen. The handle only slides up
   // out of frame after the bottom sheet passes the "half" snap on its way to

@@ -226,6 +226,7 @@ export default function PadDashboardPage() {
 
   const [openPadId, setOpenPadId] = useState<number | null>(null);
   const [pendingPauseId, setPendingPauseId] = useState<number | null>(null);
+  const [expandedBookingId, setExpandedBookingId] = useState<string | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
   // Rename state
@@ -516,188 +517,235 @@ export default function PadDashboardPage() {
         ) : !openPad ? (
           /* ── LIST VIEW ── */
           <>
-            {/* ── Booking Requests Section ── */}
-            {listerBookings.length > 0 && (() => {
-              const pending  = listerBookings.filter(b => b.status === "pending");
-              const recent   = listerBookings.filter(b => b.status === "approved" || b.status === "denied").slice(0, 5);
-              if (pending.length === 0 && recent.length === 0) return null;
-              return (
-                <div style={{ marginBottom: 18 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(14,31,64,0.45)", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 10 }}>
-                    Booking Requests
-                    {pending.length > 0 && (
-                      <span style={{ marginLeft: 8, background: "#f59e0b", color: "#fff", borderRadius: 100, padding: "2px 7px", fontSize: 10, fontWeight: 800 }}>{pending.length} new</span>
-                    )}
-                  </div>
-                  {[...pending, ...recent].map(bk => {
-                    const isPending  = bk.status === "pending";
-                    const isApproved = bk.status === "approved";
-                    const isDenied   = bk.status === "denied";
-                    const acting     = actingOn === bk.id;
-                    return (
-                      <div key={bk.id} style={{
-                        background: "#fff", borderRadius: 16, border: `1.5px solid ${isPending ? "rgba(251,191,36,0.45)" : isApproved ? "rgba(141,214,63,0.35)" : "rgba(14,31,64,0.08)"}`,
-                        padding: "14px 16px", marginBottom: 10,
-                        boxShadow: isPending ? "0 2px 12px rgba(251,191,36,0.10)" : "0 1px 6px rgba(14,31,64,0.05)",
-                      }}>
-                        {/* Status + date row */}
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                          <div style={{
-                            fontSize: 10, fontWeight: 800, letterSpacing: 0.5, textTransform: "uppercase",
-                            color: isPending ? "#f59e0b" : isApproved ? "#5a9e1a" : "rgba(14,31,64,0.35)",
-                            background: isPending ? "rgba(251,191,36,0.12)" : isApproved ? "rgba(141,214,63,0.12)" : "rgba(14,31,64,0.05)",
-                            border: `1px solid ${isPending ? "rgba(251,191,36,0.30)" : isApproved ? "rgba(141,214,63,0.30)" : "rgba(14,31,64,0.10)"}`,
-                            borderRadius: 20, padding: "3px 9px",
-                          }}>
-                            {isPending ? "● Awaiting your response" : isApproved ? "✓ Approved" : "✕ Denied"}
-                          </div>
-                          <span style={{ fontSize: 11, color: "rgba(14,31,64,0.38)", fontWeight: 500 }}>
-                            {new Date(bk.created_at).toLocaleDateString("en-US", { month:"short", day:"numeric" })}
-                          </span>
-                        </div>
-                        {/* Driver + spot */}
-                        <div style={{ fontSize: 14, fontWeight: 700, color: NAVY, marginBottom: 2 }}>{bk.driver_name}</div>
-                        <div style={{ fontSize: 12, color: "rgba(14,31,64,0.50)", marginBottom: 8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{bk.spot_address}</div>
-                        {/* Date / time / price chips */}
-                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: isPending ? 12 : 0 }}>
-                          {[
-                            { icon: "📅", val: fmtDt(bk.start_ts) },
-                            { icon: "⏰", val: `${fmtTm(bk.start_ts)} → ${fmtTm(bk.end_ts)}` },
-                            { icon: "💰", val: `$${Number(bk.total_price).toFixed(0)}` },
-                          ].map((chip, i) => (
-                            <div key={i} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(14,31,64,0.04)", borderRadius: 8, padding: "5px 9px", border: "1px solid rgba(14,31,64,0.07)" }}>
-                              <span style={{ fontSize: 11 }}>{chip.icon}</span>
-                              <span style={{ fontSize: 11, fontWeight: 600, color: NAVY }}>{chip.val}</span>
-                            </div>
-                          ))}
-                        </div>
-                        {/* Approve / Deny buttons — only for pending */}
-                        {isPending && (
-                          <div style={{ display: "flex", gap: 8 }}>
-                            <button
-                              disabled={acting}
-                              onClick={() => handleApprove(bk.id)}
-                              style={{ flex: 1, padding: "11px 0", borderRadius: 12, background: acting ? "rgba(141,214,63,0.06)" : "rgba(141,214,63,0.14)", border: "1px solid rgba(141,214,63,0.40)", color: "#5a9e1a", fontSize: 13, fontWeight: 700, cursor: acting ? "wait" : "pointer", fontFamily: "'DM Sans',sans-serif", opacity: acting ? 0.6 : 1 }}>
-                              {acting ? "…" : "✓ Approve"}
-                            </button>
-                            <button
-                              disabled={acting}
-                              onClick={() => handleDeny(bk.id)}
-                              style={{ flex: 1, padding: "11px 0", borderRadius: 12, background: acting ? "rgba(255,80,80,0.04)" : "rgba(255,80,80,0.08)", border: "1px solid rgba(255,80,80,0.22)", color: "#ef4444", fontSize: 13, fontWeight: 700, cursor: acting ? "wait" : "pointer", fontFamily: "'DM Sans',sans-serif", opacity: acting ? 0.6 : 1 }}>
-                              {acting ? "…" : "✕ Deny"}
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+            {/* ══ YOUR PADS ══ */}
+            <div style={{ marginBottom: 28 }}>
+              {/* Section header */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ width: 3, height: 16, borderRadius: 2, background: GREEN }} />
+                  <span style={{ fontSize: 12, fontWeight: 800, color: NAVY, letterSpacing: 0.3, textTransform: "uppercase" }}>Your Pads</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(14,31,64,0.38)", background: "rgba(14,31,64,0.06)", borderRadius: 100, padding: "2px 7px" }}>{pads.length}</span>
                 </div>
-              );
-            })()}
-
-            {(() => {
-              const totalBookings = listerBookings.length;
-              const activeCount = pads.filter(p => p.status === "active").length;
-
-              return (
-                <>
-                  {/* Stats grid */}
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 18 }}>
-                    {[
-                      { l: "Bookings", v: String(totalBookings), sub: "all time" },
-                      { l: "Active pads", v: `${activeCount}/${pads.length}`, sub: pads.length === 1 ? "listing" : "listings" },
-                    ].map(s => (
-                      <div key={s.l} style={{ background: "#fff", borderRadius: 14, padding: "11px 12px", border: "1px solid rgba(14,31,64,0.07)" }}>
-                        <div style={{ fontSize: 9.5, color: "rgba(14,31,64,0.32)", fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 4 }}>{s.l}</div>
-                        <div style={{ fontSize: 17, fontWeight: 800, color: NAVY, letterSpacing: -0.5, lineHeight: 1 }}>{s.v}</div>
-                        <div style={{ fontSize: 10, color: "rgba(14,31,64,0.40)", marginTop: 4 }}>{s.sub}</div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(14,31,64,0.45)", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 10 }}>
-                    Your pads
-                  </div>
-                </>
-              );
-            })()}
-
-            {sortedPads.map(pad => (
-              <div key={pad.id} onClick={() => setOpenPadId(pad.id)} style={{
-                background: "#fff", borderRadius: 18, border: "1px solid rgba(14,31,64,0.09)",
-                overflow: "hidden", marginBottom: 14,
-                boxShadow: "0 2px 12px rgba(14,31,64,0.06)", cursor: "pointer",
-                opacity: pad.status === "paused" ? 0.78 : 1,
-              }}>
-                <div style={{
-                  height: 130,
-                  background: `url(${pad.photoUrl}) center/cover, linear-gradient(135deg,rgba(141,214,63,0.15),rgba(14,31,64,0.08))`,
-                  position: "relative",
-                  filter: pad.status === "paused" ? "grayscale(0.4)" : "none",
-                }}>
-                  <div style={{ position: "absolute", top: 10, right: 10 }}>
-                    <StatusPill pad={pad} />
-                  </div>
-                  {pad.status !== "pending" && (
-                    <div style={{ position: "absolute", top: 10, left: 10, display: "flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.92)", borderRadius: 100, padding: "5px 8px 5px 10px", boxShadow: "0 2px 6px rgba(14,31,64,0.18)" }}>
-                      <span style={{ fontSize: 10, fontWeight: 700, color: NAVY, letterSpacing: 0.3 }}>
-                        {pad.status === "paused" ? "Closed" : "Open"}
-                      </span>
-                      <PauseSwitch
-                        paused={pad.status === "paused"}
-                        onPress={() => requestPauseToggle(pad.id)}
-                      />
+                {/* Quick stats inline */}
+                <div style={{ display: "flex", gap: 10 }}>
+                  {[
+                    { l: "Active", v: `${pads.filter(p => p.status === "active").length}/${pads.length}` },
+                    { l: "Bookings", v: String(listerBookings.length) },
+                  ].map(s => (
+                    <div key={s.l} style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: NAVY, letterSpacing: -0.3, lineHeight: 1 }}>{s.v}</div>
+                      <div style={{ fontSize: 9.5, color: "rgba(14,31,64,0.35)", fontWeight: 600, marginTop: 1 }}>{s.l}</div>
                     </div>
-                  )}
-                </div>
-                <div style={{ padding: "14px 16px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
-                        <div style={{ fontSize: 15, fontWeight: 700, color: NAVY, letterSpacing: -0.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {pad.name}
-                        </div>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); startRename(pad); }}
-                          style={{ flexShrink: 0, padding: "2px 8px", borderRadius: 100, background: "rgba(141,214,63,0.12)", border: "1px solid rgba(141,214,63,0.35)", color: "#5a9e1a", fontSize: 10, fontWeight: 800, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", letterSpacing: 0.2 }}
-                        >
-                          Rename
-                        </button>
-                      </div>
-                      <div style={{ fontSize: 12, color: "rgba(14,31,64,0.45)" }}>
-                        {pad.address} · {pad.type}{pad.spotCount > 1 ? ` · ${pad.spotCount} spots` : ""}
-                      </div>
-                    </div>
-                    <div style={{ textAlign: "right", flexShrink: 0 }}>
-                      <div style={{ fontSize: 18, fontWeight: 800, color: GREEN }}>${pad.price}<span style={{ fontSize: 10, color: "rgba(141,214,63,0.6)", fontWeight: 500 }}>/hr</span></div>
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                    {[
-                      { l: "Listed", r: pad.since },
-                      { l: "Bookings", r: String(pad.bookings) },
-                    ].map(s => (
-                      <div key={s.l} style={{ flex: 1, background: "rgba(14,31,64,0.04)", borderRadius: 10, padding: "8px 10px", border: "1px solid rgba(14,31,64,0.07)" }}>
-                        <div style={{ fontSize: 9, color: "rgba(14,31,64,0.30)", fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 3 }}>{s.l}</div>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{s.r}</div>
-                      </div>
-                    ))}
-                  </div>
+                  ))}
                 </div>
               </div>
-            ))}
 
-            {/* Add new pad */}
-            <button onClick={startAddPad} style={{
-              width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
-              padding: "15px 0", borderRadius: 16,
-              background: "transparent", border: `2px dashed rgba(141,214,63,0.40)`,
-              cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
-              fontSize: 15, fontWeight: 700, color: "#5a9e1a", letterSpacing: -0.2,
-            }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
-              Add another pad
-            </button>
+              {/* Pad cards */}
+              {sortedPads.length === 0 ? (
+                <div style={{ background: "#fff", borderRadius: 16, padding: "28px 20px", textAlign: "center", border: "1px dashed rgba(14,31,64,0.14)", color: "rgba(14,31,64,0.40)", fontSize: 13 }}>
+                  No pads listed yet.
+                </div>
+              ) : (
+                sortedPads.map(pad => (
+                  <div key={pad.id} onClick={() => setOpenPadId(pad.id)} style={{
+                    background: "#fff", borderRadius: 18, border: "1px solid rgba(14,31,64,0.09)",
+                    overflow: "hidden", marginBottom: 12,
+                    boxShadow: "0 2px 10px rgba(14,31,64,0.06)", cursor: "pointer",
+                    opacity: pad.status === "paused" ? 0.78 : 1,
+                  }}>
+                    <div style={{
+                      height: 120,
+                      background: `url(${pad.photoUrl}) center/cover, linear-gradient(135deg,rgba(141,214,63,0.15),rgba(14,31,64,0.08))`,
+                      position: "relative",
+                      filter: pad.status === "paused" ? "grayscale(0.4)" : "none",
+                    }}>
+                      <div style={{ position: "absolute", top: 10, right: 10 }}>
+                        <StatusPill pad={pad} />
+                      </div>
+                      {pad.status !== "pending" && (
+                        <div style={{ position: "absolute", top: 10, left: 10, display: "flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.92)", borderRadius: 100, padding: "5px 8px 5px 10px", boxShadow: "0 2px 6px rgba(14,31,64,0.18)" }}>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: NAVY, letterSpacing: 0.3 }}>
+                            {pad.status === "paused" ? "Closed" : "Open"}
+                          </span>
+                          <PauseSwitch paused={pad.status === "paused"} onPress={() => requestPauseToggle(pad.id)} />
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ padding: "12px 14px" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                            <div style={{ fontSize: 14.5, fontWeight: 700, color: NAVY, letterSpacing: -0.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {pad.name}
+                            </div>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); startRename(pad); }}
+                              style={{ flexShrink: 0, padding: "2px 8px", borderRadius: 100, background: "rgba(141,214,63,0.12)", border: "1px solid rgba(141,214,63,0.35)", color: "#5a9e1a", fontSize: 10, fontWeight: 800, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", letterSpacing: 0.2 }}
+                            >
+                              Rename
+                            </button>
+                          </div>
+                          <div style={{ fontSize: 11.5, color: "rgba(14,31,64,0.45)" }}>
+                            {pad.address} · {pad.type}{pad.spotCount > 1 ? ` · ${pad.spotCount} spots` : ""}
+                          </div>
+                        </div>
+                        <div style={{ textAlign: "right", flexShrink: 0 }}>
+                          <div style={{ fontSize: 17, fontWeight: 800, color: GREEN }}>${pad.price}<span style={{ fontSize: 10, color: "rgba(141,214,63,0.55)", fontWeight: 500 }}>/hr</span></div>
+                          <div style={{ fontSize: 10, color: "rgba(14,31,64,0.38)", marginTop: 2 }}>Since {pad.since}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+
+              {/* Add new pad */}
+              <button onClick={startAddPad} style={{
+                width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+                padding: "13px 0", borderRadius: 14,
+                background: "transparent", border: `2px dashed rgba(141,214,63,0.38)`,
+                cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+                fontSize: 14, fontWeight: 700, color: "#5a9e1a", letterSpacing: -0.2,
+              }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                Add another pad
+              </button>
+            </div>
+
+            {/* ══ BOOKING REQUESTS ══ */}
+            {(() => {
+              const allRequests = [...listerBookings.filter(b => b.status === "pending"), ...listerBookings.filter(b => b.status !== "pending").sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())];
+              if (allRequests.length === 0) return null;
+              const pendingCount = listerBookings.filter(b => b.status === "pending").length;
+              return (
+                <div>
+                  {/* Section header */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                    <div style={{ width: 3, height: 16, borderRadius: 2, background: "#f59e0b" }} />
+                    <span style={{ fontSize: 12, fontWeight: 800, color: NAVY, letterSpacing: 0.3, textTransform: "uppercase" }}>Booking Requests</span>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(14,31,64,0.38)", background: "rgba(14,31,64,0.06)", borderRadius: 100, padding: "2px 7px" }}>{allRequests.length}</span>
+                    {pendingCount > 0 && (
+                      <span style={{ fontSize: 10, fontWeight: 800, color: "#fff", background: "#f59e0b", borderRadius: 100, padding: "2px 8px" }}>{pendingCount} new</span>
+                    )}
+                  </div>
+
+                  {/* Accordion pills */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {allRequests.map(bk => {
+                      const isPending  = bk.status === "pending";
+                      const isApproved = bk.status === "approved";
+                      const acting     = actingOn === bk.id;
+                      const isOpen     = expandedBookingId === bk.id;
+
+                      const statusColor  = isPending ? "#f59e0b" : isApproved ? "#5a9e1a" : "rgba(14,31,64,0.35)";
+                      const statusBg     = isPending ? "rgba(251,191,36,0.10)" : isApproved ? "rgba(141,214,63,0.10)" : "rgba(14,31,64,0.04)";
+                      const statusBorder = isPending ? "rgba(251,191,36,0.30)" : isApproved ? "rgba(141,214,63,0.28)" : "rgba(14,31,64,0.09)";
+                      const pillBorder   = isPending ? "rgba(251,191,36,0.38)" : isApproved ? "rgba(141,214,63,0.28)" : "rgba(14,31,64,0.09)";
+
+                      return (
+                        <div key={bk.id} style={{
+                          background: "#fff",
+                          borderRadius: 14,
+                          border: `1.5px solid ${isOpen ? (isPending ? "rgba(251,191,36,0.50)" : pillBorder) : pillBorder}`,
+                          overflow: "hidden",
+                          boxShadow: isPending && !isOpen ? "0 2px 10px rgba(251,191,36,0.08)" : "0 1px 4px rgba(14,31,64,0.05)",
+                        }}>
+                          {/* Pill header — always visible, tap to toggle */}
+                          <button
+                            onClick={() => setExpandedBookingId(isOpen ? null : bk.id)}
+                            style={{
+                              width: "100%", display: "flex", alignItems: "center", gap: 10,
+                              padding: "11px 14px", background: "transparent", border: "none",
+                              cursor: "pointer", fontFamily: "'DM Sans',sans-serif", textAlign: "left",
+                            }}
+                          >
+                            {/* Status dot */}
+                            <span style={{ width: 8, height: 8, borderRadius: "50%", background: statusColor, flexShrink: 0, boxShadow: isPending ? `0 0 0 3px rgba(251,191,36,0.20)` : "none" }} />
+
+                            {/* Driver name + spot */}
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                <span style={{ fontSize: 13.5, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{bk.driver_name}</span>
+                                <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: 0.4, textTransform: "uppercase", padding: "2px 7px", borderRadius: 100, color: statusColor, background: statusBg, border: `1px solid ${statusBorder}`, flexShrink: 0 }}>
+                                  {isPending ? "Pending" : isApproved ? "Approved" : "Denied"}
+                                </span>
+                              </div>
+                              <div style={{ fontSize: 11, color: "rgba(14,31,64,0.42)", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {fmtDt(bk.start_ts)} · {fmtTm(bk.start_ts)} → {fmtTm(bk.end_ts)}
+                              </div>
+                            </div>
+
+                            {/* Price + chevron */}
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                              <span style={{ fontSize: 14, fontWeight: 800, color: GREEN }}>${Number(bk.total_price).toFixed(0)}</span>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(14,31,64,0.35)" strokeWidth="2.5" strokeLinecap="round" style={{ transform: isOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.18s" }}>
+                                <path d="M6 9l6 6 6-6"/>
+                              </svg>
+                            </div>
+                          </button>
+
+                          {/* Expanded panel */}
+                          {isOpen && (
+                            <div style={{ padding: "0 14px 14px", borderTop: "1px solid rgba(14,31,64,0.07)", paddingTop: 12 }}>
+
+                              {/* Driver info */}
+                              <div style={{ background: "rgba(14,31,64,0.03)", borderRadius: 10, padding: "10px 12px", marginBottom: 10, border: "1px solid rgba(14,31,64,0.07)" }}>
+                                <div style={{ fontSize: 9.5, fontWeight: 700, color: "rgba(14,31,64,0.38)", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 6 }}>Driver info</div>
+                                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(14,31,64,0.40)" strokeWidth="2" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                                    <span style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{bk.driver_name}</span>
+                                  </div>
+                                  {bk.driver_email && (
+                                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(14,31,64,0.40)" strokeWidth="2" strokeLinecap="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                                      <span style={{ fontSize: 12, color: "rgba(14,31,64,0.60)" }}>{bk.driver_email}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Booking details chips */}
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: isPending ? 12 : 0 }}>
+                                {[
+                                  { label: "Date", val: fmtDt(bk.start_ts) },
+                                  { label: "Time", val: `${fmtTm(bk.start_ts)} → ${fmtTm(bk.end_ts)}` },
+                                  { label: "Total", val: `$${Number(bk.total_price).toFixed(2)}` },
+                                  { label: "Rate", val: `$${Number(bk.price_per_hr).toFixed(0)}/hr` },
+                                ].map(chip => (
+                                  <div key={chip.label} style={{ display: "flex", flexDirection: "column", background: "rgba(14,31,64,0.04)", borderRadius: 8, padding: "6px 10px", border: "1px solid rgba(14,31,64,0.07)", minWidth: 70 }}>
+                                    <span style={{ fontSize: 9, fontWeight: 700, color: "rgba(14,31,64,0.35)", letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 2 }}>{chip.label}</span>
+                                    <span style={{ fontSize: 12, fontWeight: 700, color: NAVY }}>{chip.val}</span>
+                                  </div>
+                                ))}
+                              </div>
+
+                              {/* Approve / Deny — pending only */}
+                              {isPending && (
+                                <div style={{ display: "flex", gap: 8 }}>
+                                  <button
+                                    disabled={acting}
+                                    onClick={() => handleApprove(bk.id)}
+                                    style={{ flex: 1, padding: "11px 0", borderRadius: 100, background: acting ? "rgba(141,214,63,0.06)" : GREEN, border: "none", color: acting ? "#5a9e1a" : NAVY, fontSize: 13, fontWeight: 800, cursor: acting ? "wait" : "pointer", fontFamily: "'DM Sans',sans-serif", opacity: acting ? 0.6 : 1 }}>
+                                    {acting ? "…" : "✓ Approve"}
+                                  </button>
+                                  <button
+                                    disabled={acting}
+                                    onClick={() => handleDeny(bk.id)}
+                                    style={{ flex: 1, padding: "11px 0", borderRadius: 100, background: "transparent", border: "1.5px solid rgba(239,68,68,0.40)", color: "#ef4444", fontSize: 13, fontWeight: 800, cursor: acting ? "wait" : "pointer", fontFamily: "'DM Sans',sans-serif", opacity: acting ? 0.6 : 1 }}>
+                                    {acting ? "…" : "Deny"}
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
           </>
         ) : (
           /* ── DETAIL / EDIT VIEW (dark profile) ── */

@@ -182,12 +182,12 @@ export default function HomePage() {
           <button
             onClick={handleFindAPad}
             style={{
-              width: "100%", background: "#8DD63F", color: "#0E1F40",
+              width: "80%", background: "#8DD63F", color: "#0E1F40",
               border: "none", borderRadius: 50, padding: "16px",
               fontSize: 16, fontWeight: 800, cursor: "pointer",
               letterSpacing: "-0.01em",
               boxShadow: "0 4px 20px rgba(141,214,63,0.28)",
-              marginBottom: 13,
+              marginBottom: 7,
             }}
           >
             Start Parking
@@ -232,7 +232,7 @@ export default function HomePage() {
         <button
           onClick={handleListMyPad}
           style={{
-            width: "100%", background: "transparent",
+            width: "80%", background: "transparent",
             border: "2.5px solid #0E1F40", borderRadius: 50,
             padding: "14px", fontSize: 15, fontWeight: 800,
             color: "#0E1F40", cursor: "pointer",

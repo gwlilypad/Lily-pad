@@ -230,114 +230,104 @@ export default function ListerBookingsPage() {
           </div>
         ) : (
           /* Booking cards */
-          <div style={{ padding: "8px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ padding: "6px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
             {tabItems.map((bk, i) => {
               const isPending  = bk.status === "pending";
               const isApproved = bk.status === "approved";
               const isDenied   = bk.status === "denied";
               const acting     = actingOn === bk.id;
               const pal        = avatarPalette(bk.driver_name);
+              const statusColor = isPending ? "#b45309" : isApproved ? "#3a6b0f" : "rgba(14,31,64,0.35)";
+              const statusBg    = isPending ? "rgba(251,191,36,0.11)" : isApproved ? "rgba(141,214,63,0.12)" : "rgba(14,31,64,0.05)";
+              const statusBdr   = isPending ? "rgba(251,191,36,0.30)" : isApproved ? "rgba(141,214,63,0.28)" : "rgba(14,31,64,0.09)";
 
               return (
                 <div
                   key={bk.id}
                   style={{
                     background: "#fff",
-                    borderRadius: 20,
-                    padding: "18px 18px 16px",
+                    borderRadius: 16,
+                    padding: "14px 14px 12px",
                     boxShadow: isPending
-                      ? "0 4px 20px rgba(251,191,36,0.14), 0 1px 4px rgba(0,0,0,0.06)"
-                      : "0 2px 12px rgba(14,31,64,0.07), 0 1px 3px rgba(0,0,0,0.04)",
-                    border: isPending ? "1.5px solid rgba(251,191,36,0.35)" : "1px solid rgba(14,31,64,0.06)",
-                    animation: "lp-fadein 0.22s ease both",
+                      ? "0 2px 14px rgba(251,191,36,0.12), 0 1px 3px rgba(0,0,0,0.04)"
+                      : "0 1px 6px rgba(14,31,64,0.07)",
+                    border: isPending ? "1.5px solid rgba(251,191,36,0.28)" : "1px solid rgba(14,31,64,0.07)",
+                    animation: "lp-fadein 0.2s ease both",
                     animationDelay: `${i * 0.04}s`,
                   }}
                 >
-                  {/* Top row — avatar + name + status */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
-                    {/* Avatar */}
+                  {/* ── Top row: avatar · name/sub · badge ── */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
                     <div style={{
-                      width: 52, height: 52, borderRadius: "50%", flexShrink: 0,
+                      width: 40, height: 40, borderRadius: "50%", flexShrink: 0,
                       background: pal.bg,
                       display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 18, fontWeight: 800, color: pal.fg,
-                      boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-                      border: `2px solid ${pal.bg}`,
+                      fontSize: 14, fontWeight: 800, color: pal.fg,
                     }}>
                       {initials(bk.driver_name)}
                     </div>
-
-                    {/* Name + sub */}
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 15.5, fontWeight: 800, color: NAVY, letterSpacing: -0.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: NAVY, letterSpacing: -0.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {bk.driver_name}
                       </div>
-                      <div style={{ fontSize: 11.5, color: "rgba(14,31,64,0.45)", marginTop: 2 }}>
+                      <div style={{ fontSize: 11, color: "rgba(14,31,64,0.42)", marginTop: 1 }}>
                         {isPending ? "Requesting to book" : isApproved ? "Booking confirmed" : "Request denied"}
                       </div>
                     </div>
-
-                    {/* Status badge */}
                     <div style={{
-                      padding: "4px 10px", borderRadius: 100, flexShrink: 0,
-                      fontSize: 10.5, fontWeight: 800, letterSpacing: 0.3, textTransform: "uppercase",
-                      background: isPending
-                        ? "rgba(251,191,36,0.13)"
-                        : isApproved
-                          ? "rgba(141,214,63,0.15)"
-                          : "rgba(14,31,64,0.07)",
-                      color: isPending ? "#b45309" : isApproved ? "#3a6b0f" : "rgba(14,31,64,0.40)",
-                      border: isPending
-                        ? "1px solid rgba(251,191,36,0.35)"
-                        : isApproved
-                          ? "1px solid rgba(141,214,63,0.35)"
-                          : "1px solid rgba(14,31,64,0.10)",
+                      padding: "3px 9px", borderRadius: 100, flexShrink: 0,
+                      fontSize: 10, fontWeight: 800, letterSpacing: 0.4, textTransform: "uppercase",
+                      background: statusBg, color: statusColor,
+                      border: `1px solid ${statusBdr}`,
                     }}>
                       {isPending ? "Pending" : isApproved ? "Active" : "Denied"}
                     </div>
                   </div>
 
-                  {/* Divider */}
-                  <div style={{ height: 1, background: "rgba(14,31,64,0.06)", marginBottom: 14 }} />
-
-                  {/* Booking info grid */}
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
-                    {[
-                      { icon: "📅", label: "Date",  val: fmtDate(bk.start_ts) },
-                      { icon: "⏱",  label: "Time",  val: `${fmtTime(bk.start_ts)} – ${fmtTime(bk.end_ts)}` },
-                      { icon: "💵", label: "Total", val: `$${Number(bk.total_price).toFixed(2)}` },
-                      { icon: "🅿️", label: "Spot",  val: bk.spot_address.split(",")[0] },
-                    ].map(row => (
-                      <div key={row.label} style={{
-                        background: "rgba(14,31,64,0.04)",
-                        borderRadius: 12, padding: "9px 12px",
-                        border: "1px solid rgba(14,31,64,0.05)",
-                      }}>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(14,31,64,0.38)", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 3 }}>
-                          {row.label}
-                        </div>
-                        <div style={{ fontSize: 12.5, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {row.val}
-                        </div>
-                      </div>
-                    ))}
+                  {/* ── Info strip ── */}
+                  <div style={{
+                    background: "rgba(14,31,64,0.03)", borderRadius: 10,
+                    border: "1px solid rgba(14,31,64,0.05)",
+                    padding: "9px 12px", marginBottom: isPending || isApproved ? 10 : 0,
+                  }}>
+                    {/* Date · Time */}
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 5, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(14,31,64,0.35)", textTransform: "uppercase", letterSpacing: 0.4, flexShrink: 0 }}>Date</span>
+                      <span style={{ fontSize: 12.5, fontWeight: 700, color: NAVY }}>{fmtDate(bk.start_ts)}</span>
+                      <span style={{ fontSize: 10, color: "rgba(14,31,64,0.25)", margin: "0 2px" }}>·</span>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(14,31,64,0.35)", textTransform: "uppercase", letterSpacing: 0.4, flexShrink: 0 }}>Time</span>
+                      <span style={{ fontSize: 12.5, fontWeight: 700, color: NAVY }}>{fmtTime(bk.start_ts)}–{fmtTime(bk.end_ts)}</span>
+                    </div>
+                    {/* Total · Rate */}
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 5 }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(14,31,64,0.35)", textTransform: "uppercase", letterSpacing: 0.4, flexShrink: 0 }}>Total</span>
+                      <span style={{ fontSize: 12.5, fontWeight: 700, color: NAVY }}>${Number(bk.total_price).toFixed(2)}</span>
+                      <span style={{ fontSize: 10, color: "rgba(14,31,64,0.25)", margin: "0 2px" }}>·</span>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(14,31,64,0.35)", textTransform: "uppercase", letterSpacing: 0.4, flexShrink: 0 }}>Rate</span>
+                      <span style={{ fontSize: 12.5, fontWeight: 700, color: NAVY }}>${Number(bk.price_per_hr).toFixed(0)}/hr</span>
+                    </div>
+                    {/* Spot */}
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 6, minWidth: 0 }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(14,31,64,0.35)", textTransform: "uppercase", letterSpacing: 0.4, flexShrink: 0 }}>Spot</span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: "rgba(14,31,64,0.65)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {bk.spot_address.split(",")[0]}
+                      </span>
+                    </div>
                   </div>
 
-                  {/* Accept / Deny — pending only */}
+                  {/* ── Accept / Deny (pending) ── */}
                   {isPending && (
-                    <div style={{ display: "flex", gap: 10 }}>
+                    <div style={{ display: "flex", gap: 8 }}>
                       <button
                         disabled={acting}
                         onClick={() => handleDeny(bk.id)}
                         style={{
-                          flex: 1, padding: "12px 0", borderRadius: 100,
-                          background: "rgba(239,68,68,0.07)",
-                          border: "1.5px solid rgba(239,68,68,0.25)",
-                          color: "#dc2626", fontSize: 13.5, fontWeight: 800,
+                          flex: 1, padding: "10px 0", borderRadius: 100,
+                          background: "transparent",
+                          border: "1.5px solid rgba(239,68,68,0.28)",
+                          color: "#dc2626", fontSize: 13, fontWeight: 700,
                           cursor: acting ? "wait" : "pointer",
-                          fontFamily: "'DM Sans',sans-serif",
-                          opacity: acting ? 0.5 : 1,
-                          transition: "all 0.15s",
+                          fontFamily: "'DM Sans',sans-serif", opacity: acting ? 0.5 : 1,
                         }}
                       >
                         {acting ? "…" : "Deny"}
@@ -346,15 +336,12 @@ export default function ListerBookingsPage() {
                         disabled={acting}
                         onClick={() => handleApprove(bk.id)}
                         style={{
-                          flex: 2, padding: "12px 0", borderRadius: 100,
-                          background: acting ? "rgba(141,214,63,0.55)" : GREEN,
-                          border: "none",
-                          color: NAVY, fontSize: 13.5, fontWeight: 800,
+                          flex: 2, padding: "10px 0", borderRadius: 100,
+                          background: acting ? "rgba(141,214,63,0.5)" : GREEN,
+                          border: "none", color: NAVY, fontSize: 13, fontWeight: 800,
                           cursor: acting ? "wait" : "pointer",
-                          fontFamily: "'DM Sans',sans-serif",
-                          opacity: acting ? 0.6 : 1,
-                          boxShadow: "0 4px 12px rgba(141,214,63,0.30)",
-                          transition: "all 0.15s",
+                          fontFamily: "'DM Sans',sans-serif", opacity: acting ? 0.6 : 1,
+                          boxShadow: "0 3px 10px rgba(141,214,63,0.28)",
                         }}
                       >
                         {acting ? "…" : "✓ Accept"}
@@ -362,19 +349,11 @@ export default function ListerBookingsPage() {
                     </div>
                   )}
 
-                  {/* Approved — rate line */}
-                  {isApproved && (
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", background: "rgba(141,214,63,0.08)", borderRadius: 12, border: "1px solid rgba(141,214,63,0.22)" }}>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: "rgba(14,31,64,0.55)" }}>Rate per hour</span>
-                      <span style={{ fontSize: 14, fontWeight: 800, color: "#3a6b0f" }}>${Number(bk.price_per_hr).toFixed(0)}/hr</span>
-                    </div>
-                  )}
-
-                  {/* Denied — subtle note */}
+                  {/* ── Denied chip ── */}
                   {isDenied && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", background: "rgba(14,31,64,0.04)", borderRadius: 12 }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(14,31,64,0.35)" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
-                      <span style={{ fontSize: 12, color: "rgba(14,31,64,0.45)", fontWeight: 600 }}>Request was denied</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(14,31,64,0.30)" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                      <span style={{ fontSize: 11.5, color: "rgba(14,31,64,0.38)", fontWeight: 600 }}>Request was denied</span>
                     </div>
                   )}
                 </div>

@@ -41,12 +41,7 @@ export default function DriverAccountPage() {
           <div className="info-row"><span className="info-lbl">Vehicle</span><span className="info-val">{vehicle}</span><span className="info-edit">Edit</span></div>
         </div>
 
-        <span className="section-header">Bookings</span>
-        <div className="thumb-nav-card">
-          <div className="thumb-nav-row" onClick={() => goTo("bookings")}><span className="thumb-nav-lbl">Past bookings</span><span className="thumb-nav-arrow">›</span></div>
-        </div>
-
-        <div className="thumb-nav-card" style={{ marginTop: 16 }}>
+        <div className="thumb-nav-card" style={{ marginTop: 8 }}>
           <div className="thumb-nav-row" onClick={handleSignOut}><span className="thumb-nav-lbl" style={{ color: "rgba(229,57,53,0.8)" }}>Sign out</span><span className="thumb-nav-arrow">›</span></div>
         </div>
       </div>

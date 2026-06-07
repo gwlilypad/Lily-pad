@@ -170,7 +170,7 @@ export default function HomePage() {
           <img src={lilypadLogo} alt="Lily Pad" style={{ width: 265, height: "auto", display: "block", pointerEvents: "none" }} />
         </div>
 
-        {/* Bottom content: headline + button + FOR DRIVERS */}
+        {/* Bottom content: headline + button */}
         <div style={{ width: "100%", paddingBottom: "8vh", display: "flex", flexDirection: "column", alignItems: "center" }}>
           <h1 style={{
             textAlign: "center", margin: "0 0 20px",
@@ -188,20 +188,21 @@ export default function HomePage() {
               fontSize: 16, fontWeight: 800, cursor: "pointer",
               letterSpacing: "-0.01em",
               boxShadow: "0 4px 20px rgba(141,214,63,0.28)",
-              marginBottom: 22,
             }}
           >
             Start Parking
           </button>
-
-          <p style={{
-            margin: 0, fontSize: 10, fontWeight: 700,
-            letterSpacing: "0.22em", color: "rgba(255,255,255,0.30)",
-            textTransform: "uppercase", textAlign: "center",
-          }}>
-            For Drivers
-          </p>
         </div>
+
+        {/* FOR DRIVERS — pinned near the dividing line */}
+        <p style={{
+          position: "absolute", bottom: 18, left: 0, right: 0,
+          margin: 0, fontSize: 10, fontWeight: 700,
+          letterSpacing: "0.22em", color: "rgba(255,255,255,0.30)",
+          textTransform: "uppercase", textAlign: "center",
+        }}>
+          For Drivers
+        </p>
       </div>
 
       {/* ── LIGHT SECTION ── */}
@@ -209,13 +210,15 @@ export default function HomePage() {
         position: "absolute", bottom: 0, left: 0, right: 0, height: `${100 - SPLIT}%`,
         background: "#F0F2F7",
         display: "flex", flexDirection: "column", alignItems: "center",
-        justifyContent: "flex-start",
-        padding: "8vh 24px calc(env(safe-area-inset-bottom) + 20px)",
+        justifyContent: "center",
+        padding: "0 24px calc(env(safe-area-inset-bottom) + 20px)",
         boxSizing: "border-box", zIndex: 5,
       }}>
 
+        {/* FOR HOSTS — pinned near the dividing line */}
         <p style={{
-          margin: "0 0 7px", fontSize: 10, fontWeight: 700,
+          position: "absolute", top: 18, left: 0, right: 0,
+          margin: 0, fontSize: 10, fontWeight: 700,
           letterSpacing: "0.22em", color: "rgba(14,31,64,0.33)",
           textTransform: "uppercase", textAlign: "center",
         }}>

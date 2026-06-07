@@ -5,6 +5,12 @@ import { useAuth } from "@/context/AuthContext";
 const NAVY = "#0E1F40";
 const GREEN = "#8DD63F";
 
+interface ExtendRequest {
+  new_end_ts: string;
+  requested_at: string;
+  status: "pending" | "approved" | "denied";
+}
+
 interface ListerBooking {
   id: string;
   spot_id: string;
@@ -18,6 +24,8 @@ interface ListerBooking {
   pad_type: string;
   status: string;
   created_at: string;
+  extend_request: ExtendRequest | null;
+  auto_approve: boolean;
 }
 
 function fmtDate(ts: string | null) {
@@ -46,11 +54,12 @@ export default function ListerBookingsPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const [bookings, setBookings]   = useState<ListerBooking[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [actingOn, setActingOn]   = useState<string | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [tab, setTab]             = useState<"new" | "current" | "past">("new");
+  const [bookings, setBookings]       = useState<ListerBooking[]>([]);
+  const [loading, setLoading]         = useState(true);
+  const [actingOn, setActingOn]       = useState<string | null>(null);
+  const [extActingOn, setExtActingOn] = useState<string | null>(null);
+  const [expandedId, setExpandedId]   = useState<string | null>(null);
+  const [tab, setTab]                 = useState<"new" | "current" | "past">("new");
 
   const fetchBookings = useCallback(() => {
     if (!user?.id) return;
@@ -80,10 +89,34 @@ export default function ListerBookingsPage() {
     } catch { /* non-blocking */ }
     setActingOn(null);
   }
+  async function handleExtApprove(id: string) {
+    setExtActingOn(id);
+    try {
+      const r = await fetch(`/api/bookings/${id}/extension-approve`, { method: "PATCH" });
+      const data = await r.json();
+      if (r.ok) {
+        setBookings(prev => prev.map(b => b.id === id
+          ? { ...b, end_ts: data.new_end_ts, extend_request: { ...b.extend_request!, status: "approved" } }
+          : b));
+      }
+    } catch { /* non-blocking */ }
+    setExtActingOn(null);
+  }
+  async function handleExtDeny(id: string) {
+    setExtActingOn(id);
+    try {
+      await fetch(`/api/bookings/${id}/extension-deny`, { method: "PATCH" });
+      setBookings(prev => prev.map(b => b.id === id
+        ? { ...b, extend_request: { ...b.extend_request!, status: "denied" } }
+        : b));
+    } catch { /* non-blocking */ }
+    setExtActingOn(null);
+  }
 
   const now       = Date.now();
   const newReqs   = bookings.filter(b => b.status === "pending");
   const current   = bookings.filter(b => b.status === "approved" && (!b.end_ts || new Date(b.end_ts).getTime() > now));
+  const pendingExtCount = current.filter(b => b.extend_request?.status === "pending").length;
   const past      = bookings.filter(b =>
     (b.status === "approved" && b.end_ts && new Date(b.end_ts).getTime() <= now) || b.status === "denied"
   ).sort((a, b2) => new Date(b2.created_at).getTime() - new Date(a.created_at).getTime());
@@ -181,16 +214,20 @@ export default function ListerBookingsPage() {
         ) : (
           <div style={{ padding: "4px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
             {tabItems.map((bk, i) => {
-              const isPending  = bk.status === "pending";
-              const isApproved = bk.status === "approved";
-              const isDenied   = bk.status === "denied";
-              const acting     = actingOn === bk.id;
-              const isOpen     = expandedId === bk.id;
-              const pal        = avatarPalette(bk.driver_name);
+              const isPending    = bk.status === "pending";
+              const isApproved   = bk.status === "approved";
+              const isDenied     = bk.status === "denied";
+              const acting       = actingOn === bk.id;
+              const extActing    = extActingOn === bk.id;
+              const isOpen       = expandedId === bk.id;
+              const pal          = avatarPalette(bk.driver_name);
+              const hasPendingExt = bk.extend_request?.status === "pending";
 
-              const dotColor  = isPending ? "#f59e0b" : isApproved ? GREEN : "rgba(14,31,64,0.25)";
+              const dotColor  = isPending ? "#f59e0b" : hasPendingExt ? "#7c3aed" : isApproved ? GREEN : "rgba(14,31,64,0.25)";
               const cardBorder = isPending
                 ? (isOpen ? "rgba(251,191,36,0.45)" : "rgba(251,191,36,0.25)")
+                : hasPendingExt
+                ? (isOpen ? "rgba(124,58,237,0.35)" : "rgba(124,58,237,0.20)")
                 : isOpen ? "rgba(14,31,64,0.12)" : "rgba(14,31,64,0.07)";
 
               return (
@@ -241,6 +278,11 @@ export default function ListerBookingsPage() {
 
                     {/* Price + chevron */}
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                      {hasPendingExt && (
+                        <span style={{ fontSize: 9, fontWeight: 800, padding: "2px 7px", borderRadius: 100, background: "rgba(124,58,237,0.10)", border: "1px solid rgba(124,58,237,0.25)", color: "#7c3aed", letterSpacing: 0.4, textTransform: "uppercase", whiteSpace: "nowrap" }}>
+                          ⏱ Ext.
+                        </span>
+                      )}
                       <span style={{ fontSize: 13.5, fontWeight: 800, color: isApproved ? "#3a6b0f" : isPending ? "#b45309" : "rgba(14,31,64,0.40)" }}>
                         ${Number(bk.total_price).toFixed(0)}
                       </span>
@@ -321,6 +363,56 @@ export default function ListerBookingsPage() {
                           <span style={{ fontSize: 13.5, fontWeight: 800, color: isApproved ? "#3a6b0f" : NAVY }}>${Number(bk.total_price).toFixed(2)}</span>
                         </div>
                       </div>
+
+                      {/* EXTENSION REQUEST (for approved/current bookings) */}
+                      {isApproved && bk.extend_request && bk.extend_request.status !== "approved" && (
+                        <div style={{
+                          margin: "0 16px 14px",
+                          borderRadius: 12,
+                          border: `1.5px solid ${bk.extend_request.status === "pending" ? "rgba(124,58,237,0.30)" : "rgba(14,31,64,0.10)"}`,
+                          background: bk.extend_request.status === "pending" ? "rgba(124,58,237,0.05)" : "rgba(14,31,64,0.03)",
+                          overflow: "hidden",
+                        }}>
+                          <div style={{ padding: "10px 12px", display: "flex", alignItems: "center", gap: 8, borderBottom: "1px solid rgba(14,31,64,0.07)" }}>
+                            <span style={{ fontSize: 14 }}>⏱</span>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 11.5, fontWeight: 800, color: bk.extend_request.status === "pending" ? "#7c3aed" : "rgba(14,31,64,0.45)", letterSpacing: 0.1 }}>
+                                {bk.extend_request.status === "pending" ? "Extension request" : "Extension denied"}
+                              </div>
+                              <div style={{ fontSize: 11, color: "rgba(14,31,64,0.45)", marginTop: 1 }}>
+                                Guest wants to stay until <strong style={{ color: NAVY }}>{fmtDate(bk.extend_request.new_end_ts)}</strong> at <strong style={{ color: NAVY }}>{fmtTime(bk.extend_request.new_end_ts)}</strong>
+                              </div>
+                            </div>
+                          </div>
+                          {bk.extend_request.status === "pending" && (
+                            <div style={{ display: "flex", gap: 8, padding: "10px 12px" }}>
+                              <button disabled={extActing} onClick={() => handleExtDeny(bk.id)} style={{
+                                flex: 1, padding: "9px 0", borderRadius: 100, background: "transparent",
+                                border: "1.5px solid rgba(239,68,68,0.28)", color: "#dc2626",
+                                fontSize: 12.5, fontWeight: 700, cursor: extActing ? "wait" : "pointer",
+                                fontFamily: "'DM Sans',sans-serif", opacity: extActing ? 0.5 : 1,
+                              }}>
+                                {extActing ? "…" : "Deny"}
+                              </button>
+                              <button disabled={extActing} onClick={() => handleExtApprove(bk.id)} style={{
+                                flex: 2, padding: "9px 0", borderRadius: 100,
+                                background: extActing ? "rgba(124,58,237,0.4)" : "#7c3aed",
+                                border: "none", color: "#fff",
+                                fontSize: 12.5, fontWeight: 800, cursor: extActing ? "wait" : "pointer",
+                                fontFamily: "'DM Sans',sans-serif", opacity: extActing ? 0.6 : 1,
+                                boxShadow: "0 3px 10px rgba(124,58,237,0.25)",
+                              }}>
+                                {extActing ? "…" : "✓ Approve extension"}
+                              </button>
+                            </div>
+                          )}
+                          {bk.extend_request.status === "denied" && (
+                            <div style={{ padding: "8px 12px", fontSize: 11, color: "rgba(14,31,64,0.40)", fontWeight: 600 }}>
+                              Extension was denied — checkout at original time.
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       {/* ACCEPT / DENY */}
                       {isPending && (

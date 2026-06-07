@@ -58,6 +58,14 @@ export default function BookingsPage() {
   const [adjSaving, setAdjSaving] = useState(false);
   const [adjError, setAdjError]   = useState("");
 
+  // Extend state (active bookings only — submits extension request)
+  const [extendingId, setExtendingId]     = useState<string|null>(null);
+  const [extNewEnd, setExtNewEnd]         = useState("");
+  const [extSaving, setExtSaving]         = useState(false);
+  const [extError, setExtError]           = useState("");
+  // extend_request status per booking uuid (pending/auto_approved/denied)
+  const [extStatusMap, setExtStatusMap]   = useState<Record<string, { status: string; new_end_ts: string }>>({});
+
   // Cancel confirm state (inline in pill)
   const [cancelConfirmId, setCancelConfirmId] = useState<string|null>(null);
   const [cancellingId, setCancellingId]       = useState<string|null>(null);
@@ -68,6 +76,12 @@ export default function BookingsPage() {
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (Array.isArray(data) && data.length > 0) {
+          const initExtMap: Record<string, { status: string; new_end_ts: string }> = {};
+          data.forEach((b: Record<string, unknown>) => {
+            const er = b.extend_request as { status?: string; new_end_ts?: string } | null;
+            if (er?.status && er?.new_end_ts) initExtMap[String(b.id || "")] = { status: er.status, new_end_ts: er.new_end_ts };
+          });
+          setExtStatusMap(initExtMap);
           const mapped: BookingRec[] = data.map((b: Record<string, unknown>) => {
             const idStr = String(b.id || "");
             const numId = idStr ? (parseInt(idStr.replace(/-/g, "").slice(0, 8), 16) || Math.round(Math.random() * 1e8)) : Math.round(Math.random() * 1e8);
@@ -151,6 +165,36 @@ export default function BookingsPage() {
     finally { setAdjSaving(false); }
   }
 
+  function startExtend(b: BookingRec) {
+    setExtNewEnd(toLocalInput(b.endTs));
+    setExtError("");
+    setExtendingId(b.uuid!);
+  }
+
+  async function doExtend(b: BookingRec) {
+    if (!extNewEnd) return;
+    const newEnd = new Date(extNewEnd).getTime();
+    if (newEnd <= b.endTs) { setExtError("New end must be after current end time."); return; }
+    setExtSaving(true); setExtError("");
+    try {
+      const r = await fetch(`/api/bookings/${b.uuid}/extension-request`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ new_end_ts: new Date(newEnd).toISOString() }),
+      });
+      const data = await r.json();
+      if (!r.ok) { setExtError(data.error || "Failed to submit request."); return; }
+      const status = data.status as string;
+      const newEndIso = new Date(newEnd).toISOString();
+      setExtStatusMap(prev => ({ ...prev, [b.uuid!]: { status, new_end_ts: newEndIso } }));
+      if (status === "auto_approved") {
+        setApiBookings(prev => prev.map(x => x.uuid === b.uuid ? { ...x, endTs: newEnd } : x));
+      }
+      setExtendingId(null);
+    } catch { setExtError("Network error. Please try again."); }
+    finally { setExtSaving(false); }
+  }
+
   async function doCancel(b: BookingRec) {
     setCancellingId(b.uuid!);
     try {
@@ -220,8 +264,10 @@ export default function BookingsPage() {
           const totalLabel = `$${(Math.round(total * 100) / 100).toFixed(2)}`;
           const isExpanded = expandedId === b.uuid;
           const isAdjusting = adjustingId === b.uuid;
+          const isExtending = extendingId === b.uuid;
           const isCancelConfirm = cancelConfirmId === b.uuid;
           const canModify = ds === "upcoming" || ds === "active" || ds === "pending";
+          const extStatus = extStatusMap[b.uuid!] || null;
 
           return (
             <div key={b.uuid || b.id}
@@ -276,6 +322,37 @@ export default function BookingsPage() {
                     </div>
                   )}
 
+                  {/* ── Extension status banner ── */}
+                  {extStatus && !isExtending && (
+                    <div style={{ marginBottom:12, padding:"10px 12px", borderRadius:10, border:`1px solid ${extStatus.status==="auto_approved"?"rgba(141,214,63,0.30)":extStatus.status==="pending"?"rgba(124,58,237,0.25)":"rgba(255,80,80,0.18)"}`, background:extStatus.status==="auto_approved"?"rgba(141,214,63,0.08)":extStatus.status==="pending"?"rgba(124,58,237,0.06)":"rgba(255,80,80,0.06)", fontSize:12, color:"rgba(255,255,255,0.65)", lineHeight:1.5 }}>
+                      {extStatus.status === "auto_approved" && <>✅ Extension approved — checkout extended to <strong style={{color:"#fff"}}>{fmtTime(new Date(extStatus.new_end_ts).getTime())}</strong> on <strong style={{color:"#fff"}}>{fmtDate(new Date(extStatus.new_end_ts).getTime())}</strong>.</>}
+                      {extStatus.status === "pending"       && <>⏱ Extension request sent — waiting for host to approve. New checkout: <strong style={{color:"#fff"}}>{fmtTime(new Date(extStatus.new_end_ts).getTime())}</strong>.</>}
+                      {extStatus.status === "denied"        && <>❌ Host denied the extension request. Checkout remains at the original time.</>}
+                    </div>
+                  )}
+
+                  {/* ── Extend form (active bookings — end-time only) ── */}
+                  {canModify && isExtending && (
+                    <div style={{ background:"rgba(255,255,255,0.04)", borderRadius:12, padding:"12px", marginBottom:12, display:"flex", flexDirection:"column", gap:8 }}>
+                      <div style={{ fontSize:11, fontWeight:700, color:"rgba(255,255,255,0.45)", letterSpacing:"0.06em", textTransform:"uppercase" }}>Request extension</div>
+                      <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                        <label style={{ fontSize:11, color:"rgba(255,255,255,0.40)", fontWeight:600 }}>New checkout time</label>
+                        <input type="datetime-local" value={extNewEnd} onChange={e => setExtNewEnd(e.target.value)} style={inputStyle} />
+                      </div>
+                      {extError && <p style={{ fontSize:11, color:"#f87171", margin:0 }}>{extError}</p>}
+                      <div style={{ display:"flex", gap:8, marginTop:2 }}>
+                        <button onClick={() => doExtend(b)} disabled={extSaving}
+                          style={{ flex:2, padding:"10px 0", borderRadius:10, background:extSaving?"rgba(124,58,237,0.35)":"#7c3aed", border:"none", color:"#fff", fontWeight:800, fontSize:13, cursor:extSaving?"not-allowed":"pointer", fontFamily:"'DM Sans',sans-serif" }}>
+                          {extSaving ? "Sending…" : "Send request"}
+                        </button>
+                        <button onClick={() => { setExtendingId(null); setExtError(""); }}
+                          style={{ flex:1, padding:"10px 0", borderRadius:10, background:"rgba(255,255,255,0.07)", border:"1px solid rgba(255,255,255,0.12)", color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"'DM Sans',sans-serif" }}>
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {/* ── Adjust Time form (inline) ── */}
                   {canModify && isAdjusting && (
                     <div style={{ background:"rgba(255,255,255,0.04)", borderRadius:12, padding:"12px", marginBottom:12, display:"flex", flexDirection:"column", gap:8 }}>
@@ -325,9 +402,15 @@ export default function BookingsPage() {
                   )}
 
                   {/* ── Action buttons ── */}
-                  {canModify && !isAdjusting && !isCancelConfirm && (
+                  {canModify && !isAdjusting && !isExtending && !isCancelConfirm && (
                     <div style={{ display:"flex", gap:8 }}>
-                      {(ds === "upcoming" || ds === "active") && (
+                      {ds === "active" && !extStatus && (
+                        <button onClick={() => startExtend(b)}
+                          style={{ flex:1, padding:"10px 0", borderRadius:12, background:"rgba(124,58,237,0.10)", border:"1px solid rgba(124,58,237,0.25)", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:700, color:"#9b6ff7" }}>
+                          ⏱ Extend
+                        </button>
+                      )}
+                      {ds === "upcoming" && (
                         <button onClick={() => startAdjust(b)}
                           style={{ flex:1, padding:"10px 0", borderRadius:12, background:"rgba(141,214,63,0.10)", border:`1px solid rgba(141,214,63,0.25)`, cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:700, color:GREEN }}>
                           Adjust Time

@@ -1567,7 +1567,7 @@ app.patch('/api/spots/:id', async (req, res) => {
   // First fetch the current row so we can merge photo_url into description JSON
   try {
     const cur = await fetch(
-      `${SUPABASE_URL}/rest/v1/spots?id=eq.${id}&select=description,status,price_per_hr,address,lat,lng`,
+      `${SUPABASE_URL}/rest/v1/spots?id=eq.${id}&select=description,status,price_per_hr,address,lat,lng,spot_data`,
       { headers: SVC_HEADERS }
     );
     const curData = await cur.json();
@@ -1597,6 +1597,10 @@ app.patch('/api/spots/:id', async (req, res) => {
     if ('address'      in body) patchFields.address       = body.address;
     if ('lat'          in body) patchFields.lat           = body.lat;
     if ('lng'          in body) patchFields.lng           = body.lng;
+    if ('auto_approve' in body) {
+      const existingSpotData = existing?.spot_data || {};
+      patchFields.spot_data = { ...existingSpotData, auto_approve: !!body.auto_approve };
+    }
     if ('spot_name'    in body) {
       const newName = String(body.spot_name || '').trim();
       if (newName) {
@@ -1857,11 +1861,12 @@ app.get('/api/bookings/lister/:listerId', async (req, res) => {
   const { listerId } = req.params;
   try {
     // 1. Get all spot IDs for this lister
-    const spotRes  = await fetch(`${SUPABASE_URL}/rest/v1/spots?host_user_id=eq.${listerId}&select=id,address`, { headers: SVC_HEADERS });
+    const spotRes  = await fetch(`${SUPABASE_URL}/rest/v1/spots?host_user_id=eq.${listerId}&select=id,address,spot_data`, { headers: SVC_HEADERS });
     const spotData = await spotRes.json();
     if (!spotRes.ok || !Array.isArray(spotData) || spotData.length === 0) return res.json([]);
-    const spotMap  = {};
-    spotData.forEach(s => { spotMap[s.id] = s.address; });
+    const spotMap     = {};
+    const spotDataMap = {};
+    spotData.forEach(s => { spotMap[s.id] = s.address; spotDataMap[s.id] = s.spot_data || {}; });
     const ids = spotData.map(s => s.id).join(',');
 
     // 2. Fetch all bookings for those spots
@@ -1871,19 +1876,22 @@ app.get('/api/bookings/lister/:listerId', async (req, res) => {
 
     const mapped = bData.map(b => {
       const bd = b.booking_data || {};
+      const er = bd.extend_request || null;
       return {
-        id:           b.id,
-        spot_id:      b.spot_id,
-        spot_address: bd.addr || spotMap[b.spot_id] || '',
-        driver_name:  bd.driver_name  || 'Driver',
-        driver_email: bd.driver_email || null,
-        start_ts:     bd.start_ts     || null,
-        end_ts:       bd.end_ts       || null,
-        price_per_hr: Number(bd.price_per_hr) || 0,
-        total_price:  Number(bd.total_price)  || 0,
-        pad_type:     bd.padType || 'Driveway',
-        status:       b.status   || 'pending',
-        created_at:   b.created_at,
+        id:             b.id,
+        spot_id:        b.spot_id,
+        spot_address:   bd.addr || spotMap[b.spot_id] || '',
+        driver_name:    bd.driver_name  || 'Driver',
+        driver_email:   bd.driver_email || null,
+        start_ts:       bd.start_ts     || null,
+        end_ts:         bd.end_ts       || null,
+        price_per_hr:   Number(bd.price_per_hr) || 0,
+        total_price:    Number(bd.total_price)  || 0,
+        pad_type:       bd.padType || 'Driveway',
+        status:         b.status   || 'pending',
+        created_at:     b.created_at,
+        extend_request: er ? { new_end_ts: er.new_end_ts, requested_at: er.requested_at, status: er.status || 'pending' } : null,
+        auto_approve:   !!(spotDataMap[b.spot_id]?.auto_approve),
       };
     });
     res.json(mapped);
@@ -2056,6 +2064,142 @@ app.patch('/api/bookings/:id/extend', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Bookings: request extension (driver → asks lister to extend end time) ──────
+app.post('/api/bookings/:id/extension-request', async (req, res) => {
+  const { new_end_ts } = req.body || {};
+  if (!new_end_ts) return res.status(400).json({ error: 'new_end_ts required' });
+  try {
+    const bkRes  = await fetch(`${SUPABASE_URL}/rest/v1/bookings?id=eq.${req.params.id}&select=*`, { headers: SVC_HEADERS });
+    const bkRows = await bkRes.json();
+    const bk     = Array.isArray(bkRows) ? bkRows[0] : null;
+    if (!bk) return res.status(404).json({ error: 'Not found' });
+
+    const bd      = bk.booking_data || {};
+    const spot_id = bk.spot_id;
+
+    // Fetch spot to check auto_approve setting
+    const spotRes  = await fetch(`${SUPABASE_URL}/rest/v1/spots?id=eq.${spot_id}&select=spot_data,host_user_id,address`, { headers: SVC_HEADERS });
+    const spotRows = await spotRes.json();
+    const spot     = Array.isArray(spotRows) ? spotRows[0] : null;
+    const autoApprove = !!(spot?.spot_data?.auto_approve);
+
+    const requested_at = new Date().toISOString();
+
+    if (autoApprove) {
+      // Auto-approve: immediately update end_ts
+      const merged = { ...bd, end_ts: new_end_ts, extend_request: { new_end_ts, requested_at, status: 'approved' } };
+      await fetch(`${SUPABASE_URL}/rest/v1/bookings?id=eq.${req.params.id}`,
+        { method: 'PATCH', headers: { ...SVC_HEADERS, 'Prefer': 'return=minimal' }, body: JSON.stringify({ booking_data: merged }) }
+      );
+      console.log(`[extension] auto-approved ${req.params.id} → ${new_end_ts}`);
+      return res.json({ status: 'auto_approved', new_end_ts });
+    }
+
+    // Needs lister approval: store pending request
+    const merged = { ...bd, extend_request: { new_end_ts, requested_at, status: 'pending' } };
+    await fetch(`${SUPABASE_URL}/rest/v1/bookings?id=eq.${req.params.id}`,
+      { method: 'PATCH', headers: { ...SVC_HEADERS, 'Prefer': 'return=minimal' }, body: JSON.stringify({ booking_data: merged }) }
+    );
+
+    // Email lister
+    const listerId = bd.lister_id || spot?.host_user_id;
+    if (listerId) {
+      const lrRes  = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${listerId}&select=full_name,email`, { headers: SVC_HEADERS });
+      const lrRows = await lrRes.json();
+      const lr     = Array.isArray(lrRows) ? lrRows[0] : null;
+      const addr   = bd.addr || spot?.address || 'your spot';
+      const tmOpts = { hour: 'numeric', minute: '2-digit' };
+      const dOpts  = { month: 'short', day: 'numeric' };
+      const newEndStr = new Date(new_end_ts).toLocaleTimeString('en-US', tmOpts);
+      const newDateStr = new Date(new_end_ts).toLocaleDateString('en-US', dOpts);
+      sendEmail(lr?.email, 'Extension Request — Lily Pad',
+        `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
+          <h2 style="color:#0E1F40;margin:0 0 8px">Extension request ⏱</h2>
+          <p style="color:#555;margin:0 0 16px">Hi ${lr?.full_name || 'Host'},</p>
+          <p style="color:#555;margin:0 0 20px"><strong>${bd.driver_name || 'Your guest'}</strong> has requested to extend their booking at <strong>${addr}</strong>.</p>
+          <div style="background:#f5f7fa;border-radius:12px;padding:16px;margin-bottom:20px">
+            <div style="font-size:13px;color:#555;margin-bottom:4px">New checkout: <strong>${newDateStr} at ${newEndStr}</strong></div>
+          </div>
+          <p style="color:#555;margin:0 0 20px">Open Lily Pad and go to <strong>My Reservations</strong> to approve or deny.</p>
+          <p style="font-size:12px;color:#999;margin:0">— Lily Pad</p>
+        </div>`
+      );
+    }
+    console.log(`[extension] pending request ${req.params.id} → ${new_end_ts}`);
+    res.json({ status: 'pending' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Bookings: approve extension ────────────────────────────────────────────────
+app.patch('/api/bookings/:id/extension-approve', async (req, res) => {
+  try {
+    const getR  = await fetch(`${SUPABASE_URL}/rest/v1/bookings?id=eq.${req.params.id}&select=*`, { headers: SVC_HEADERS });
+    const rows  = await getR.json();
+    const bk    = Array.isArray(rows) ? rows[0] : null;
+    if (!bk) return res.status(404).json({ error: 'Not found' });
+    const bd         = bk.booking_data || {};
+    const new_end_ts = bd.extend_request?.new_end_ts;
+    if (!new_end_ts) return res.status(400).json({ error: 'No pending extension request' });
+
+    const merged = { ...bd, end_ts: new_end_ts, extend_request: { ...bd.extend_request, status: 'approved' } };
+    const patchR = await fetch(`${SUPABASE_URL}/rest/v1/bookings?id=eq.${req.params.id}`,
+      { method: 'PATCH', headers: { ...SVC_HEADERS, 'Prefer': 'return=minimal' }, body: JSON.stringify({ booking_data: merged }) }
+    );
+    if (!patchR.ok) { const e = await patchR.json(); return res.status(patchR.status).json({ error: e }); }
+
+    const dEmail   = bd.driver_email || null;
+    const dName    = bd.driver_name  || 'Driver';
+    const addr     = bd.addr         || 'your spot';
+    const tmOpts   = { hour: 'numeric', minute: '2-digit' };
+    const dOpts    = { month: 'short', day: 'numeric' };
+    const newEndStr  = new Date(new_end_ts).toLocaleTimeString('en-US', tmOpts);
+    const newDateStr = new Date(new_end_ts).toLocaleDateString('en-US', dOpts);
+    sendEmail(dEmail, 'Extension Approved — Lily Pad',
+      `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
+        <h2 style="color:#0E1F40;margin:0 0 8px">Extension approved! ✅</h2>
+        <p style="color:#555;margin:0 0 16px">Hi ${dName},</p>
+        <p style="color:#555;margin:0 0 20px">Great news — the host approved your extension request for <strong>${addr}</strong>.</p>
+        <div style="background:#f0fce8;border-radius:12px;padding:16px;margin-bottom:20px;border:1px solid #c8e9a0">
+          <div style="font-size:13px;color:#555">New checkout: <strong>${newDateStr} at ${newEndStr}</strong></div>
+        </div>
+        <p style="font-size:12px;color:#999;margin:0">— Lily Pad</p>
+      </div>`
+    );
+    console.log(`[extension] approved ${req.params.id} → ${new_end_ts}`);
+    res.json({ ok: true, new_end_ts });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Bookings: deny extension ───────────────────────────────────────────────────
+app.patch('/api/bookings/:id/extension-deny', async (req, res) => {
+  try {
+    const getR  = await fetch(`${SUPABASE_URL}/rest/v1/bookings?id=eq.${req.params.id}&select=booking_data`, { headers: SVC_HEADERS });
+    const rows  = await getR.json();
+    const bk    = Array.isArray(rows) ? rows[0] : null;
+    if (!bk) return res.status(404).json({ error: 'Not found' });
+    const bd = bk.booking_data || {};
+
+    const merged = { ...bd, extend_request: { ...bd.extend_request, status: 'denied' } };
+    const patchR = await fetch(`${SUPABASE_URL}/rest/v1/bookings?id=eq.${req.params.id}`,
+      { method: 'PATCH', headers: { ...SVC_HEADERS, 'Prefer': 'return=minimal' }, body: JSON.stringify({ booking_data: merged }) }
+    );
+    if (!patchR.ok) { const e = await patchR.json(); return res.status(patchR.status).json({ error: e }); }
+
+    const dEmail = bd.driver_email || null;
+    const dName  = bd.driver_name  || 'Driver';
+    sendEmail(dEmail, 'Extension Request Update — Lily Pad',
+      `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
+        <h2 style="color:#0E1F40;margin:0 0 8px">Extension not approved</h2>
+        <p style="color:#555;margin:0 0 16px">Hi ${dName},</p>
+        <p style="color:#555;margin:0 0 20px">Unfortunately the host was unable to approve your extension request. Your booking will end at the original time.</p>
+        <p style="font-size:12px;color:#999;margin:0">— Lily Pad</p>
+      </div>`
+    );
+    console.log(`[extension] denied ${req.params.id}`);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Saved spots: list ──────────────────────────────────────────────────────────
 app.get('/api/saved-spots/:userId', async (req, res) => {
   try {
@@ -2107,21 +2251,24 @@ app.get('/api/bookings/:userId', async (req, res) => {
     const rows = Array.isArray(data) ? data : [];
     const mapped = rows.map(b => {
       const bd = b.booking_data || {};
+      const er = bd.extend_request || null;
       return {
-        id:          b.id,
-        user_id:     b.user_id,
-        spot_id:     bd.spot_id || b.spot_id || '',
-        addr:        bd.addr    || bd.address || '',
-        city:        'Houston, TX',
-        pad_type:    bd.padType || 'Driveway',
-        host_name:   bd.hostName  || '',
-        host_phone:  bd.hostPhone || '',
-        start_ts:    bd.start_ts  || null,
-        end_ts:      bd.end_ts    || null,
-        price_per_hr: Number(bd.price_per_hr) || 0,
-        total_price:  Number(bd.total_price)  || 0,
-        status:      b.status || 'confirmed',
-        created_at:  b.created_at,
+        id:             b.id,
+        uuid:           b.id,
+        user_id:        b.user_id,
+        spot_id:        bd.spot_id || b.spot_id || '',
+        addr:           bd.addr    || bd.address || '',
+        city:           'Houston, TX',
+        pad_type:       bd.padType || 'Driveway',
+        host_name:      bd.hostName  || '',
+        host_phone:     bd.hostPhone || '',
+        start_ts:       bd.start_ts  || null,
+        end_ts:         bd.end_ts    || null,
+        price_per_hr:   Number(bd.price_per_hr) || 0,
+        total_price:    Number(bd.total_price)  || 0,
+        status:         b.status || 'confirmed',
+        created_at:     b.created_at,
+        extend_request: er ? { new_end_ts: er.new_end_ts, requested_at: er.requested_at, status: er.status || 'pending' } : null,
       };
     });
     res.json(mapped);

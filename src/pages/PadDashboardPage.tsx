@@ -46,6 +46,7 @@ interface Pad {
   description: string;
   services: string[];
   photoUrl: string;
+  auto_approve: boolean;
   // Display only
   status: "active" | "paused" | "pending";
   pausedUntil?: number | null; // unix ms; null/undefined = indefinite
@@ -62,7 +63,7 @@ const MOCK_PADS: Pad[] = [
   {
     id: 1,
     address: "142 Maple Street", city: "Austin, TX", type: "Driveway", spotCount: 1,
-    nickname: "Front driveway", price: 4,
+    nickname: "Front driveway", price: 4, auto_approve: false,
     description: "Easy-access driveway right off the main road. Great for downtown commuters.",
     services: ["Lighting at night", "24/7 access"],
     photoUrl: "https://images.unsplash.com/photo-1590674899484-d5640e854abe?w=600&q=70",
@@ -71,7 +72,7 @@ const MOCK_PADS: Pad[] = [
   {
     id: 2,
     address: "880 Oak Lane", city: "Austin, TX", type: "Driveway", spotCount: 2,
-    nickname: "Side gravel pad", price: 3,
+    nickname: "Side gravel pad", price: 3, auto_approve: false,
     description: "Two-car gravel pad next to the house. Quiet residential street.",
     services: ["Wide spot", "Surface paved"],
     photoUrl: "https://images.unsplash.com/photo-1448630360428-65456885c650?w=600&q=70",
@@ -189,6 +190,7 @@ export default function PadDashboardPage() {
               description: String(s.description || ""),
               services: Array.isArray(s.services) ? s.services as string[] : [],
               photoUrl: String(s.photo_url || ""),
+              auto_approve: !!((s.spot_data as Record<string, unknown>)?.auto_approve),
               status: s.status === "active" ? "active" : s.status === "paused" ? "paused" : "pending",
               pausedUntil: null,
               since: s.created_at ? new Date(String(s.created_at)).toLocaleDateString(undefined, { month: "short", year: "numeric" }) : "—",
@@ -379,6 +381,18 @@ export default function PadDashboardPage() {
 
   function updatePad(id: number, patch: Partial<Pad>) {
     setPads(prev => prev.map(p => p.id === id ? { ...p, ...patch } : p));
+  }
+
+  async function toggleAutoApprove(pad: Pad) {
+    const newVal = !pad.auto_approve;
+    updatePad(pad.id, { auto_approve: newVal });
+    if (pad.spotId) {
+      fetch(`/api/spots/${pad.spotId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ auto_approve: newVal }),
+      }).catch(() => {});
+    }
   }
 
   function requestPauseToggle(id: number) {
@@ -655,6 +669,26 @@ export default function PadDashboardPage() {
               {openPad.status !== "pending" && (
                 <PauseSwitch paused={openPad.status === "paused"} onPress={() => requestPauseToggle(openPad.id)} />
               )}
+            </div>
+
+            {/* Auto-approve toggle */}
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              gap: 12, padding: "14px 16px", borderRadius: 14, marginBottom: 16,
+              background: openPad.auto_approve ? "rgba(141,214,63,0.08)" : "rgba(255,255,255,0.04)",
+              border: `1px solid ${openPad.auto_approve ? "rgba(141,214,63,0.22)" : "rgba(255,255,255,0.08)"}`,
+            }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 700, color: "#fff", letterSpacing: -0.2 }}>
+                  Auto-approve extensions
+                </div>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", marginTop: 2 }}>
+                  {openPad.auto_approve
+                    ? "Extension requests are approved instantly."
+                    : "You'll review and approve each extension request."}
+                </div>
+              </div>
+              <PauseSwitch paused={!openPad.auto_approve} onPress={() => toggleAutoApprove(openPad)} />
             </div>
 
             {/* ── LOCKED FIELDS ── */}

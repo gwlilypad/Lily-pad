@@ -1969,7 +1969,7 @@ export default function FindPage() {
     ? Math.max(-_acctMax, Math.min(0, acctTransY))
     : (acctOpen ? 0 : -_acctMax);
   const acctFullness   = Math.max(0, Math.min(1, (acctLiveTransY + _acctMax) / _acctMax));
-  const acctBgAlpha    = 0.14 + acctFullness * 0.66;
+  const acctBgAlpha    = 0.92 + acctFullness * 0.08;
   const acctBlurPx     = Math.round(6 + acctFullness * 20);
   // Pointer-events guard: the account swipe-down should be grabbable whenever
   // its handle is visible at the top of the screen. The handle only slides up
@@ -3267,12 +3267,12 @@ export default function FindPage() {
               ? "transform 0.54s cubic-bezier(0.34,1.48,0.64,1)"   // spring: snaps open with pull
               : "transform 0.38s cubic-bezier(0.22,1,0.36,1)",      // ease-out: retreats cleanly
           display: "flex", flexDirection: "column",
-          background: `rgba(14,31,64,${acctBgAlpha.toFixed(3)})`,
+          background: `rgba(247,248,252,${acctBgAlpha.toFixed(3)})`,
           backdropFilter: `blur(${acctBlurPx}px)`,
           WebkitBackdropFilter: `blur(${acctBlurPx}px)`,
           borderRadius: "0 0 28px 28px",
-          boxShadow: "0 4px 32px rgba(0,0,0,0.36)",
-          border: "1px solid rgba(255,255,255,0.07)",
+          boxShadow: "0 4px 32px rgba(0,0,0,0.14)",
+          border: "1px solid rgba(14,31,64,0.08)",
           borderTop: "none",
           willChange: "transform",
         }}
@@ -3290,15 +3290,15 @@ export default function FindPage() {
               )}
             </div>
             <div>
-              <div style={{ fontSize: 17, fontWeight: 700, color: "#fff", letterSpacing: -0.3 }}>
+              <div style={{ fontSize: 17, fontWeight: 700, color: "#0E1F40", letterSpacing: -0.3 }}>
                 {`${profile?.first_name || state.drAns[0] || state.suAns[0] || ""} ${profile?.last_name || state.drAns[1] || state.suAns[1] || ""}`.trim() || "My Account"}
               </div>
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>{profile?.email || state.drAns[2] || state.suAns[2] || ""}</div>
+              <div style={{ fontSize: 12, color: "rgba(14,31,64,0.45)", marginTop: 2 }}>{profile?.email || state.drAns[2] || state.suAns[2] || ""}</div>
             </div>
           </div>
 
           {/* Divider */}
-          <div style={{ height: 1, background: "rgba(255,255,255,0.07)", marginBottom: 4 }} />
+          <div style={{ height: 1, background: "rgba(14,31,64,0.08)", marginBottom: 4 }} />
 
           {/* Menu items */}
           {acctView === "menu" ? (
@@ -3360,25 +3360,25 @@ export default function FindPage() {
                   },
                 ].filter(item => !item.lister || drawerMode === "lister");
                 return (
-                  <div style={{ background: "rgba(255,255,255,0.04)", borderRadius: 14, border: "1px solid rgba(255,255,255,0.07)", overflow: "hidden" }}>
+                  <div style={{ background: "rgba(14,31,64,0.04)", borderRadius: 14, border: "1px solid rgba(14,31,64,0.07)", overflow: "hidden" }}>
                     {items.map((item, idx) => {
                       const isAccent = item.accent;
                       return (
                         <div key={item.label}>
-                          {idx > 0 && <div style={{ height: 1, background: "rgba(255,255,255,0.06)", marginLeft: 44 }} />}
+                          {idx > 0 && <div style={{ height: 1, background: "rgba(14,31,64,0.06)", marginLeft: 44 }} />}
                           <div onClick={item.onClick} style={{
                             display: "flex", alignItems: "center", gap: 12,
                             padding: "10px 14px", cursor: "pointer",
-                            background: isAccent ? "rgba(141,214,63,0.05)" : "transparent",
+                            background: isAccent ? "rgba(141,214,63,0.08)" : "transparent",
                           }}>
-                            <div style={{ width: 30, height: 30, borderRadius: 8, background: isAccent ? "rgba(141,214,63,0.14)" : "rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: isAccent ? "#8DD63F" : "rgba(255,255,255,0.55)" }}>
+                            <div style={{ width: 30, height: 30, borderRadius: 8, background: isAccent ? "rgba(141,214,63,0.18)" : "rgba(14,31,64,0.07)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: isAccent ? "#8DD63F" : "rgba(14,31,64,0.55)" }}>
                               {item.icon}
                             </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 13, fontWeight: 600, color: isAccent ? "#8DD63F" : "#fff", letterSpacing: -0.1 }}>{item.label}</div>
-                              <div style={{ fontSize: 11, color: isAccent ? "rgba(141,214,63,0.50)" : "rgba(255,255,255,0.35)", marginTop: 0.5 }}>{item.sub}</div>
+                              <div style={{ fontSize: 13, fontWeight: 600, color: isAccent ? "#5a9e1f" : "#0E1F40", letterSpacing: -0.1 }}>{item.label}</div>
+                              <div style={{ fontSize: 11, color: isAccent ? "rgba(90,158,31,0.75)" : "rgba(14,31,64,0.42)", marginTop: 0.5 }}>{item.sub}</div>
                             </div>
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={isAccent ? "rgba(141,214,63,0.45)" : "rgba(255,255,255,0.18)"} strokeWidth="2.5" strokeLinecap="round"><path d="m9 18 6-6-6-6"/></svg>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={isAccent ? "rgba(90,158,31,0.50)" : "rgba(14,31,64,0.20)"} strokeWidth="2.5" strokeLinecap="round"><path d="m9 18 6-6-6-6"/></svg>
                           </div>
                         </div>
                       );
@@ -3389,12 +3389,12 @@ export default function FindPage() {
 
               {/* ── Driver / Lister toggle ── */}
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 4px 2px" }}>
-                <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.30)", textTransform: "uppercase", letterSpacing: 0.8 }}>Mode</span>
-                <div style={{ display: "flex", background: "rgba(255,255,255,0.05)", borderRadius: 20, padding: 2, border: "1px solid rgba(255,255,255,0.08)" }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(14,31,64,0.38)", textTransform: "uppercase", letterSpacing: 0.8 }}>Mode</span>
+                <div style={{ display: "flex", background: "rgba(14,31,64,0.06)", borderRadius: 20, padding: 2, border: "1px solid rgba(14,31,64,0.10)" }}>
                   {(["driver", "lister"] as const).map(m => (
                     <button key={m} onClick={() => setDrawerMode(m)} style={{
                       background: drawerMode === m ? "#8DD63F" : "transparent",
-                      color: drawerMode === m ? "#0E1F40" : "rgba(255,255,255,0.40)",
+                      color: drawerMode === m ? "#0E1F40" : "rgba(14,31,64,0.42)",
                       border: "none", borderRadius: 16, padding: "5px 14px",
                       fontSize: 11, fontWeight: 700, cursor: "pointer",
                       fontFamily: '"DM Sans", sans-serif',
@@ -3425,25 +3425,25 @@ export default function FindPage() {
                     </button>
                   ) : (
                     <>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.30)", letterSpacing: 0.7, textTransform: "uppercase", padding: "2px 4px" }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(14,31,64,0.38)", letterSpacing: 0.7, textTransform: "uppercase", padding: "2px 4px" }}>
                         Your spots · {myHostSpots.length}
                       </div>
-                      <div style={{ background: "rgba(255,255,255,0.04)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.07)", overflow: "hidden" }}>
+                      <div style={{ background: "rgba(14,31,64,0.04)", borderRadius: 12, border: "1px solid rgba(14,31,64,0.07)", overflow: "hidden" }}>
                         {myHostSpots.map((spot, idx) => (
                           <div key={spot.id}>
-                            {idx > 0 && <div style={{ height: 1, background: "rgba(255,255,255,0.06)", marginLeft: 42 }} />}
+                            {idx > 0 && <div style={{ height: 1, background: "rgba(14,31,64,0.06)", marginLeft: 42 }} />}
                             <div onClick={() => { setManagingSpot(spot); setAcctView("manage-spot"); }} style={{
                               display: "flex", alignItems: "center", gap: 10,
                               padding: "10px 14px", cursor: "pointer",
                             }}>
-                              <div style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(141,214,63,0.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "#8DD63F" }}>
+                              <div style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(141,214,63,0.18)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "#5a9e1f" }}>
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
                               </div>
                               <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: 13, fontWeight: 600, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{spot.addr}</div>
-                                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 0.5 }}>{spot.price} · {spot.meta.split("·")[0].trim()}</div>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: "#0E1F40", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{spot.addr}</div>
+                                <div style={{ fontSize: 11, color: "rgba(14,31,64,0.42)", marginTop: 0.5 }}>{spot.price} · {spot.meta.split("·")[0].trim()}</div>
                               </div>
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.20)" strokeWidth="2.5" strokeLinecap="round"><path d="m9 18 6-6-6-6"/></svg>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(14,31,64,0.20)" strokeWidth="2.5" strokeLinecap="round"><path d="m9 18 6-6-6-6"/></svg>
                             </div>
                           </div>
                         ))}
@@ -3812,18 +3812,18 @@ export default function FindPage() {
             alignItems: "center", justifyContent: "center", gap: 5,
             touchAction: "none", cursor: acctDragging ? "grabbing" : "grab",
             userSelect: "none",
-            borderTop: "1px solid rgba(255,255,255,0.10)",
-            background: "linear-gradient(to bottom, rgba(14,31,64,0) 0%, rgba(14,31,64,0.10) 60%, rgba(14,31,64,0.22) 100%)",
+            borderTop: "1px solid rgba(14,31,64,0.08)",
+            background: "linear-gradient(to bottom, rgba(247,248,252,0) 0%, rgba(247,248,252,0.85) 55%, rgba(247,248,252,1) 100%)",
             padding: "8px 0 10px",
             borderBottomLeftRadius: 28,
             borderBottomRightRadius: 28,
           }}
         >
           {/* Grab pill */}
-          <div style={{ width: 44, height: 5, borderRadius: 3, background: "rgba(255,255,255,0.55)" }} />
+          <div style={{ width: 44, height: 5, borderRadius: 3, background: "rgba(14,31,64,0.18)" }} />
           {/* Label */}
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 14, fontWeight: 800, color: "#fff", letterSpacing: 0.2 }}>Account</span>
+            <span style={{ fontSize: 14, fontWeight: 800, color: "#0E1F40", letterSpacing: 0.2 }}>Account</span>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8DD63F" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
               <path d="M6 9l6 6 6-6"/>
             </svg>

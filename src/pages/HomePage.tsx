@@ -208,8 +208,8 @@ export default function HomePage() {
         position: "absolute", bottom: 0, left: 0, right: 0, height: `${100 - SPLIT}%`,
         background: "#F0F2F7",
         display: "flex", flexDirection: "column", alignItems: "center",
-        justifyContent: "center",
-        padding: "0 24px calc(env(safe-area-inset-bottom) + 20px)",
+        justifyContent: "flex-start",
+        padding: "8vh 24px calc(env(safe-area-inset-bottom) + 20px)",
         boxSizing: "border-box", zIndex: 5,
       }}>
 

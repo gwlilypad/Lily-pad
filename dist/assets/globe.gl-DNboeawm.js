@@ -1,4 +1,4 @@
-import{g as f7}from"./index-CPH4b1If.js";/**
+import{g as f7}from"./index-BtjmDHtE.js";/**
  * @license
  * Copyright 2010-2026 Three.js Authors
  * SPDX-License-Identifier: MIT

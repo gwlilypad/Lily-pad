@@ -826,13 +826,13 @@ export default function AdminPage() {
   // Holds the trimmed pending text (and the ticket it's bound to so a tab/ticket
   // switch can't accidentally fire it on the wrong conversation).
   const [pendingReply, setPendingReply] = useState<{ ticketId: string; text: string } | null>(null);
-  type ServiceTab = "chat" | "email" | "tickets";
+  type ServiceTab = "email" | "tickets";
   type PipelineFilter = "all" | "open" | "pending" | "resolved";
   type AudienceFilter = "all" | "renter" | "padRenter";
   type EmailAudienceFilter = "all" | "renter" | "padRenter" | "guest";
   type EmailCategoryFilter = "all" | EmailCategory;
   type SortDir = "recent" | "oldest";
-  const [serviceTab, setServiceTab] = useState<ServiceTab>("chat");
+  const [serviceTab, setServiceTab] = useState<ServiceTab>("email");
   const [pipelineFilter, setPipelineFilter] = useState<PipelineFilter>("open");
   const [audienceFilter, setAudienceFilter] = useState<AudienceFilter>("all");
   const [emailAudienceFilter, setEmailAudienceFilter] = useState<EmailAudienceFilter>("all");
@@ -1371,7 +1371,7 @@ export default function AdminPage() {
     setSelectedEmailId(null);
     setAgentReplyDraft("");
     setPendingReply(null);
-    setServiceTab("chat");
+    setServiceTab("email");
     setPipelineFilter("open");
     setAudienceFilter("all");
     setEmailAudienceFilter("all");
@@ -2098,7 +2098,7 @@ export default function AdminPage() {
             );
           }
 
-          if (serviceTab === "chat" && selected) {
+          if (false && selected) {
             const last = selected.messages[selected.messages.length - 1];
             const customerWaiting = last && last.from === "user" && selected.status === "open";
             return (
@@ -2385,10 +2385,9 @@ export default function AdminPage() {
                 <p style={{ fontSize: 22, fontWeight: 800, color: "#fff", margin: "2px 0 0", letterSpacing: "-0.02em" }}>Customer interaction</p>
               </div>
 
-              {/* ── Sub-tab toggle: Live chat / Email / Tickets ── */}
+              {/* ── Sub-tab toggle: Email / Tickets ── */}
               <div style={{ display: "flex", gap: 4, background: "#142A52", borderRadius: 100, padding: 4 }}>
                 {([
-                  { key: "chat" as ServiceTab, label: "Live chat", count: totalChats, accent: openCount + (role === "admin" ? pendingCount : 0) },
                   { key: "email" as ServiceTab, label: "Email", count: totalEmails, accent: unreadEmails },
                   { key: "tickets" as ServiceTab, label: "Tickets", count: changeRequestTickets.length, accent: openCRCount },
                 ]).map(t => {
@@ -2405,113 +2404,7 @@ export default function AdminPage() {
                 })}
               </div>
 
-              {serviceTab === "chat" ? (
-                <>
-                  {/* ── Pipeline list (Total / Open / Pending approval / Resolved) ── */}
-                  <div style={{ background: "#142A52", borderRadius: 16, padding: "4px 14px" }}>
-                    {([
-                      { key: "all" as PipelineFilter,      label: "Total",            count: totalChats,    dot: "rgba(255,255,255,0.55)", num: "#fff" },
-                      { key: "open" as PipelineFilter,     label: "Open",             count: openCount,     dot: GREEN,                    num: GREEN },
-                      { key: "pending" as PipelineFilter,  label: "Pending approval", count: pendingCount,  dot: "#F59E0B",                num: "#F59E0B", showAdminPing: true },
-                      { key: "resolved" as PipelineFilter, label: "Resolved",         count: resolvedCount, dot: "rgba(157,190,255,0.55)", num: "#9DBEFF" },
-                    ]).map((row, i, arr) => {
-                      const active = pipelineFilter === row.key;
-                      return (
-                        <button
-                          key={row.key}
-                          onClick={() => setPipelineFilter(row.key)}
-                          style={{
-                            width: "100%", display: "flex", alignItems: "center", gap: 10,
-                            padding: "14px 4px",
-                            background: "transparent", border: "none", cursor: "pointer",
-                            borderBottom: i < arr.length - 1 ? "1px solid rgba(255,255,255,0.06)" : "none",
-                            color: "inherit", fontFamily: '"DM Sans",sans-serif',
-                            position: "relative",
-                          }}
-                        >
-                          <span style={{ width: 8, height: 8, borderRadius: "50%", background: row.dot, flexShrink: 0 }} />
-                          <span style={{ flex: 1, textAlign: "left", fontSize: 14, fontWeight: 700, color: active ? "#fff" : "rgba(255,255,255,0.78)" }}>
-                            {row.label}
-                          </span>
-                          {row.showAdminPing && role === "admin" && row.count > 0 && (
-                            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#F59E0B", boxShadow: "0 0 0 2px #142A52" }} />
-                          )}
-                          <span style={{ fontSize: 16, fontWeight: 800, color: row.num, letterSpacing: "-0.01em" }}>
-                            {row.count}
-                          </span>
-                          {active && (
-                            <span style={{ position: "absolute", left: -14, top: 8, bottom: 8, width: 3, borderRadius: 2, background: GREEN }} />
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* ── Audience + sort ── */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <div style={{ flex: 1, display: "flex", gap: 4, background: "#142A52", borderRadius: 100, padding: 4 }}>
-                        {([
-                          { key: "all" as AudienceFilter, label: "All users" },
-                          { key: "renter" as AudienceFilter, label: "Renters" },
-                          { key: "padRenter" as AudienceFilter, label: "Listers" },
-                        ]).map(f => (
-                          <button key={f.key} onClick={() => setAudienceFilter(f.key)} style={{ flex: 1, padding: "7px 8px", borderRadius: 100, border: "none", background: audienceFilter === f.key ? "rgba(255,255,255,0.10)" : "transparent", color: audienceFilter === f.key ? "#fff" : "rgba(255,255,255,0.55)", fontWeight: 700, fontSize: 11, cursor: "pointer", fontFamily: '"DM Sans",sans-serif' }}>{f.label}</button>
-                        ))}
-                      </div>
-                      <button onClick={() => setSortDir(d => d === "recent" ? "oldest" : "recent")} style={{ background: "#142A52", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 100, padding: "7px 14px", color: "rgba(255,255,255,0.65)", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: '"DM Sans",sans-serif', display: "flex", alignItems: "center", gap: 6 }}>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                          {sortDir === "recent" ? <path d="M12 5v14m-6-6 6 6 6-6"/> : <path d="M12 19V5m-6 6 6-6 6 6"/>}
-                        </svg>
-                        {sortDir === "recent" ? "Newest" : "Oldest"}
-                      </button>
-                    </div>
-                  </div>
-
-                  {filtered.length === 0 ? (
-                    <div style={{ background: "#142A52", borderRadius: 18, padding: "32px 22px", textAlign: "center", color: "rgba(255,255,255,0.45)", fontSize: 13 }}>
-                      {totalChats === 0
-                        ? "No support conversations yet. When a customer chats, it'll show up here."
-                        : "No conversations match these filters."}
-                    </div>
-                  ) : (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                      {filtered.map(t => {
-                        const p = ticketPipeline(t);
-                        const last = t.messages[t.messages.length - 1];
-                        const needsReply = last && last.from === "user" && t.status === "open";
-                        const unreadByAgent = !t.openedByAgent;
-                        return (
-                          <div key={t.id} onClick={() => { setSelectedTicketId(t.id); setAgentReplyDraft(""); setPendingReply(null); setResolveOpen(false); resetResolutionAuthFields(); markTicketOpened(t.id); }} style={{ background: "#142A52", borderRadius: 14, padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", border: needsReply ? `1px solid rgba(141,214,63,0.32)` : "1px solid transparent", position: "relative" }}>
-                            {unreadByAgent && (
-                              <span style={{ position: "absolute", top: 10, right: 10, width: 8, height: 8, borderRadius: "50%", background: GREEN, boxShadow: "0 0 0 3px rgba(141,214,63,0.20)" }} />
-                            )}
-                            <div style={{ width: 38, height: 38, borderRadius: 10, background: "rgba(141,214,63,0.18)", color: GREEN, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                            </div>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                                <span style={{ fontSize: 13, fontWeight: 800, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.subject}</span>
-                                <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase", padding: "2px 6px", borderRadius: 5, color: pipelinePillFg(p), background: pipelinePillBg(p) }}>{pipelineText(p)}</span>
-                                <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase", padding: "2px 6px", borderRadius: 5, color: audiencePillFg(t.accountType), background: audiencePillBg(t.accountType) }}>{audienceLabel(t.accountType)}</span>
-                                {needsReply && <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase", padding: "2px 6px", borderRadius: 5, color: NAVY, background: GREEN }}>Reply</span>}
-                                {t.status === "pending_resolution" && <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase", padding: "2px 6px", borderRadius: 5, color: "#FACC15", background: "rgba(250,204,21,0.18)", border: "1px solid rgba(250,204,21,0.30)" }}>Awaiting admin</span>}
-                              </div>
-                              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.50)", marginTop: 2 }}>
-                                {t.userName}{t.userEmail ? ` · ${t.userEmail}` : ""}
-                              </div>
-                              <div style={{ fontSize: 11.5, color: "rgba(255,255,255,0.62)", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                {ticketLastPreview(t)}
-                              </div>
-                            </div>
-                            <div style={{ fontSize: 10.5, color: "rgba(255,255,255,0.40)", flexShrink: 0 }}>{formatSupportTime(t.updatedAt)}</div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </>
-              ) : serviceTab === "tickets" ? (
+              {serviceTab === "tickets" ? (
                 /* ── CHANGE REQUEST TICKETS ── */
                 (() => {
                   const crSorted = [...changeRequestTickets].sort((a, b) => b.updatedAt - a.updatedAt);

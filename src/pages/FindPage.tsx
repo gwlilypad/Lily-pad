@@ -3302,30 +3302,32 @@ export default function FindPage() {
 
           {/* Menu items */}
           {acctView === "menu" ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
 
-              {/* ── 4 Driver items (always shown) ── */}
+              {/* ── Nav items grouped in one card ── */}
               {(() => {
                 const userTickets = supportTickets.filter(t => t.userId === supportUserId.current);
                 const openCount = userTickets.filter(t => t.status === "open").length;
                 const upcoming = state.bookings.filter(b => b.status === "active" && b.endTs > Date.now()).length;
                 const items = [
                   {
-                    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
+                    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
                     label: "My Account",
                     sub: "Photo & personal info",
                     lister: false,
+                    accent: false,
                     onClick: () => { setAcctOpen(false); acctOpenRef.current = false; goTo(state.accountType === "padRenter" ? "account" : "driveraccount"); },
                   },
                   {
-                    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>,
+                    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>,
                     label: "My Bookings",
                     sub: upcoming > 0 ? `${upcoming} upcoming` : "Past & upcoming",
                     lister: false,
+                    accent: false,
                     onClick: () => { setAcctOpen(false); acctOpenRef.current = false; goTo("bookings"); },
                   },
                   {
-                    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
+                    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
                     label: "My Pads",
                     sub: myHostSpots.length > 0 ? `${myHostSpots.length} listing${myHostSpots.length !== 1 ? "s" : ""}` : "Manage your listings",
                     lister: true,
@@ -3333,147 +3335,132 @@ export default function FindPage() {
                     onClick: () => { setAcctOpen(false); acctOpenRef.current = false; goTo("paddashboard"); },
                   },
                   {
-                    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>,
+                    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>,
                     label: "Customer Service",
-                    sub: openCount > 0 ? `${openCount} open conversation${openCount !== 1 ? "s" : ""}` : "Contact us or chat with a rep",
+                    sub: openCount > 0 ? `${openCount} open conversation${openCount !== 1 ? "s" : ""}` : "Get help",
                     lister: false,
+                    accent: false,
                     onClick: () => { setAcctOpen(false); acctOpenRef.current = false; goTo("customerservice"); },
                   },
                   {
-                    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
+                    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
                     label: "Saved Spots",
-                    sub: `${savedSpots.length} spot${savedSpots.length !== 1 ? "s" : ""} saved`,
+                    sub: savedSpots.length > 0 ? `${savedSpots.length} saved` : "None saved yet",
                     lister: false,
+                    accent: false,
                     onClick: () => { setAcctOpen(false); acctOpenRef.current = false; goTo("savedspots"); },
                   },
                 ].filter(item => !item.lister || drawerMode === "lister");
-                return items.map(item => {
-                  const isAccent = (item as { accent?: boolean }).accent;
-                  return (
-                    <div key={item.label} onClick={item.onClick} style={{
-                      display: "flex", alignItems: "center", gap: 14,
-                      padding: "14px 16px", borderRadius: 14,
-                      background: isAccent ? "rgba(141,214,63,0.09)" : "rgba(52,52,58,0.60)",
-                      border: isAccent ? "1px solid rgba(141,214,63,0.28)" : "1px solid rgba(255,255,255,0.07)",
-                      boxShadow: "0 2px 8px rgba(0,0,0,0.28)",
-                      cursor: "pointer",
-                    }}>
-                      <div style={{ width: 40, height: 40, borderRadius: 12, background: isAccent ? "rgba(141,214,63,0.16)" : "rgba(255,255,255,0.08)", border: isAccent ? "1px solid rgba(141,214,63,0.22)" : "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: isAccent ? "#8DD63F" : "rgba(255,255,255,0.6)" }}>
-                        {item.icon}
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: isAccent ? "#8DD63F" : "#fff", letterSpacing: -0.2 }}>{item.label}</div>
-                        <div style={{ fontSize: 11, color: isAccent ? "rgba(141,214,63,0.55)" : "rgba(255,255,255,0.38)", marginTop: 1 }}>{item.sub}</div>
-                      </div>
-                      <div style={{ marginLeft: "auto", color: isAccent ? "rgba(141,214,63,0.4)" : "rgba(255,255,255,0.2)" }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="m9 18 6-6-6-6"/></svg>
-                      </div>
-                    </div>
-                  );
-                });
+                return (
+                  <div style={{ background: "rgba(255,255,255,0.04)", borderRadius: 14, border: "1px solid rgba(255,255,255,0.07)", overflow: "hidden" }}>
+                    {items.map((item, idx) => {
+                      const isAccent = item.accent;
+                      return (
+                        <div key={item.label}>
+                          {idx > 0 && <div style={{ height: 1, background: "rgba(255,255,255,0.06)", marginLeft: 44 }} />}
+                          <div onClick={item.onClick} style={{
+                            display: "flex", alignItems: "center", gap: 12,
+                            padding: "10px 14px", cursor: "pointer",
+                            background: isAccent ? "rgba(141,214,63,0.05)" : "transparent",
+                          }}>
+                            <div style={{ width: 30, height: 30, borderRadius: 8, background: isAccent ? "rgba(141,214,63,0.14)" : "rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: isAccent ? "#8DD63F" : "rgba(255,255,255,0.55)" }}>
+                              {item.icon}
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 13, fontWeight: 600, color: isAccent ? "#8DD63F" : "#fff", letterSpacing: -0.1 }}>{item.label}</div>
+                              <div style={{ fontSize: 11, color: isAccent ? "rgba(141,214,63,0.50)" : "rgba(255,255,255,0.35)", marginTop: 0.5 }}>{item.sub}</div>
+                            </div>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={isAccent ? "rgba(141,214,63,0.45)" : "rgba(255,255,255,0.18)"} strokeWidth="2.5" strokeLinecap="round"><path d="m9 18 6-6-6-6"/></svg>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
               })()}
 
               {/* ── Driver / Lister toggle ── */}
-              <div style={{ height: 1, background: "rgba(255,255,255,0.07)", margin: "6px 0 2px" }} />
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 2px" }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.38)", textTransform: "uppercase", letterSpacing: 0.7 }}>Mode</span>
-                <div style={{ display: "flex", background: "rgba(255,255,255,0.05)", borderRadius: 20, padding: 3, gap: 2, border: "1px solid rgba(255,255,255,0.09)" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 4px 2px" }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.30)", textTransform: "uppercase", letterSpacing: 0.8 }}>Mode</span>
+                <div style={{ display: "flex", background: "rgba(255,255,255,0.05)", borderRadius: 20, padding: 2, border: "1px solid rgba(255,255,255,0.08)" }}>
                   {(["driver", "lister"] as const).map(m => (
-                    <button
-                      key={m}
-                      onClick={() => setDrawerMode(m)}
-                      style={{
-                        background: drawerMode === m ? "#8DD63F" : "transparent",
-                        color: drawerMode === m ? "#0E1F40" : "rgba(255,255,255,0.45)",
-                        border: "none", borderRadius: 16, padding: "6px 18px",
-                        fontSize: 12, fontWeight: 800, cursor: "pointer",
-                        fontFamily: '"DM Sans", sans-serif',
-                        transition: "background 0.18s, color 0.18s",
-                      }}
-                    >{m === "driver" ? "Driver" : "Lister"}</button>
+                    <button key={m} onClick={() => setDrawerMode(m)} style={{
+                      background: drawerMode === m ? "#8DD63F" : "transparent",
+                      color: drawerMode === m ? "#0E1F40" : "rgba(255,255,255,0.40)",
+                      border: "none", borderRadius: 16, padding: "5px 14px",
+                      fontSize: 11, fontWeight: 700, cursor: "pointer",
+                      fontFamily: '"DM Sans", sans-serif',
+                      transition: "background 0.15s, color 0.15s",
+                    }}>{m === "driver" ? "Driver" : "Lister"}</button>
                   ))}
                 </div>
               </div>
 
-              {/* ── Lister section (only when lister mode active) ── */}
+              {/* ── Lister section ── */}
               {drawerMode === "lister" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 2 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
                   {myHostSpots.length === 0 ? (
-                    <button
-                      onClick={() => { setAcctOpen(false); acctOpenRef.current = false; goTo("padtype"); }}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 12,
-                        width: "100%", padding: "14px 16px", borderRadius: 14,
-                        background: "rgba(141,214,63,0.08)", border: "1.5px dashed rgba(141,214,63,0.40)",
-                        cursor: "pointer", fontFamily: '"DM Sans", sans-serif', textAlign: "left",
-                      }}
-                    >
-                      <div style={{ width: 40, height: 40, borderRadius: 12, background: "rgba(141,214,63,0.14)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "#8DD63F" }}>
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                    <button onClick={() => { setAcctOpen(false); acctOpenRef.current = false; goTo("padtype"); }} style={{
+                      display: "flex", alignItems: "center", gap: 10,
+                      width: "100%", padding: "11px 14px", borderRadius: 12,
+                      background: "rgba(141,214,63,0.06)", border: "1.5px dashed rgba(141,214,63,0.35)",
+                      cursor: "pointer", fontFamily: '"DM Sans", sans-serif', textAlign: "left",
+                    }}>
+                      <div style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(141,214,63,0.14)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "#8DD63F" }}>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                       </div>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13.5, fontWeight: 700, color: "#8DD63F", letterSpacing: -0.2 }}>List your spot on Lily Pad</div>
-                        <div style={{ fontSize: 11, color: "rgba(141,214,63,0.55)", marginTop: 1 }}>Earn money from your parking space</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "#8DD63F", letterSpacing: -0.1 }}>List your spot on lily pad</div>
+                        <div style={{ fontSize: 11, color: "rgba(141,214,63,0.50)", marginTop: 0.5 }}>Earn money from your parking space</div>
                       </div>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8DD63F" strokeWidth="2.2" strokeLinecap="round"><path d="m9 18 6-6-6-6"/></svg>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(141,214,63,0.45)" strokeWidth="2.5" strokeLinecap="round"><path d="m9 18 6-6-6-6"/></svg>
                     </button>
                   ) : (
                     <>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.38)", letterSpacing: 0.6, textTransform: "uppercase", padding: "0 2px" }}>
-                        Your listed spots · {myHostSpots.length}
+                      <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.30)", letterSpacing: 0.7, textTransform: "uppercase", padding: "2px 4px" }}>
+                        Your spots · {myHostSpots.length}
                       </div>
-                      {myHostSpots.map(spot => (
-                        <div
-                          key={spot.id}
-                          onClick={() => { setManagingSpot(spot); setAcctView("manage-spot"); }}
-                          style={{
-                            display: "flex", alignItems: "center", gap: 12,
-                            padding: "12px 14px", borderRadius: 12,
-                            background: "rgba(52,52,58,0.60)", border: "1px solid rgba(255,255,255,0.07)",
-                            cursor: "pointer",
-                          }}
-                        >
-                          <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(141,214,63,0.14)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "#8DD63F" }}>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                      <div style={{ background: "rgba(255,255,255,0.04)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.07)", overflow: "hidden" }}>
+                        {myHostSpots.map((spot, idx) => (
+                          <div key={spot.id}>
+                            {idx > 0 && <div style={{ height: 1, background: "rgba(255,255,255,0.06)", marginLeft: 42 }} />}
+                            <div onClick={() => { setManagingSpot(spot); setAcctView("manage-spot"); }} style={{
+                              display: "flex", alignItems: "center", gap: 10,
+                              padding: "10px 14px", cursor: "pointer",
+                            }}>
+                              <div style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(141,214,63,0.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "#8DD63F" }}>
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{spot.addr}</div>
+                                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 0.5 }}>{spot.price} · {spot.meta.split("·")[0].trim()}</div>
+                              </div>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.20)" strokeWidth="2.5" strokeLinecap="round"><path d="m9 18 6-6-6-6"/></svg>
+                            </div>
                           </div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{spot.addr}</div>
-                            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", marginTop: 1 }}>{spot.price} · {spot.meta.split("·")[0].trim()}</div>
-                          </div>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="2.2" strokeLinecap="round"><path d="m9 18 6-6-6-6"/></svg>
-                        </div>
-                      ))}
-                      <button
-                        onClick={() => { setAcctOpen(false); acctOpenRef.current = false; goTo("padtype"); }}
-                        style={{
-                          display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                          width: "100%", padding: "12px", borderRadius: 12,
-                          background: "transparent", border: "1.5px dashed rgba(141,214,63,0.35)",
-                          cursor: "pointer", fontFamily: '"DM Sans", sans-serif',
-                          fontSize: 13, fontWeight: 700, color: "#8DD63F",
-                        }}
-                      >
-                        + Add new spot
-                      </button>
+                        ))}
+                      </div>
+                      <button onClick={() => { setAcctOpen(false); acctOpenRef.current = false; goTo("padtype"); }} style={{
+                        display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                        width: "100%", padding: "9px", borderRadius: 10,
+                        background: "transparent", border: "1.5px dashed rgba(141,214,63,0.30)",
+                        cursor: "pointer", fontFamily: '"DM Sans", sans-serif',
+                        fontSize: 12, fontWeight: 700, color: "rgba(141,214,63,0.8)",
+                      }}>+ Add spot</button>
                     </>
                   )}
                 </div>
               )}
 
               {/* Sign out */}
-              <button
-                onClick={() => { authSignOut().then(() => goTo("home")); }}
-                style={{
-                  display: "flex", alignItems: "center", gap: 14,
-                  width: "100%", marginTop: 4, padding: "14px 16px", borderRadius: 14,
-                  background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.18)",
-                  cursor: "pointer", fontFamily: '"DM Sans", sans-serif',
-                }}
-              >
-                <div style={{ width: 40, height: 40, borderRadius: 12, background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.15)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "rgba(239,68,68,0.75)" }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-                </div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: "rgba(239,68,68,0.85)", letterSpacing: -0.2 }}>Sign out</div>
+              <button onClick={() => { authSignOut().then(() => goTo("home")); }} style={{
+                display: "flex", alignItems: "center", gap: 8,
+                width: "100%", padding: "9px 14px", borderRadius: 10,
+                background: "transparent", border: "1px solid rgba(239,68,68,0.15)",
+                cursor: "pointer", fontFamily: '"DM Sans", sans-serif',
+              }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(239,68,68,0.70)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                <span style={{ fontSize: 12, fontWeight: 600, color: "rgba(239,68,68,0.75)" }}>Sign out</span>
               </button>
             </div>
           ) : acctView === "account" ? (

@@ -2657,7 +2657,7 @@ function buildEarlyAccessHtml(logoUrl) {
 
 // SPA fallback — when EARLY_ACCESS=true serve the early access page directly
 // (no React bundle sent to browser). Admin/auth paths always get the React app.
-const REACT_ONLY_PATHS = ['/admin', '/signin', '/forgot', '/verify'];
+const REACT_ONLY_PATHS = ['/admin', '/signin', '/forgot', '/verify', '/paddashboard', '/listerbookings'];
 app.get('*', (req, res) => {
   const noCacheHeaders = () => {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');

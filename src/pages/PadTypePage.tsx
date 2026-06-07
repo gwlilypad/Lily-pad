@@ -1,7 +1,9 @@
+import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/context/AuthContext";
 
 export default function PadTypePage() {
+  const navigate = useNavigate();
   const { goTo } = useApp();
   const { user } = useAuth();
   return (
@@ -13,7 +15,7 @@ export default function PadTypePage() {
       <div className="s-divider" />
       <div style={{ flex: 1, background: "#0E1F40", display: "flex", flexDirection: "column", alignItems: "center", padding: "20px 28px 36px" }}>
         <div style={{ width: "100%", padding: "6px 0 20px" }}>
-          <button className="back-btn" onClick={() => goTo("home")} style={{ background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 4, fontFamily: "'DM Sans', sans-serif" }}>
+          <button className="back-btn" onClick={() => navigate(-1)} style={{ background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 4, fontFamily: "'DM Sans', sans-serif" }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.45)" strokeWidth="2"><path d="M19 12H5M12 5l-7 7 7 7" /></svg>
             <span style={{ fontSize: 13, color: "rgba(255,255,255,0.45)" }}>Back</span>
           </button>

@@ -4,7 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import TabBar from "@/components/TabBar";
 
 export default function AccountPage() {
-  const { goTo, state } = useApp();
+  const { goTo, state, setState } = useApp();
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
 
@@ -24,7 +24,7 @@ export default function AccountPage() {
   return (
     <div className="page active" style={{ display: "flex", flexDirection: "column" }}>
       <div style={{ background: "#0E1F40", padding: "44px 24px 20px", flexShrink: 0 }}>
-        <button onClick={() => navigate(-1)} style={{ background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.14)", borderRadius: "50%", width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#fff", marginBottom: 16 }}>
+        <button onClick={() => { setState(s => ({ ...s, openAcctOnFind: true })); navigate(-1); }} style={{ background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.14)", borderRadius: "50%", width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#fff", marginBottom: 16 }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M15 18l-6-6 6-6"/></svg>
         </button>
         <div className="profile-avatar"><span className="avatar-initials">{initials}</span></div>

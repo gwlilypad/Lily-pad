@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { supabase } from "@/lib/supabase";
 
@@ -21,7 +22,8 @@ function saveSavedIds(ids: number[]) {
 }
 
 export default function SavedSpotsPage() {
-  const { goTo } = useApp();
+  const { goTo, setState } = useApp();
+  const navigate = useNavigate();
   const [savedIds, setSavedIds] = useState<number[]>(() => loadSavedIds());
   const [spots, setSpots] = useState<Spot[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,7 +51,7 @@ export default function SavedSpotsPage() {
       {/* Header */}
       <div style={{ flexShrink: 0, padding: "52px 20px 16px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <button onClick={() => goTo("find")} style={{
+          <button onClick={() => { setState(s => ({ ...s, openAcctOnFind: true })); navigate(-1); }} style={{
             background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.14)",
             borderRadius: "50%", width: 36, height: 36, display: "flex", alignItems: "center",
             justifyContent: "center", cursor: "pointer", color: "#fff", flexShrink: 0,

@@ -8,7 +8,7 @@ import {
 } from "@/lib/supportApi";
 
 export default function CustomerServicePage() {
-  const { goTo, state } = useApp();
+  const { goTo, state, setState } = useApp();
   const navigate = useNavigate();
   const { user, profile } = useAuth();
 
@@ -121,7 +121,7 @@ export default function CustomerServicePage() {
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           {view === "thread"
             ? <BackBtn onClick={() => { setView("menu"); setActiveId(null); }} />
-            : <BackBtn onClick={() => navigate(-1)} />
+            : <BackBtn onClick={() => { setState(s => ({ ...s, openAcctOnFind: true })); navigate(-1); }} />
           }
           <div>
             <div style={{ fontSize: 20, fontWeight: 800, color: "#fff", letterSpacing: -0.5 }}>

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
@@ -148,6 +149,7 @@ function LockedRow({ label, value }: { label: string; value: string }) {
 
 export default function PadDashboardPage() {
   const { goTo, setState } = useApp();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [pads, setPads] = useState<Pad[]>([]);
   const [loadingPads, setLoadingPads] = useState(true);
@@ -483,7 +485,7 @@ export default function PadDashboardPage() {
       <div style={{ flexShrink: 0, padding: "52px 20px 22px", background: NAVY }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <button
-            onClick={() => openPad ? (setOpenPadId(null), setEditMode(false), setEditDraft(null)) : goTo("account")}
+            onClick={() => openPad ? (setOpenPadId(null), setEditMode(false), setEditDraft(null)) : (setState(s => ({ ...s, openAcctOnFind: true })), navigate(-1))}
             style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, cursor: "pointer", padding: 0 }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
           </button>

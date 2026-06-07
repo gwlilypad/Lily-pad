@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/context/AuthContext";
 import type { BookingRec } from "@/context/AppContext";
@@ -42,6 +43,7 @@ function toLocalInput(ts: number) {
 
 export default function BookingsPage() {
   const { goTo, setState } = useApp();
+  const navigate = useNavigate();
   const { user } = useAuth();
 
   const [filter, setFilter]       = useState<"upcoming"|"past">("upcoming");
@@ -175,7 +177,7 @@ export default function BookingsPage() {
       {/* Header */}
       <div style={{ flexShrink: 0, padding: "52px 20px 0", background: NAVY }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
-          <button onClick={() => goTo("find")} style={{ width:36,height:36,borderRadius:"50%",background:"rgba(255,255,255,0.10)",border:"1px solid rgba(255,255,255,0.12)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer" }}>
+          <button onClick={() => { setState(s => ({ ...s, openAcctOnFind: true })); navigate(-1); }} style={{ width:36,height:36,borderRadius:"50%",background:"rgba(255,255,255,0.10)",border:"1px solid rgba(255,255,255,0.12)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer" }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
           </button>
           <div>

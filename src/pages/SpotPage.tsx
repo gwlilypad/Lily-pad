@@ -1,7 +1,9 @@
+import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 
 export default function SpotPage() {
   const { goTo } = useApp();
+  const navigate = useNavigate();
   const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const openDays = new Set([1, 2, 3, 4, 5]);
 
@@ -10,7 +12,7 @@ export default function SpotPage() {
       {/* Hero */}
       <div className="spot-hero">
         <div className="spot-hero-overlay" />
-        <button className="spot-hero-back" onClick={() => goTo("find")}>
+        <button className="spot-hero-back" onClick={() => navigate(-1)}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0E1F40" strokeWidth="2"><path d="M19 12H5M12 5l-7 7 7 7" /></svg>
         </button>
         <div className="spot-hero-price" style={{ zIndex: 2 }}>$3/hr</div>

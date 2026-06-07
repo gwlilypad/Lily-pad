@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 
 const QR_PATTERN = [
@@ -13,6 +14,7 @@ const QR_PATTERN = [
 
 export default function ConfirmPage() {
   const { goTo } = useApp();
+  const navigate = useNavigate();
 
   return (
     <div className="page active" style={{ display: "flex", flexDirection: "column" }}>
@@ -55,7 +57,7 @@ export default function ConfirmPage() {
         </div>
 
         <button className="dir-btn" onClick={() => alert("Opening maps...")}>Get directions</button>
-        <button style={{ width: "100%", padding: "12px 0", background: "transparent", color: "rgba(14,31,64,0.5)", fontSize: 13, fontWeight: 400, border: "none", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", marginTop: 8 }} onClick={() => goTo("find")}>
+        <button style={{ width: "100%", padding: "12px 0", background: "transparent", color: "rgba(14,31,64,0.5)", fontSize: 13, fontWeight: 400, border: "none", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", marginTop: 8 }} onClick={() => navigate(-1)}>
           Back to search
         </button>
       </div>

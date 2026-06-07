@@ -24,7 +24,7 @@ export default function DriverAccountPage() {
   return (
     <div className="page active" style={{ display: "flex", flexDirection: "column" }}>
       <div style={{ background: "#0E1F40", padding: "44px 24px 20px", flexShrink: 0 }}>
-        <button onClick={() => goTo("find")} style={{ background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.14)", borderRadius: "50%", width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#fff", marginBottom: 16 }}>
+        <button onClick={() => navigate(-1)} style={{ background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.14)", borderRadius: "50%", width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#fff", marginBottom: 16 }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M15 18l-6-6 6-6"/></svg>
         </button>
         <div className="profile-avatar"><span className="avatar-initials">{initials}</span></div>
@@ -47,22 +47,6 @@ export default function DriverAccountPage() {
           <div className="thumb-nav-row" onClick={() => goTo("bookings")}><span className="thumb-nav-lbl">Upcoming bookings</span><span className="thumb-nav-arrow">›</span></div>
           <div className="thumb-nav-row" onClick={() => goTo("bookings")}><span className="thumb-nav-lbl">Past bookings</span><span className="thumb-nav-arrow">›</span></div>
           <div className="thumb-nav-row"><span className="thumb-nav-lbl">Favorites</span><span className="thumb-nav-arrow">›</span></div>
-        </div>
-
-        <span className="section-header">Referrals</span>
-        <div className="referral-card">
-          <div className="ref-header">
-            <div className="ref-icon">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0E1F40" strokeWidth="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
-            </div>
-            <span className="ref-title">Invite friends</span>
-          </div>
-          <p className="ref-sub">Share your code. When friends book their first pad, you both save.</p>
-          <div className="ref-code-row">
-            <span className="ref-code">DRIVE10</span>
-            <button className="ref-copy-btn" onClick={() => navigator.clipboard.writeText("DRIVE10").catch(() => {})}>Copy</button>
-          </div>
-          <p className="ref-earn">0 referrals so far · $0 saved</p>
         </div>
 
         <span className="section-header">Settings</span>

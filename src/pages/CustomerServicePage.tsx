@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/context/AuthContext";
 import { formatSupportTime, ticketLastPreview, type SupportTicket } from "@/lib/support";
@@ -8,6 +9,7 @@ import {
 
 export default function CustomerServicePage() {
   const { goTo, state } = useApp();
+  const navigate = useNavigate();
   const { user, profile } = useAuth();
 
   const [tickets, setTickets]           = useState<SupportTicket[]>([]);
@@ -119,7 +121,7 @@ export default function CustomerServicePage() {
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           {view === "thread"
             ? <BackBtn onClick={() => { setView("menu"); setActiveId(null); }} />
-            : <BackBtn onClick={() => goTo("find")} />
+            : <BackBtn onClick={() => navigate(-1)} />
           }
           <div>
             <div style={{ fontSize: 20, fontWeight: 800, color: "#fff", letterSpacing: -0.5 }}>

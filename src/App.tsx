@@ -19,6 +19,7 @@ import ConfirmPage from "@/pages/ConfirmPage";
 import DriverSignupPage from "@/pages/DriverSignupPage";
 import DriverAccountPage from "@/pages/DriverAccountPage";
 import PadDashboardPage from "@/pages/PadDashboardPage";
+import ListerBookingsPage from "@/pages/ListerBookingsPage";
 import BookingsPage from "@/pages/BookingsPage";
 import AdminPage from "@/pages/AdminPage";
 import CustomerServicePage from "@/pages/CustomerServicePage";
@@ -48,6 +49,7 @@ const PAGE_ROUTES: Record<PageId, string> = {
   driversignup: "/driversignup",
   driveraccount: "/driveraccount",
   paddashboard: "/paddashboard",
+  listerbookings: "/listerbookings",
   bookings: "/bookings",
   admin: "/admin",
   savedspots: "/savedspots",
@@ -241,6 +243,7 @@ function AppInner() {
           <Route path="/account" element={<AuthGuard><AccountPage /></AuthGuard>} />
           <Route path="/driveraccount" element={<AuthGuard><DriverAccountPage /></AuthGuard>} />
           <Route path="/paddashboard" element={<AuthGuard><PadDashboardPage /></AuthGuard>} />
+          <Route path="/listerbookings" element={<AuthGuard><ListerBookingsPage /></AuthGuard>} />
           <Route path="/admin" element={<AdminPage />} />
           <Route path="/savedspots" element={<AuthGuard><SavedSpotsPage /></AuthGuard>} />
           <Route path="/customerservice" element={<AuthGuard><CustomerServicePage /></AuthGuard>} />

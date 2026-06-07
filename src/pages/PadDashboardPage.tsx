@@ -154,7 +154,6 @@ export default function PadDashboardPage() {
   const [pads, setPads] = useState<Pad[]>([]);
   const [loadingPads, setLoadingPads] = useState(true);
   const [listerBookings, setListerBookings] = useState<ListerBooking[]>([]);
-  const [actingOn, setActingOn] = useState<string | null>(null);
 
   function startAddPad() {
     setState(s => ({ ...s, addingExtraPad: true, apAns: {} }));
@@ -206,28 +205,8 @@ export default function PadDashboardPage() {
     fetchListerBookings();
   }, [user?.id, fetchListerBookings]);
 
-  async function handleApprove(bookingId: string) {
-    setActingOn(bookingId);
-    try {
-      await fetch(`/api/bookings/${bookingId}/approve`, { method: "PATCH" });
-      setListerBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: "approved" } : b));
-    } catch { /* non-blocking */ }
-    setActingOn(null);
-  }
-
-  async function handleDeny(bookingId: string) {
-    setActingOn(bookingId);
-    try {
-      await fetch(`/api/bookings/${bookingId}/deny`, { method: "PATCH" });
-      setListerBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: "denied" } : b));
-    } catch { /* non-blocking */ }
-    setActingOn(null);
-  }
-
   const [openPadId, setOpenPadId] = useState<number | null>(null);
   const [pendingPauseId, setPendingPauseId] = useState<number | null>(null);
-  const [expandedBookingId, setExpandedBookingId] = useState<string | null>(null);
-  const [bookingTab, setBookingTab] = useState<"new" | "current" | "past">("new");
   const photoInputRef = useRef<HTMLInputElement>(null);
 
   // Rename state
@@ -508,7 +487,7 @@ export default function PadDashboardPage() {
       </div>
 
       {/* Body */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "20px 16px 32px" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: openPad ? "20px 16px 32px" : "20px 16px 96px" }}>
 
         {loadingPads ? (
           <div style={{ textAlign: "center", padding: "80px 0" }}>
@@ -612,178 +591,6 @@ export default function PadDashboardPage() {
               </button>
             </div>
 
-            {/* ══ BOOKINGS ══ */}
-            {(() => {
-              const now = Date.now();
-              const newReqs  = listerBookings.filter(b => b.status === "pending");
-              const current  = listerBookings.filter(b => b.status === "approved" && (!b.end_ts || new Date(b.end_ts).getTime() > now));
-              const past     = listerBookings.filter(b =>
-                (b.status === "approved" && b.end_ts && new Date(b.end_ts).getTime() <= now) ||
-                b.status === "denied"
-              ).sort((a, b2) => new Date(b2.created_at).getTime() - new Date(a.created_at).getTime());
-
-              const tabItems: ListerBooking[] = bookingTab === "new" ? newReqs : bookingTab === "current" ? current : past;
-
-              const tabDefs: { key: "new" | "current" | "past"; label: string; count: number; dot: string }[] = [
-                { key: "new",     label: "New",     count: newReqs.length, dot: "#f59e0b" },
-                { key: "current", label: "Current", count: current.length,  dot: GREEN },
-                { key: "past",    label: "Past",    count: past.length,     dot: "rgba(255,255,255,0.35)" },
-              ];
-
-              return (
-                <div>
-                  {/* Section header */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                    <div style={{ width: 3, height: 16, borderRadius: 2, background: "#f59e0b" }} />
-                    <span style={{ fontSize: 12, fontWeight: 800, color: "#fff", letterSpacing: 0.3, textTransform: "uppercase" }}>Bookings</span>
-                    {newReqs.length > 0 && (
-                      <span style={{ fontSize: 10, fontWeight: 800, color: "#fff", background: "#f59e0b", borderRadius: 100, padding: "2px 8px" }}>{newReqs.length} new</span>
-                    )}
-                  </div>
-
-                  {/* Tab toggle */}
-                  <div style={{ display: "flex", gap: 4, background: "#142A52", borderRadius: 100, padding: 4, marginBottom: 12 }}>
-                    {tabDefs.map(t => {
-                      const active = bookingTab === t.key;
-                      return (
-                        <button
-                          key={t.key}
-                          onClick={() => { setBookingTab(t.key); setExpandedBookingId(null); }}
-                          style={{
-                            flex: 1, padding: "8px 6px", borderRadius: 100, border: "none",
-                            background: active ? "rgba(255,255,255,0.12)" : "transparent",
-                            color: active ? "#fff" : "rgba(255,255,255,0.50)",
-                            fontWeight: 800, fontSize: 11.5, cursor: "pointer",
-                            fontFamily: "'DM Sans',sans-serif",
-                            display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-                          }}
-                        >
-                          {active && <span style={{ width: 6, height: 6, borderRadius: "50%", background: t.dot, flexShrink: 0 }} />}
-                          {t.label}
-                          <span style={{
-                            fontSize: 10, fontWeight: 800, padding: "1px 6px", borderRadius: 100,
-                            background: active ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.07)",
-                            color: active ? "#fff" : "rgba(255,255,255,0.45)",
-                          }}>{t.count}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* Accordion pills */}
-                  {tabItems.length === 0 ? (
-                    <div style={{ background: "#142A52", borderRadius: 14, padding: "24px 16px", textAlign: "center", color: "rgba(255,255,255,0.35)", fontSize: 13 }}>
-                      {bookingTab === "new" ? "No pending requests right now." : bookingTab === "current" ? "No active bookings." : "No past bookings yet."}
-                    </div>
-                  ) : (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                      {tabItems.map(bk => {
-                        const isPending  = bk.status === "pending";
-                        const isApproved = bk.status === "approved";
-                        const acting     = actingOn === bk.id;
-                        const isOpen     = expandedBookingId === bk.id;
-
-                        const dotColor     = isPending ? "#f59e0b" : isApproved ? GREEN : "rgba(255,255,255,0.30)";
-                        const badgeColor   = isPending ? "#f59e0b" : isApproved ? GREEN : "rgba(255,255,255,0.40)";
-                        const badgeBg      = isPending ? "rgba(251,191,36,0.14)" : isApproved ? "rgba(141,214,63,0.14)" : "rgba(255,255,255,0.07)";
-                        const badgeBorder  = isPending ? "rgba(251,191,36,0.30)" : isApproved ? "rgba(141,214,63,0.28)" : "rgba(255,255,255,0.12)";
-                        const pillBorder   = isOpen
-                          ? (isPending ? "rgba(251,191,36,0.50)" : isApproved ? "rgba(141,214,63,0.38)" : "rgba(255,255,255,0.16)")
-                          : "rgba(255,255,255,0.08)";
-
-                        return (
-                          <div key={bk.id} style={{
-                            background: "#142A52",
-                            borderRadius: 14,
-                            border: `1.5px solid ${pillBorder}`,
-                            overflow: "hidden",
-                          }}>
-                            {/* Pill header */}
-                            <button
-                              onClick={() => setExpandedBookingId(isOpen ? null : bk.id)}
-                              style={{
-                                width: "100%", display: "flex", alignItems: "center", gap: 10,
-                                padding: "12px 14px", background: "transparent", border: "none",
-                                cursor: "pointer", fontFamily: "'DM Sans',sans-serif", textAlign: "left",
-                              }}
-                            >
-                              <span style={{ width: 8, height: 8, borderRadius: "50%", background: dotColor, flexShrink: 0, boxShadow: isPending ? "0 0 0 3px rgba(251,191,36,0.22)" : "none" }} />
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                  <span style={{ fontSize: 13.5, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{bk.driver_name}</span>
-                                  <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: 0.4, textTransform: "uppercase", padding: "2px 7px", borderRadius: 100, color: badgeColor, background: badgeBg, border: `1px solid ${badgeBorder}`, flexShrink: 0 }}>
-                                    {isPending ? "Pending" : isApproved ? "Active" : "Denied"}
-                                  </span>
-                                </div>
-                                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.42)", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                  {fmtDt(bk.start_ts)} · {fmtTm(bk.start_ts)} → {fmtTm(bk.end_ts)}
-                                </div>
-                              </div>
-                              <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                                <span style={{ fontSize: 14, fontWeight: 800, color: GREEN }}>${Number(bk.total_price).toFixed(0)}</span>
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.30)" strokeWidth="2.5" strokeLinecap="round" style={{ transform: isOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.18s" }}>
-                                  <path d="M6 9l6 6 6-6"/>
-                                </svg>
-                              </div>
-                            </button>
-
-                            {/* Expanded panel */}
-                            {isOpen && (
-                              <div style={{ padding: "0 14px 14px", borderTop: "1px solid rgba(255,255,255,0.07)", paddingTop: 12 }}>
-
-                                {/* Driver profile (name only — no email) */}
-                                <div style={{ background: "rgba(255,255,255,0.05)", borderRadius: 10, padding: "10px 12px", marginBottom: 10, border: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", gap: 10 }}>
-                                  <div style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(141,214,63,0.18)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth="2" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                                  </div>
-                                  <div>
-                                    <div style={{ fontSize: 9.5, fontWeight: 700, color: "rgba(255,255,255,0.38)", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 2 }}>Driver</div>
-                                    <div style={{ fontSize: 13.5, fontWeight: 700, color: "#fff" }}>{bk.driver_name}</div>
-                                  </div>
-                                </div>
-
-                                {/* Booking detail chips */}
-                                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: isPending ? 12 : 0 }}>
-                                  {[
-                                    { label: "Date",  val: fmtDt(bk.start_ts) },
-                                    { label: "Time",  val: `${fmtTm(bk.start_ts)} → ${fmtTm(bk.end_ts)}` },
-                                    { label: "Total", val: `$${Number(bk.total_price).toFixed(2)}` },
-                                    { label: "Rate",  val: `$${Number(bk.price_per_hr).toFixed(0)}/hr` },
-                                  ].map(chip => (
-                                    <div key={chip.label} style={{ display: "flex", flexDirection: "column", background: "rgba(255,255,255,0.06)", borderRadius: 8, padding: "6px 10px", border: "1px solid rgba(255,255,255,0.08)", minWidth: 70 }}>
-                                      <span style={{ fontSize: 9, fontWeight: 700, color: "rgba(255,255,255,0.35)", letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 2 }}>{chip.label}</span>
-                                      <span style={{ fontSize: 12, fontWeight: 700, color: "#fff" }}>{chip.val}</span>
-                                    </div>
-                                  ))}
-                                </div>
-
-                                {/* Approve / Deny — new requests only */}
-                                {isPending && (
-                                  <div style={{ display: "flex", gap: 8 }}>
-                                    <button
-                                      disabled={acting}
-                                      onClick={() => handleApprove(bk.id)}
-                                      style={{ flex: 1, padding: "11px 0", borderRadius: 100, background: acting ? "rgba(141,214,63,0.25)" : GREEN, border: "none", color: NAVY, fontSize: 13, fontWeight: 800, cursor: acting ? "wait" : "pointer", fontFamily: "'DM Sans',sans-serif", opacity: acting ? 0.6 : 1 }}>
-                                      {acting ? "…" : "✓ Approve"}
-                                    </button>
-                                    <button
-                                      disabled={acting}
-                                      onClick={() => handleDeny(bk.id)}
-                                      style={{ flex: 1, padding: "11px 0", borderRadius: 100, background: "transparent", border: "1.5px solid rgba(239,68,68,0.45)", color: "#ef4444", fontSize: 13, fontWeight: 800, cursor: acting ? "wait" : "pointer", fontFamily: "'DM Sans',sans-serif", opacity: acting ? 0.6 : 1 }}>
-                                      {acting ? "…" : "Deny"}
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
           </>
         ) : (
           /* ── DETAIL / EDIT VIEW (dark profile) ── */
@@ -1174,6 +981,66 @@ export default function PadDashboardPage() {
           </div>
         </div>
       )}
+
+      {/* ══ BOOKINGS PEEK BAR (list view only) ══ */}
+      {!openPad && (() => {
+        const pendingCount = listerBookings.filter(b => b.status === "pending").length;
+        const totalCount   = listerBookings.length;
+        return (
+          <div style={{
+            position: "absolute", bottom: 0, left: 0, right: 0,
+            zIndex: 30,
+            background: "linear-gradient(to top, rgba(8,15,32,0.92) 0%, transparent 100%)",
+            padding: "20px 16px 28px",
+            pointerEvents: "none",
+          }}>
+            <button
+              onClick={() => navigate("/listerbookings")}
+              style={{
+                width: "100%", display: "flex", alignItems: "center", gap: 14,
+                padding: "14px 18px", borderRadius: 20,
+                background: "#142A52",
+                border: pendingCount > 0 ? "1.5px solid rgba(251,191,36,0.45)" : "1.5px solid rgba(255,255,255,0.10)",
+                boxShadow: pendingCount > 0
+                  ? "0 4px 24px rgba(251,191,36,0.14), 0 2px 8px rgba(0,0,0,0.4)"
+                  : "0 4px 20px rgba(0,0,0,0.4)",
+                cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+                pointerEvents: "all",
+              }}
+            >
+              {/* Handle nub */}
+              <div style={{ position: "absolute", top: -24, left: "50%", transform: "translateX(-50%)", width: 36, height: 4, borderRadius: 2, background: "rgba(255,255,255,0.18)" }} />
+
+              {/* Icon */}
+              <div style={{ width: 40, height: 40, borderRadius: 12, background: pendingCount > 0 ? "rgba(251,191,36,0.15)" : "rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, border: pendingCount > 0 ? "1px solid rgba(251,191,36,0.28)" : "1px solid rgba(255,255,255,0.08)" }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={pendingCount > 0 ? "#f59e0b" : "rgba(255,255,255,0.55)"} strokeWidth="2" strokeLinecap="round">
+                  <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                </svg>
+              </div>
+
+              {/* Text */}
+              <div style={{ flex: 1, textAlign: "left" }}>
+                <div style={{ fontSize: 14.5, fontWeight: 800, color: "#fff", letterSpacing: -0.2 }}>Bookings</div>
+                <div style={{ fontSize: 11.5, color: pendingCount > 0 ? "rgba(251,191,36,0.80)" : "rgba(255,255,255,0.40)", marginTop: 1 }}>
+                  {pendingCount > 0 ? `${pendingCount} pending · ${totalCount} total` : totalCount === 0 ? "No bookings yet" : `${totalCount} booking${totalCount !== 1 ? "s" : ""}`}
+                </div>
+              </div>
+
+              {/* Badge + chevron */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                {pendingCount > 0 && (
+                  <div style={{ background: "#f59e0b", borderRadius: 100, minWidth: 22, height: 22, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 6px", fontSize: 11, fontWeight: 800, color: "#fff" }}>
+                    {pendingCount}
+                  </div>
+                )}
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.30)" strokeWidth="2.5" strokeLinecap="round">
+                  <path d="M9 18l6-6-6-6"/>
+                </svg>
+              </div>
+            </button>
+          </div>
+        );
+      })()}
     </div>
   );
 }

@@ -3926,162 +3926,141 @@ export default function FindPage() {
 
         type HostPageId = "paddashboard" | "listerbookings" | "padtype" | "customerservice";
         const actions: Array<{ label: string; sub: string; icon: React.ReactNode; page: HostPageId; accent: boolean }> = [
-          { label: "My Pads", sub: myHostSpots.length > 0 ? `${myHostSpots.length} listing${myHostSpots.length !== 1 ? 's' : ''}` : "Manage listings", page: "paddashboard", accent: true, icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
-          { label: "Reservations", sub: "Requests & bookings", page: "listerbookings", accent: false, icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> },
-          { label: "List New Spot", sub: "Add a parking space", page: "padtype", accent: false, icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg> },
-          { label: "Support", sub: "Get help", page: "customerservice", accent: false, icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg> },
+          { label: "My Pads", sub: myHostSpots.length > 0 ? `${myHostSpots.length} listing${myHostSpots.length !== 1 ? 's' : ''}` : "Manage listings", page: "paddashboard", accent: true, icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
+          { label: "Reservations", sub: "Requests & bookings", page: "listerbookings", accent: false, icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> },
+          { label: "List New Spot", sub: "Add a parking space", page: "padtype", accent: false, icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg> },
+          { label: "Support", sub: "Get help", page: "customerservice", accent: false, icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg> },
         ];
 
         return (
           <div key="host-dash" style={{
             position: "absolute", inset: 0, zIndex: 50,
-            background: "linear-gradient(180deg,#0a1628 0%,#0E1F40 55%,#112247 100%)",
+            background: "#0a1628",
             display: "flex", flexDirection: "column",
             fontFamily: "'DM Sans',sans-serif",
             overflowY: "auto", WebkitOverflowScrolling: "touch" as any,
           }}>
 
-            {/* ── Header ── */}
-            <div style={{ padding: "calc(env(safe-area-inset-top) + 20px) 20px 0", flexShrink: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 22 }}>
+            {/* ── TOP BAR ── */}
+            <div style={{ padding: "calc(env(safe-area-inset-top) + 16px) 20px 0", flexShrink: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
                 <div>
-                  <div style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,0.35)", letterSpacing: 1.4, textTransform: "uppercase" }}>Host Dashboard</div>
-                  <div style={{ fontSize: 23, fontWeight: 800, color: "#fff", letterSpacing: -0.6, marginTop: 2 }}>
-                    {profile?.first_name ? `Hey, ${profile.first_name} 👋` : "My Dashboard"}
+                  <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.32)", letterSpacing: 1.6, textTransform: "uppercase" }}>
+                    {profile?.first_name || "Host"} · Dashboard
                   </div>
                 </div>
-                <button
-                  onClick={() => setDrawerMode("driver")}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 6,
-                    padding: "9px 14px", borderRadius: 22,
-                    background: "rgba(141,214,63,0.10)", border: "1.5px solid rgba(141,214,63,0.28)",
-                    color: "#8DD63F", fontSize: 12, fontWeight: 700,
-                    cursor: "pointer", fontFamily: "'DM Sans',sans-serif", flexShrink: 0,
-                  }}
-                >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
-                  Driver Mode
-                </button>
+                <button onClick={() => setDrawerMode("driver")} style={{
+                  padding: "6px 13px", borderRadius: 20,
+                  background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.11)",
+                  color: "rgba(255,255,255,0.55)", fontSize: 11, fontWeight: 600,
+                  cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+                  letterSpacing: -0.1,
+                }}>← Driver</button>
               </div>
 
-              {/* ── EARNINGS CHART ── */}
-              <div style={{ marginBottom: 8 }}>
-                {/* Summary */}
-                <div style={{ display: "flex", alignItems: "flex-end", gap: 14, marginBottom: 14 }}>
-                  <div>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.38)", letterSpacing: 0.3, marginBottom: 2 }}>
-                      {earningsRange === 'D' ? "Today" : earningsRange === 'W' ? "This Week" : earningsRange === 'M' ? "This Month" : earningsRange === 'Y' ? "This Year" : "All Time"} · Earnings
-                    </div>
-                    <div style={{ fontSize: 38, fontWeight: 800, color: "#fff", letterSpacing: -1.5, lineHeight: 1 }}>
-                      ${totalEarnings.toFixed(2)}
-                    </div>
-                  </div>
-                  <div style={{ paddingBottom: 5 }}>
-                    <div style={{ fontSize: 12, color: "rgba(255,255,255,0.38)", fontWeight: 600 }}>{bookingCount} booking{bookingCount !== 1 ? 's' : ''}</div>
-                    {bookingCount === 0 && <div style={{ fontSize: 10.5, color: "rgba(141,214,63,0.60)", fontWeight: 600, marginTop: 2 }}>List a spot to earn</div>}
-                  </div>
+              {/* Earnings headline — updates live on scrub */}
+              <div style={{ marginBottom: 18 }}>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", fontWeight: 500, marginBottom: 3 }}>
+                  {scrubPt ? scrubPt.label : (earningsRange === 'D' ? "Today" : earningsRange === 'W' ? "This Week" : earningsRange === 'M' ? "This Month" : earningsRange === 'Y' ? "This Year" : "All Time")}
                 </div>
-
-                {/* Range tabs */}
-                <div style={{ display: "flex", gap: 5, marginBottom: 10 }}>
-                  {(['D','W','M','Y','ALL'] as const).map(r => (
-                    <button key={r} onClick={() => { setEarningsRange(r); setChartScrubIdx(null); }} style={{
-                      flex: 1, padding: "6px 0", borderRadius: 9,
-                      background: earningsRange === r ? "#8DD63F" : "rgba(255,255,255,0.07)",
-                      border: "none",
-                      color: earningsRange === r ? "#0E1F40" : "rgba(255,255,255,0.45)",
-                      fontSize: 11, fontWeight: 700, cursor: "pointer",
-                      fontFamily: "'DM Sans',sans-serif",
-                      transition: "background 0.15s,color 0.15s",
-                    }}>{r}</button>
-                  ))}
+                <div style={{ fontSize: 42, fontWeight: 800, color: "#fff", letterSpacing: -2, lineHeight: 1 }}>
+                  ${(scrubPt ? scrubPt.earnings : totalEarnings).toFixed(2)}
                 </div>
-
-                {/* SVG Chart */}
-                <div style={{ width: "100%", touchAction: "none", borderRadius: 16, overflow: "hidden", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                  <svg
-                    viewBox={`0 0 ${CW} ${CH}`}
-                    style={{ width: "100%", display: "block", userSelect: "none" }}
-                    onPointerDown={onCDown}
-                    onPointerMove={onCMove}
-                    onPointerUp={() => setChartScrubIdx(null)}
-                    onPointerLeave={() => setChartScrubIdx(null)}
-                  >
-                    <defs>
-                      <linearGradient id="hEarnGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#8DD63F" stopOpacity="0.32"/>
-                        <stop offset="100%" stopColor="#8DD63F" stopOpacity="0.01"/>
-                      </linearGradient>
-                    </defs>
-                    {/* Grid lines */}
-                    {[0.25,0.5,0.75].map(f => (
-                      <line key={f} x1={PL} y1={PT + ch - f*ch} x2={CW-PR} y2={PT + ch - f*ch}
-                        stroke="rgba(255,255,255,0.05)" strokeWidth="1"/>
-                    ))}
-                    {/* Baseline */}
-                    <line x1={PL} y1={PT+ch} x2={CW-PR} y2={PT+ch} stroke="rgba(255,255,255,0.10)" strokeWidth="1"/>
-                    {/* Area */}
-                    {areaPath && <path d={areaPath} fill="url(#hEarnGrad)"/>}
-                    {/* Line */}
-                    {linePath && <path d={linePath} fill="none" stroke="#8DD63F" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>}
-                    {/* Data dots on zero — subtle tick marks */}
-                    {pts.map((p, i) => (
-                      <circle key={i} cx={p.x} cy={PT+ch} r="1.5" fill="rgba(255,255,255,0.12)"/>
-                    ))}
-                    {/* X-axis labels */}
-                    {labelIdxs.map(i => (
-                      <text key={i} x={pts[i]?.x ?? 0} y={CH - 8}
-                        textAnchor="middle" fontSize="8.5" fill="rgba(255,255,255,0.28)"
-                        fontFamily="DM Sans,sans-serif" fontWeight="600"
-                      >{pts[i]?.label ?? ''}</text>
-                    ))}
-                    {/* Scrub */}
-                    {scrubPt && (() => {
-                      const bx = Math.max(34, Math.min(CW - 34, scrubPt.x));
-                      const by = Math.max(14, scrubPt.y - 26);
-                      return (
-                        <>
-                          <line x1={scrubPt.x} y1={PT} x2={scrubPt.x} y2={PT+ch}
-                            stroke="rgba(255,255,255,0.22)" strokeWidth="1.5" strokeDasharray="3 3"/>
-                          <circle cx={scrubPt.x} cy={scrubPt.y} r="5.5" fill="#8DD63F" stroke="#0a1628" strokeWidth="2.5"/>
-                          <rect x={bx-32} y={by-13} width={64} height={24} rx={7} fill="rgba(255,255,255,0.95)"/>
-                          <text x={bx} y={by+4} textAnchor="middle" fontSize="12" fontWeight="700" fill="#0E1F40" fontFamily="DM Sans,sans-serif">
-                            ${scrubPt.earnings.toFixed(2)}
-                          </text>
-                        </>
-                      );
-                    })()}
-                  </svg>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 5 }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 600, color: "#8DD63F" }}>
+                    +{bookingCount} booking{bookingCount !== 1 ? 's' : ''}
+                  </span>
+                  {bookingCount === 0 && (
+                    <span style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", fontWeight: 400 }}>· List a spot to start earning</span>
+                  )}
                 </div>
               </div>
             </div>
 
-            {/* ── QUICK ACTIONS ── */}
-            <div style={{ padding: "14px 20px calc(env(safe-area-inset-bottom) + 28px)", flex: 1 }}>
-              <div style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,0.32)", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>
-                Quick Actions
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                {actions.map(a => (
-                  <button key={a.label} onClick={() => goTo(a.page)} style={{
-                    display: "flex", flexDirection: "column", alignItems: "flex-start",
-                    padding: "16px 14px", borderRadius: 18,
-                    background: a.accent ? "rgba(141,214,63,0.09)" : "rgba(255,255,255,0.05)",
-                    border: a.accent ? "1.5px solid rgba(141,214,63,0.28)" : "1px solid rgba(255,255,255,0.09)",
-                    cursor: "pointer", fontFamily: "'DM Sans',sans-serif", textAlign: "left", gap: 10,
+            {/* ── FULL-BLEED CHART ── */}
+            <div style={{ width: "100%", touchAction: "none", flexShrink: 0 }}>
+              <svg
+                viewBox={`0 0 ${CW} ${CH}`}
+                style={{ width: "100%", display: "block", userSelect: "none" }}
+                onPointerDown={onCDown}
+                onPointerMove={onCMove}
+                onPointerUp={() => setChartScrubIdx(null)}
+                onPointerLeave={() => setChartScrubIdx(null)}
+              >
+                <defs>
+                  <linearGradient id="hEarnGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#8DD63F" stopOpacity="0.22"/>
+                    <stop offset="88%" stopColor="#8DD63F" stopOpacity="0.01"/>
+                  </linearGradient>
+                </defs>
+                {areaPath && <path d={areaPath} fill="url(#hEarnGrad)"/>}
+                {linePath && <path d={linePath} fill="none" stroke="#8DD63F" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>}
+                {labelIdxs.map(i => (
+                  <text key={i} x={pts[i]?.x ?? 0} y={CH - 7}
+                    textAnchor="middle" fontSize="8" fill="rgba(255,255,255,0.20)"
+                    fontFamily="DM Sans,sans-serif" fontWeight="600"
+                  >{pts[i]?.label ?? ''}</text>
+                ))}
+                {scrubPt && (
+                  <>
+                    <line x1={scrubPt.x} y1={PT} x2={scrubPt.x} y2={PT + ch}
+                      stroke="rgba(255,255,255,0.28)" strokeWidth="1"/>
+                    <circle cx={scrubPt.x} cy={scrubPt.y} r="3.5" fill="#8DD63F" stroke="#0a1628" strokeWidth="2"/>
+                  </>
+                )}
+              </svg>
+            </div>
+
+            {/* ── RANGE TABS ── */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 2, padding: "4px 16px 10px" }}>
+              {(['D','W','M','Y','ALL'] as const).map(r => (
+                <button key={r} onClick={() => { setEarningsRange(r); setChartScrubIdx(null); }} style={{
+                  padding: "5px 13px", borderRadius: 20,
+                  background: earningsRange === r ? "rgba(255,255,255,0.13)" : "transparent",
+                  border: "none",
+                  color: earningsRange === r ? "#fff" : "rgba(255,255,255,0.32)",
+                  fontSize: 12, fontWeight: earningsRange === r ? 700 : 400,
+                  cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+                  transition: "all 0.15s", letterSpacing: earningsRange === r ? -0.2 : 0,
+                }}>{r}</button>
+              ))}
+            </div>
+
+            {/* ── DIVIDER ── */}
+            <div style={{ height: 1, background: "rgba(255,255,255,0.07)" }}/>
+
+            {/* ── NAVIGATION ROWS ── */}
+            <div style={{ flex: 1, overflowY: "auto", paddingBottom: "calc(env(safe-area-inset-bottom) + 16px)" }}>
+              {actions.map((a, idx) => (
+                <div key={a.label}>
+                  {idx > 0 && (
+                    <div style={{ height: 1, background: "rgba(255,255,255,0.05)", marginLeft: 58 }}/>
+                  )}
+                  <button onClick={() => goTo(a.page)} style={{
+                    display: "flex", alignItems: "center", gap: 14,
+                    width: "100%", padding: "13px 20px",
+                    background: "transparent", border: "none",
+                    cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
                     WebkitTapHighlightColor: "transparent",
                   }}>
-                    <div style={{ width: 42, height: 42, borderRadius: 12, background: a.accent ? "rgba(141,214,63,0.16)" : "rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center", color: a.accent ? "#8DD63F" : "rgba(255,255,255,0.65)" }}>
-                      {a.icon}
+                    <div style={{
+                      width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+                      background: a.accent ? "rgba(141,214,63,0.14)" : "rgba(255,255,255,0.07)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      color: a.accent ? "#8DD63F" : "rgba(255,255,255,0.52)",
+                    }}>{a.icon}</div>
+                    <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: a.accent ? "#8DD63F" : "#fff", letterSpacing: -0.2 }}>{a.label}</div>
+                      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.32)", marginTop: 1 }}>{a.sub}</div>
                     </div>
-                    <div>
-                      <div style={{ fontSize: 13.5, fontWeight: 700, color: a.accent ? "#8DD63F" : "#fff", letterSpacing: -0.2 }}>{a.label}</div>
-                      <div style={{ fontSize: 11, color: a.accent ? "rgba(141,214,63,0.55)" : "rgba(255,255,255,0.38)", marginTop: 2 }}>{a.sub}</div>
-                    </div>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+                      stroke={a.accent ? "rgba(141,214,63,0.50)" : "rgba(255,255,255,0.18)"}
+                      strokeWidth="2.5" strokeLinecap="round">
+                      <path d="m9 18 6-6-6-6"/>
+                    </svg>
                   </button>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
           </div>
         );

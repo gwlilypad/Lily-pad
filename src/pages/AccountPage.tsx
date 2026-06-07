@@ -45,7 +45,7 @@ export default function AccountPage() {
         <div className="thumb-nav-card">
           <div className="thumb-nav-row" onClick={() => goTo("addpad")}><span className="thumb-nav-lbl">My lily pad</span><span className="thumb-nav-arrow">›</span></div>
           <div className="thumb-nav-row" onClick={() => goTo("availability")}><span className="thumb-nav-lbl">Availability & pricing</span><span className="thumb-nav-arrow">›</span></div>
-          <div className="thumb-nav-row"><span className="thumb-nav-lbl">Bookings</span><span className="thumb-nav-arrow">›</span></div>
+          <div className="thumb-nav-row" onClick={() => navigate("/listerbookings")}><span className="thumb-nav-lbl">Bookings</span><span className="thumb-nav-arrow">›</span></div>
           <div className="thumb-nav-row"><span className="thumb-nav-lbl">Earnings</span><span className="thumb-nav-arrow">›</span></div>
         </div>
 

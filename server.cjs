@@ -2393,6 +2393,34 @@ app.post('/api/beta/reset-password', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Customer contact form ──────────────────────────────────────────────────────
+app.post('/api/contact', async (req, res) => {
+  try {
+    const { name, email, phone, message } = req.body || {};
+    if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required.' });
+    if (!email || !email.trim()) return res.status(400).json({ error: 'Email is required.' });
+    if (!message || !message.trim()) return res.status(400).json({ error: 'Message is required.' });
+
+    const html = `
+      <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#1a1a1a">
+        <h2 style="color:#0E1F40;margin-bottom:4px">New Support Request</h2>
+        <p style="color:#666;margin-top:0;font-size:13px">Submitted via the Lily Pad app</p>
+        <table style="width:100%;border-collapse:collapse;margin-top:16px;font-size:14px">
+          <tr><td style="padding:10px 0;border-bottom:1px solid #eee;color:#555;width:100px"><strong>Name</strong></td><td style="padding:10px 0;border-bottom:1px solid #eee">${name.trim()}</td></tr>
+          <tr><td style="padding:10px 0;border-bottom:1px solid #eee;color:#555"><strong>Email</strong></td><td style="padding:10px 0;border-bottom:1px solid #eee"><a href="mailto:${email.trim()}">${email.trim()}</a></td></tr>
+          ${phone ? `<tr><td style="padding:10px 0;border-bottom:1px solid #eee;color:#555"><strong>Phone</strong></td><td style="padding:10px 0;border-bottom:1px solid #eee">${phone.trim()}</td></tr>` : ''}
+        </table>
+        <div style="margin-top:20px;background:#f6f8fb;border-radius:8px;padding:16px">
+          <p style="margin:0 0 6px;font-size:12px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.05em">Message</p>
+          <p style="margin:0;font-size:14px;line-height:1.6;white-space:pre-wrap">${message.trim()}</p>
+        </div>
+      </div>`;
+
+    await sendEmail('support@lilypadparking.com', `Support request from ${name.trim()}`, html);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Staff login page ───────────────────────────────────────────────────────────
 app.get('/staff-login', (req, res) => {
   res.sendFile(path.join(__dirname, 'staff-login.html'));

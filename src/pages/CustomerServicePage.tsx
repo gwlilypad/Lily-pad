@@ -1,17 +1,67 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
+
+const NAVY = "#0E1F40";
+const GREEN = "#8DD63F";
 
 export default function CustomerServicePage() {
   const { setState } = useApp();
   const navigate = useNavigate();
+
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [message, setMessage] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState("");
 
   function goBack() {
     setState(s => ({ ...s, openAcctOnFind: true }));
     navigate(-1);
   }
 
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    if (!name.trim()) { setError("Please enter your name."); return; }
+    if (!email.trim()) { setError("Please enter your email."); return; }
+    if (!message.trim()) { setError("Please describe your issue."); return; }
+
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), email: email.trim(), phone: phone.trim(), message: message.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Something went wrong.");
+      setSent(true);
+    } catch (err: any) {
+      setError(err.message || "Failed to send. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const inputStyle: React.CSSProperties = {
+    width: "100%",
+    padding: "12px 14px",
+    borderRadius: 12,
+    background: "rgba(255,255,255,0.05)",
+    border: "1.5px solid rgba(255,255,255,0.10)",
+    color: "#fff",
+    fontSize: 14,
+    fontFamily: '"DM Sans", sans-serif',
+    outline: "none",
+    boxSizing: "border-box",
+    transition: "border-color 0.15s",
+  };
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "#0E1F40", fontFamily: '"DM Sans", sans-serif', overflow: "hidden" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: NAVY, fontFamily: '"DM Sans", sans-serif', overflow: "hidden" }}>
 
       {/* Header */}
       <div style={{ flexShrink: 0, padding: "52px 20px 16px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
@@ -31,55 +81,122 @@ export default function CustomerServicePage() {
       </div>
 
       {/* Body */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "24px 16px 40px", display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "24px 16px 48px" }}>
 
-        <p style={{ fontSize: 13, color: "rgba(255,255,255,0.50)", margin: 0, lineHeight: 1.6 }}>
-          Have a question or issue? Reach out and we'll get back to you as soon as possible.
-        </p>
-
-        {/* Email */}
-        <a href="mailto:support@lilypadparking.com" style={{ textDecoration: "none" }}>
-          <div style={{
-            display: "flex", alignItems: "center", gap: 14,
-            background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
-            borderRadius: 16, padding: "16px 16px", cursor: "pointer",
-          }}>
-            <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(141,214,63,0.14)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "#8DD63F" }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+        {sent ? (
+          /* ── Success state ── */
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, paddingTop: 40, textAlign: "center" }}>
+            <div style={{ width: 64, height: 64, borderRadius: "50%", background: "rgba(141,214,63,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
             </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", letterSpacing: -0.1 }}>Email us</div>
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.42)", marginTop: 2 }}>support@lilypadparking.com</div>
+            <div>
+              <p style={{ fontSize: 18, fontWeight: 800, color: "#fff", margin: "0 0 6px", letterSpacing: -0.3 }}>Message sent!</p>
+              <p style={{ fontSize: 13, color: "rgba(255,255,255,0.50)", margin: 0, lineHeight: 1.6 }}>We'll get back to you at<br /><span style={{ color: "#fff", fontWeight: 600 }}>{email}</span></p>
             </div>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="2.5" strokeLinecap="round"><path d="m9 18 6-6-6-6"/></svg>
+            <button
+              onClick={goBack}
+              style={{ marginTop: 8, padding: "12px 28px", borderRadius: 100, border: "none", background: GREEN, color: NAVY, fontWeight: 800, fontSize: 14, cursor: "pointer", fontFamily: '"DM Sans", sans-serif' }}
+            >
+              Done
+            </button>
           </div>
-        </a>
+        ) : (
+          /* ── Form ── */
+          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 
-        {/* Phone */}
-        <a href="tel:+17137777777" style={{ textDecoration: "none" }}>
-          <div style={{
-            display: "flex", alignItems: "center", gap: 14,
-            background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
-            borderRadius: 16, padding: "16px 16px", cursor: "pointer",
-          }}>
-            <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(141,214,63,0.14)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "#8DD63F" }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 1.24h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.91a16 16 0 0 0 6.29 6.29l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+            <p style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", margin: "0 0 4px", lineHeight: 1.6 }}>
+              Fill out the form below and we'll respond as soon as possible.
+            </p>
+
+            {/* Name */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <label style={{ fontSize: 11.5, fontWeight: 700, color: "rgba(255,255,255,0.55)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                Name <span style={{ color: GREEN }}>*</span>
+              </label>
+              <input
+                type="text"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="Your name"
+                autoComplete="name"
+                style={inputStyle}
+              />
             </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", letterSpacing: -0.1 }}>Call us</div>
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.42)", marginTop: 2 }}>(713) 777-7777 · Mon–Fri 9am–6pm</div>
+
+            {/* Email */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <label style={{ fontSize: 11.5, fontWeight: 700, color: "rgba(255,255,255,0.55)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                Email <span style={{ color: GREEN }}>*</span>
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                autoComplete="email"
+                style={inputStyle}
+              />
             </div>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="2.5" strokeLinecap="round"><path d="m9 18 6-6-6-6"/></svg>
-          </div>
-        </a>
 
-        {/* Response time note */}
-        <div style={{ background: "rgba(141,214,63,0.06)", border: "1px solid rgba(141,214,63,0.15)", borderRadius: 12, padding: "12px 14px", marginTop: 4 }}>
-          <p style={{ margin: 0, fontSize: 12, color: "rgba(255,255,255,0.55)", lineHeight: 1.55 }}>
-            <span style={{ color: "#8DD63F", fontWeight: 700 }}>Typical response time:</span> within a few hours during business hours.
-          </p>
-        </div>
+            {/* Phone (optional) */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <label style={{ fontSize: 11.5, fontWeight: 700, color: "rgba(255,255,255,0.55)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                Phone <span style={{ color: "rgba(255,255,255,0.30)", fontWeight: 500, textTransform: "none", letterSpacing: 0 }}>(optional)</span>
+              </label>
+              <input
+                type="tel"
+                value={phone}
+                onChange={e => setPhone(e.target.value)}
+                placeholder="(713) 555-0000"
+                autoComplete="tel"
+                style={inputStyle}
+              />
+            </div>
 
+            {/* Message */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <label style={{ fontSize: 11.5, fontWeight: 700, color: "rgba(255,255,255,0.55)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                How can we help? <span style={{ color: GREEN }}>*</span>
+              </label>
+              <textarea
+                value={message}
+                onChange={e => setMessage(e.target.value)}
+                placeholder="Describe your issue or question…"
+                rows={5}
+                style={{ ...inputStyle, resize: "vertical", lineHeight: 1.55 }}
+              />
+            </div>
+
+            {/* Error */}
+            {error && (
+              <div style={{ background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.30)", borderRadius: 10, padding: "10px 13px", fontSize: 13, color: "#FCA5A5", fontWeight: 600 }}>
+                {error}
+              </div>
+            )}
+
+            {/* Submit */}
+            <button
+              type="submit"
+              disabled={submitting}
+              style={{
+                padding: "14px",
+                borderRadius: 100,
+                border: "none",
+                background: submitting ? "rgba(141,214,63,0.40)" : GREEN,
+                color: NAVY,
+                fontWeight: 800,
+                fontSize: 15,
+                cursor: submitting ? "default" : "pointer",
+                fontFamily: '"DM Sans", sans-serif',
+                marginTop: 4,
+                letterSpacing: -0.2,
+              }}
+            >
+              {submitting ? "Sending…" : "Send message"}
+            </button>
+
+          </form>
+        )}
       </div>
     </div>
   );

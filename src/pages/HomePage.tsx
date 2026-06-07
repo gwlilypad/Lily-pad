@@ -28,43 +28,14 @@ function AdminSlide({ open }: { open: boolean }) {
   );
 }
 
-const CarSVG = () => (
-  <svg width="97" height="47" viewBox="0 0 90 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      <linearGradient id="carBody" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#f5f6f8"/><stop offset="100%" stopColor="#d2d8e2"/></linearGradient>
-      <linearGradient id="carRoof" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#eceef2"/><stop offset="100%" stopColor="#c8cdd8"/></linearGradient>
-    </defs>
-    <ellipse cx="45" cy="42" rx="36" ry="3.5" fill="rgba(14,31,64,0.28)"/>
-    <path d="M8 28 Q8 20 14 20 L22 20 L28 10 Q30 7 34 7 L58 7 Q62 7 64 10 L70 20 L76 20 Q82 20 82 28 L82 32 Q82 36 78 36 L12 36 Q8 36 8 32 Z" fill="url(#carBody)"/>
-    <path d="M28 20 L34 9 Q36 7 38 7 L56 7 Q58 7 60 9 L66 20 Z" fill="url(#carRoof)"/>
-    <path d="M60 20 L56 9 Q55 7.5 53 7.5 L50 7.5 L64 20 Z" fill="#b0c8dc" opacity="0.6"/>
-    <path d="M34 9 Q36 7 38 7 L50 7.5 L64 20 L34 20 Z" fill="#b8d0e4" opacity="0.75"/>
-    <path d="M28 20 L32 9 Q33 7.5 34 9 L34 20 Z" fill="#a8bcd0" opacity="0.55"/>
-    <path d="M28 20 L32 8 Q30 6 29 8 L26 20 Z" fill="#b0c4d4" opacity="0.5"/>
-    <path d="M38 9 Q44 7.5 52 8" stroke="white" strokeWidth="1" fill="none" opacity="0.5" strokeLinecap="round"/>
-    <line x1="50" y1="20" x2="50" y2="35" stroke="rgba(0,0,0,0.09)" strokeWidth="0.8"/>
-    <rect x="54" y="27" width="8" height="2" rx="1" fill="rgba(0,0,0,0.12)"/>
-    <rect x="36" y="27" width="8" height="2" rx="1" fill="rgba(0,0,0,0.12)"/>
-    <rect x="14" y="33" width="62" height="3" rx="1.5" fill="#b8bec8"/>
-    <path d="M78 28 Q84 28 84 32 L84 34 Q84 36 82 36 L78 36 Z" fill="#c8cdd8"/>
-    <rect x="79" y="22" width="5" height="6" rx="2" fill="#e8eef8" opacity="0.9"/>
-    <path d="M12 28 Q6 28 6 32 L6 34 Q6 36 8 36 L12 36 Z" fill="#c0c6d2"/>
-    <rect x="6" y="22" width="5" height="6" rx="2" fill="#e87070" opacity="0.75"/>
-    <circle cx="67" cy="36" r="8" fill="#22262e"/><circle cx="67" cy="36" r="5.5" fill="#383d4a"/><circle cx="67" cy="36" r="2.5" fill="#606472"/><circle cx="67" cy="36" r="1.2" fill="#888ea0"/>
-    <circle cx="23" cy="36" r="8" fill="#22262e"/><circle cx="23" cy="36" r="5.5" fill="#383d4a"/><circle cx="23" cy="36" r="2.5" fill="#606472"/><circle cx="23" cy="36" r="1.2" fill="#888ea0"/>
-    <path d="M10 30 Q10 20 14 20 L22 20 Q20 22 18 30 Z" fill="url(#carBody)"/>
-    <path d="M72 20 L76 20 Q82 20 82 28 L82 30 Q78 22 74 20 Z" fill="url(#carBody)"/>
-  </svg>
-);
-
-const SPLIT = 61;
+const SPLIT = 60;
 const PAD_SIZE = 64;
 const PAD_HALF = PAD_SIZE / 2;
 const CONNECT_THRESHOLD = 0.72;
 
 export default function HomePage() {
   const { goTo, setState } = useApp();
-  const { user, loading } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [modalOpen, setModalOpen] = useState(false);
   const [modalSuccess, setModalSuccess] = useState(false);
@@ -99,18 +70,8 @@ export default function HomePage() {
     setConnecting(true);
     setTimeout(() => {
       setAdminOpen(true);
-      setTimeout(() => {
-        goTo("admin");
-      }, 520);
+      setTimeout(() => { goTo("admin"); }, 520);
     }, 280);
-  }
-
-  function openAdmin() {
-    triggered.current = false;
-    setAdminOpen(true);
-    setTimeout(() => {
-      goTo("admin");
-    }, 620);
   }
 
   function onPadDown(e: React.PointerEvent) {
@@ -128,10 +89,7 @@ export default function HomePage() {
     const mx = maxDrag();
     const clamped = Math.min(dx, mx);
     setPadX(clamped);
-    if (clamped >= mx) {
-      dragStarted.current = false;
-      triggerConnect();
-    }
+    if (clamped >= mx) { dragStarted.current = false; triggerConnect(); }
   }
 
   function onPadUp() {
@@ -139,12 +97,8 @@ export default function HomePage() {
     dragStarted.current = false;
     setDragging(false);
     const mx = maxDrag();
-    if (padX >= mx * CONNECT_THRESHOLD) {
-      triggerConnect();
-    } else {
-      setPadX(0);
-      triggered.current = false;
-    }
+    if (padX >= mx * CONNECT_THRESHOLD) { triggerConnect(); }
+    else { setPadX(0); triggered.current = false; }
   }
 
   function onPadCancel() {
@@ -170,10 +124,6 @@ export default function HomePage() {
     goTo("padtype");
   }
 
-  function handleSignIn() {
-    if (user) { goTo("find"); } else { navigate("/signin"); }
-  }
-
   const mx = maxDrag();
   const progress = mx > 0 ? Math.min(padX / mx, 1) : 0;
   const trackOpacity = dragging || padX > 0 ? 1 : 0;
@@ -182,85 +132,125 @@ export default function HomePage() {
   return (
     <div
       ref={containerRef}
-      style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden", userSelect: "none" }}
+      style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden", userSelect: "none", fontFamily: '"DM Sans", sans-serif' }}
     >
+
       {/* ── NAVY SECTION ── */}
       <div style={{
         position: "absolute", top: 0, left: 0, right: 0, height: `${SPLIT}%`,
-        background: "#0E1F40", display: "flex", flexDirection: "column",
-        alignItems: "center", padding: "48px 20px 0", boxSizing: "border-box", zIndex: 5,
+        background: "#0E1F40",
+        display: "flex", flexDirection: "column", alignItems: "center",
+        padding: "0 24px", boxSizing: "border-box", zIndex: 5,
       }}>
-        <div style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-          <div style={{ marginLeft: -2, marginTop: -6 }}>
-            <img src={lilypadLogo} alt="Lily Pad" style={{ width: 140, height: "auto", display: "block" }} />
-          </div>
+
+        {/* Logo — centered at top, pushes content below to bottom */}
+        <div style={{ paddingTop: "calc(env(safe-area-inset-top) + 40px)", marginBottom: "auto", display: "flex", justifyContent: "center" }}>
+          <img src={lilypadLogo} alt="Lily Pad" style={{ width: 130, height: "auto", display: "block" }} />
         </div>
 
-        <div style={{ display: "flex", justifyContent: "center", marginTop: 24, flexShrink: 0 }}>
-          <div style={{ filter: "drop-shadow(0 6px 20px rgba(0,0,0,0.35))" }}>
-            <CarSVG />
-          </div>
+        {/* Bottom content: headline + button + FOR DRIVERS */}
+        <div style={{ width: "100%", paddingBottom: 24, display: "flex", flexDirection: "column", alignItems: "center", gap: 0 }}>
+          <h1 style={{
+            textAlign: "center", margin: "0 0 22px",
+            fontSize: 33, fontWeight: 800, color: "#fff",
+            lineHeight: 1.18, letterSpacing: "-0.03em", width: "100%",
+          }}>
+            Your neighbor saved<br />you a spot.
+          </h1>
+
+          <button
+            onClick={handleFindAPad}
+            style={{
+              width: "100%", background: "#8DD63F", color: "#0E1F40",
+              border: "none", borderRadius: 50, padding: "17px",
+              fontSize: 17, fontWeight: 800, cursor: "pointer",
+              letterSpacing: "-0.01em",
+              boxShadow: "0 4px 20px rgba(141,214,63,0.28)",
+              marginBottom: 14,
+            }}
+          >
+            Start Parking
+          </button>
+
+          <p style={{
+            margin: 0, fontSize: 10.5, fontWeight: 700,
+            letterSpacing: "0.20em", color: "rgba(255,255,255,0.32)",
+            textTransform: "uppercase", textAlign: "center",
+          }}>
+            For Drivers
+          </p>
         </div>
-
-        <p style={{ textAlign: "center", margin: "18px 0 6px", fontSize: 11, fontWeight: 700, letterSpacing: "0.18em", color: "#8DD63F", textTransform: "uppercase", flexShrink: 0 }}>For Drivers</p>
-        <h1 style={{ textAlign: "center", margin: "0 0 20px", fontSize: 32, fontWeight: 800, color: "#fff", lineHeight: 1.15, letterSpacing: "-0.03em", flexShrink: 0 }}>
-          Find parking<br />near you.
-        </h1>
-
-        <button
-          onClick={handleFindAPad}
-          style={{ width: "100%", background: "#8DD63F", color: "#0E1F40", border: "none", borderRadius: 50, padding: "16px", fontSize: 16, fontWeight: 800, cursor: "pointer", letterSpacing: "-0.01em", flexShrink: 0, boxShadow: "0 4px 18px rgba(141,214,63,0.30)" }}
-        >
-          Find a Lily Pad
-        </button>
       </div>
 
-      {/* ── WHITE SECTION ── */}
+      {/* ── LIGHT SECTION ── */}
       <div style={{
         position: "absolute", bottom: 0, left: 0, right: 0, height: `${100 - SPLIT}%`,
-        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end",
-        padding: "0 20px 28px", zIndex: 5, boxSizing: "border-box", gap: 12,
+        background: "#F0F2F7",
+        display: "flex", flexDirection: "column", alignItems: "center",
+        justifyContent: "center",
+        padding: "0 24px calc(env(safe-area-inset-bottom) + 20px)",
+        boxSizing: "border-box", zIndex: 5, gap: 0,
       }}>
-        <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: "0.18em", color: "rgba(14,31,64,0.38)", textTransform: "uppercase", textAlign: "center" }}>For Hosts</p>
-        <p style={{ margin: 0, fontSize: 17, fontWeight: 600, color: "#0E1F40", textAlign: "center", letterSpacing: "-0.01em" }}>List your Lily Pad. Earn Money.</p>
+
+        <p style={{
+          margin: "0 0 8px", fontSize: 10.5, fontWeight: 700,
+          letterSpacing: "0.20em", color: "rgba(14,31,64,0.35)",
+          textTransform: "uppercase", textAlign: "center",
+        }}>
+          For Hosts
+        </p>
+
+        <h2 style={{
+          margin: "0 0 18px", fontSize: 28, fontWeight: 800,
+          color: "#0E1F40", letterSpacing: "-0.03em",
+          textAlign: "center", lineHeight: 1.15,
+        }}>
+          List your driveway.
+        </h2>
+
         <button
           onClick={handleListMyPad}
-          style={{ width: "100%", background: "transparent", border: "2px solid #0E1F40", borderRadius: 50, padding: "14px", fontSize: 15, fontWeight: 700, color: "#0E1F40", cursor: "pointer", letterSpacing: "-0.01em" }}
+          style={{
+            width: "100%", background: "transparent",
+            border: "2.5px solid #0E1F40", borderRadius: 50,
+            padding: "15px", fontSize: 16, fontWeight: 800,
+            color: "#0E1F40", cursor: "pointer",
+            letterSpacing: "-0.01em", marginBottom: 18,
+          }}
         >
-          List my lily pad
+          Start Earning
         </button>
-        <button
-          onClick={handleSignIn}
-          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "rgba(14,31,64,0.45)", fontFamily: "inherit", textDecoration: "underline", textDecorationColor: "rgba(14,31,64,0.2)", padding: "4px 0" }}
+
+        <p style={{
+          margin: "0 0 8px", fontSize: 13, fontWeight: 600,
+          color: "rgba(14,31,64,0.38)", textAlign: "center",
+          letterSpacing: "0.08em", textTransform: "uppercase",
+        }}>
+          FAQ
+        </p>
+
+        <div
+          onClick={() => setModalOpen(true)}
+          style={{
+            fontSize: 13, color: "rgba(14,31,64,0.45)", cursor: "pointer",
+            textDecoration: "underline", textDecorationColor: "rgba(14,31,64,0.25)",
+            textAlign: "center",
+          }}
         >
-          Sign in
-        </button>
-        <div onClick={() => setModalOpen(true)} style={{ fontSize: 12, color: "rgba(14,31,64,0.38)", cursor: "pointer", textDecoration: "underline", textDecorationColor: "rgba(14,31,64,0.2)" }}>
           Have a referral code?
         </div>
       </div>
 
       {/* ── HORIZONTAL DRAG TRACK ── */}
-      <div
-        style={{
-          position: "absolute",
-          left: "50%",
-          top: `${SPLIT}%`,
-          transform: "translate(0, -50%)",
-          width: `calc(50% - ${PAD_HALF + 8}px)`,
-          height: 2,
-          zIndex: 8,
-          opacity: trackOpacity,
-          transition: dragging ? "none" : "opacity 0.4s ease",
-          pointerEvents: "none",
-          overflow: "visible",
-        }}
-      >
-        <div style={{
-          position: "absolute", top: 0, left: 0, right: 0, height: "100%",
-          background: "rgba(141,214,63,0.18)",
-          borderRadius: 2,
-        }} />
+      <div style={{
+        position: "absolute", left: "50%", top: `${SPLIT}%`,
+        transform: "translate(0, -50%)",
+        width: `calc(50% - ${PAD_HALF + 8}px)`, height: 2,
+        zIndex: 8, opacity: trackOpacity,
+        transition: dragging ? "none" : "opacity 0.4s ease",
+        pointerEvents: "none", overflow: "visible",
+      }}>
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "100%", background: "rgba(141,214,63,0.18)", borderRadius: 2 }} />
         <div style={{
           position: "absolute", top: 0, left: 0, height: "100%",
           width: `${progress * 100}%`,
@@ -287,20 +277,16 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* ── DRAGGABLE LILY PAD (divider) ── */}
+      {/* ── DRAGGABLE LILY PAD (divider / admin trigger) ── */}
       <div
-        onPointerDown={onPadDown}
-        onPointerMove={onPadMove}
-        onPointerUp={onPadUp}
-        onPointerCancel={onPadCancel}
+        onPointerDown={onPadDown} onPointerMove={onPadMove}
+        onPointerUp={onPadUp} onPointerCancel={onPadCancel}
         onContextMenu={e => e.preventDefault()}
         style={{
           position: "absolute",
-          left: `calc(50% + ${padX}px)`,
-          top: `${SPLIT}%`,
+          left: `calc(50% + ${padX}px)`, top: `${SPLIT}%`,
           transform: "translate(-50%, -50%)",
-          width: PAD_SIZE, height: PAD_SIZE,
-          zIndex: 10,
+          width: PAD_SIZE, height: PAD_SIZE, zIndex: 10,
           cursor: dragging ? "grabbing" : "grab",
           touchAction: "none",
           transition: dragging ? "none" : (connecting ? "left 0.28s cubic-bezier(0.34,1.48,0.64,1)" : "left 0.42s cubic-bezier(0.22,1,0.36,1)"),
@@ -314,20 +300,18 @@ export default function HomePage() {
         <PadSVG size={PAD_SIZE} />
       </div>
 
-      {/* Connect flash overlay */}
+      {/* Connect flash */}
       {connecting && (
         <div style={{
           position: "absolute", inset: 0, zIndex: 190, pointerEvents: "none",
           background: "rgba(141,214,63,0.12)",
-          opacity: adminOpen ? 0 : 1,
-          transition: "opacity 0.3s ease",
+          opacity: adminOpen ? 0 : 1, transition: "opacity 0.3s ease",
         }} />
       )}
 
-      {/* Admin slide panel */}
       <AdminSlide open={adminOpen} />
 
-      {/* Auth prompt modal — shown when logged-out user taps Find a Lily Pad */}
+      {/* ── AUTH PROMPT MODAL ── */}
       <div className={`modal-overlay${authPrompt ? " show" : ""}`} onClick={() => setAuthPrompt(false)}>
         <div className="modal-sheet" onClick={e => e.stopPropagation()}>
           <div className="modal-handle" />
@@ -336,19 +320,19 @@ export default function HomePage() {
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8DD63F" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
             </div>
             <div>
-              <p style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "#0E1F40", letterSpacing: "-0.02em" }}>Find a Lily Pad</p>
+              <p style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "#0E1F40", letterSpacing: "-0.02em" }}>Start Parking</p>
               <p style={{ margin: 0, fontSize: 12, color: "rgba(14,31,64,0.45)", marginTop: 2 }}>Sign in or create a free account to continue.</p>
             </div>
           </div>
           <button
             onClick={() => { setAuthPrompt(false); navigate("/signin"); }}
-            style={{ width: "100%", background: "#0E1F40", color: "#fff", border: "none", borderRadius: 50, padding: "15px", fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}
+            style={{ width: "100%", background: "#0E1F40", color: "#fff", border: "none", borderRadius: 50, padding: "15px", fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 10, fontFamily: '"DM Sans", sans-serif' }}
           >
             Sign in
           </button>
           <button
             onClick={() => { setAuthPrompt(false); goTo("signup"); }}
-            style={{ width: "100%", background: "transparent", color: "#0E1F40", border: "2px solid #0E1F40", borderRadius: 50, padding: "13px", fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 6 }}
+            style={{ width: "100%", background: "transparent", color: "#0E1F40", border: "2px solid #0E1F40", borderRadius: 50, padding: "13px", fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 6, fontFamily: '"DM Sans", sans-serif' }}
           >
             Create account
           </button>
@@ -356,7 +340,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Referral modal */}
+      {/* ── REFERRAL MODAL ── */}
       <div className={`modal-overlay${modalOpen ? " show" : ""}`} onClick={closeModal}>
         <div className="modal-sheet" onClick={e => e.stopPropagation()}>
           <div className="modal-handle" />

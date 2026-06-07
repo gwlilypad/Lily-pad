@@ -166,7 +166,7 @@ export default function HomePage() {
             WebkitUserSelect: "none",
           }}
         >
-          <img src={lilypadLogo} alt="Lily Pad" style={{ width: 128, height: "auto", display: "block", pointerEvents: "none" }} />
+          <img src={lilypadLogo} alt="Lily Pad" style={{ width: 160, height: "auto", display: "block", pointerEvents: "none" }} />
         </div>
 
         {/* Bottom content: headline + button + FOR DRIVERS */}

@@ -119,7 +119,7 @@ export default function ListerBookingsPage() {
         {/* Back + title row */}
         <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 24 }}>
           <button
-            onClick={() => navigate("/paddashboard")}
+            onClick={() => navigate(-1)}
             style={{
               width: 38, height: 38, borderRadius: "50%",
               background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.14)",

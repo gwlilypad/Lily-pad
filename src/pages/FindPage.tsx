@@ -1074,6 +1074,9 @@ export default function FindPage() {
   });
   const [myHostSpots, setMyHostSpots] = useState<SpotRecord[]>([]);
   const [managingSpot, setManagingSpot] = useState<SpotRecord | null>(null);
+  const [hostBookings, setHostBookings] = useState<Array<{start_ts:number,total_price:number,status:string}>>([]);
+  const [earningsRange, setEarningsRange] = useState<'D'|'W'|'M'|'Y'|'ALL'>('M');
+  const [chartScrubIdx, setChartScrubIdx] = useState<number|null>(null);
   const [supportView, setSupportView] = useState<"menu" | "thread">("menu");
   const [supportTickets, setSupportTickets] = useState<SupportTicket[]>(() => loadTickets());
   const supportUserId = useRef<string>(getOrCreateUserId());
@@ -1120,6 +1123,22 @@ export default function FindPage() {
         setMyHostSpots([]);
       }
     });
+  }, [drawerMode, user]);
+
+  // Fetch lister bookings for earnings chart when host mode is active
+  useEffect(() => {
+    if (drawerMode !== "lister" || !user) { setHostBookings([]); return; }
+    fetch(`/api/bookings/lister/${user.id}`)
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setHostBookings(data.map((b: any) => ({
+            start_ts: b.start_ts ? Number(b.start_ts) : 0,
+            total_price: Number(b.total_price) || 0,
+            status: b.status || '',
+          })));
+        }
+      }).catch(() => {});
   }, [drawerMode, user]);
 
   // Auto-scroll thread to bottom whenever the active ticket changes / new message arrives
@@ -3830,6 +3849,243 @@ export default function FindPage() {
           </div>
         </div>
       </div>
+
+      {/* ── HOST DASHBOARD ── */}
+      {drawerMode === "lister" && (() => {
+        const now = Date.now();
+        const RANGE_MS: Record<string, number> = { D: 86400000, W: 604800000, M: 2592000000, Y: 31536000000, ALL: 0 };
+        const RANGE_COUNT: Record<string, number> = { D: 24, W: 7, M: 10, Y: 12, ALL: 10 };
+        const RANGE_FMT: Record<string, (ts: number) => string> = {
+          D:   ts => `${new Date(ts).getHours()}:00`,
+          W:   ts => ['Su','Mo','Tu','We','Th','Fr','Sa'][new Date(ts).getDay()],
+          M:   ts => new Date(ts).toLocaleDateString('en-US', { month:'short', day:'numeric' }),
+          Y:   ts => ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][new Date(ts).getMonth()],
+          ALL: ts => new Date(ts).toLocaleDateString('en-US', { month:'short', year:'2-digit' }),
+        };
+        const count = RANGE_COUNT[earningsRange];
+        const rangeStart = earningsRange === 'ALL'
+          ? (hostBookings.length > 0 ? Math.min(...hostBookings.map(b => b.start_ts || now)) : now - 31536000000)
+          : now - RANGE_MS[earningsRange];
+        const bucketMs = earningsRange === 'ALL'
+          ? Math.max(Math.floor((now - rangeStart) / count), 86400000)
+          : RANGE_MS[earningsRange] / count;
+
+        const chartData = Array.from({ length: count }, (_, i) => {
+          const bs = rangeStart + i * bucketMs;
+          const earn = hostBookings.filter(b => b.start_ts >= bs && b.start_ts < bs + bucketMs).reduce((s, b) => s + b.total_price, 0);
+          return { ts: bs, earnings: earn, label: RANGE_FMT[earningsRange](bs) };
+        });
+        const totalEarnings = chartData.reduce((s, p) => s + p.earnings, 0);
+        const maxEarnings = Math.max(...chartData.map(p => p.earnings), 0.01);
+        const bookingCount = hostBookings.filter(b => b.start_ts >= rangeStart).length;
+
+        // SVG chart geometry
+        const CW = 360, CH = 185, PL = 8, PR = 8, PT = 18, PB = 32;
+        const cw = CW - PL - PR, ch = CH - PT - PB;
+        const pts = chartData.map((d, i) => ({
+          x: PL + (count > 1 ? (i / (count - 1)) * cw : cw / 2),
+          y: PT + ch - (d.earnings / maxEarnings) * ch,
+          earnings: d.earnings, label: d.label,
+        }));
+
+        // Catmull-Rom smooth path
+        const smoothPath = (points: typeof pts) => {
+          if (points.length < 2) return '';
+          let d = `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`;
+          for (let i = 0; i < points.length - 1; i++) {
+            const p0 = points[Math.max(0, i - 1)];
+            const p1 = points[i];
+            const p2 = points[i + 1];
+            const p3 = points[Math.min(points.length - 1, i + 2)];
+            const cp1x = p1.x + (p2.x - p0.x) / 6;
+            const cp1y = p1.y + (p2.y - p0.y) / 6;
+            const cp2x = p2.x - (p3.x - p1.x) / 6;
+            const cp2y = p2.y - (p3.y - p1.y) / 6;
+            d += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)} ${cp2x.toFixed(1)} ${cp2y.toFixed(1)} ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+          }
+          return d;
+        };
+        const linePath = smoothPath(pts);
+        const areaPath = pts.length >= 2
+          ? `${linePath} L ${pts[pts.length-1].x.toFixed(1)} ${(PT+ch).toFixed(1)} L ${pts[0].x.toFixed(1)} ${(PT+ch).toFixed(1)} Z`
+          : '';
+        const scrubPt = chartScrubIdx !== null ? pts[Math.max(0, Math.min(pts.length-1, chartScrubIdx))] : null;
+        const labelStep = Math.max(1, Math.floor(pts.length / 4));
+        const labelIdxs = pts.map((_, i) => i).filter(i => i === 0 || i === pts.length-1 || i % labelStep === 0);
+
+        const onCDown = (e: React.PointerEvent<SVGSVGElement>) => {
+          e.currentTarget.setPointerCapture(e.pointerId);
+          const r = e.currentTarget.getBoundingClientRect();
+          setChartScrubIdx(Math.max(0, Math.min(pts.length-1, Math.round(((e.clientX - r.left) / r.width) * (pts.length-1)))));
+        };
+        const onCMove = (e: React.PointerEvent<SVGSVGElement>) => {
+          if (e.buttons === 0) return;
+          const r = e.currentTarget.getBoundingClientRect();
+          setChartScrubIdx(Math.max(0, Math.min(pts.length-1, Math.round(((e.clientX - r.left) / r.width) * (pts.length-1)))));
+        };
+
+        type HostPageId = "paddashboard" | "listerbookings" | "padtype" | "customerservice";
+        const actions: Array<{ label: string; sub: string; icon: React.ReactNode; page: HostPageId; accent: boolean }> = [
+          { label: "My Pads", sub: myHostSpots.length > 0 ? `${myHostSpots.length} listing${myHostSpots.length !== 1 ? 's' : ''}` : "Manage listings", page: "paddashboard", accent: true, icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
+          { label: "Reservations", sub: "Requests & bookings", page: "listerbookings", accent: false, icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> },
+          { label: "List New Spot", sub: "Add a parking space", page: "padtype", accent: false, icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg> },
+          { label: "Support", sub: "Get help", page: "customerservice", accent: false, icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg> },
+        ];
+
+        return (
+          <div key="host-dash" style={{
+            position: "absolute", inset: 0, zIndex: 50,
+            background: "linear-gradient(180deg,#0a1628 0%,#0E1F40 55%,#112247 100%)",
+            display: "flex", flexDirection: "column",
+            fontFamily: "'DM Sans',sans-serif",
+            overflowY: "auto", WebkitOverflowScrolling: "touch" as any,
+          }}>
+
+            {/* ── Header ── */}
+            <div style={{ padding: "calc(env(safe-area-inset-top) + 20px) 20px 0", flexShrink: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 22 }}>
+                <div>
+                  <div style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,0.35)", letterSpacing: 1.4, textTransform: "uppercase" }}>Host Dashboard</div>
+                  <div style={{ fontSize: 23, fontWeight: 800, color: "#fff", letterSpacing: -0.6, marginTop: 2 }}>
+                    {profile?.first_name ? `Hey, ${profile.first_name} 👋` : "My Dashboard"}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setDrawerMode("driver")}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 6,
+                    padding: "9px 14px", borderRadius: 22,
+                    background: "rgba(141,214,63,0.10)", border: "1.5px solid rgba(141,214,63,0.28)",
+                    color: "#8DD63F", fontSize: 12, fontWeight: 700,
+                    cursor: "pointer", fontFamily: "'DM Sans',sans-serif", flexShrink: 0,
+                  }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+                  Driver Mode
+                </button>
+              </div>
+
+              {/* ── EARNINGS CHART ── */}
+              <div style={{ marginBottom: 8 }}>
+                {/* Summary */}
+                <div style={{ display: "flex", alignItems: "flex-end", gap: 14, marginBottom: 14 }}>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.38)", letterSpacing: 0.3, marginBottom: 2 }}>
+                      {earningsRange === 'D' ? "Today" : earningsRange === 'W' ? "This Week" : earningsRange === 'M' ? "This Month" : earningsRange === 'Y' ? "This Year" : "All Time"} · Earnings
+                    </div>
+                    <div style={{ fontSize: 38, fontWeight: 800, color: "#fff", letterSpacing: -1.5, lineHeight: 1 }}>
+                      ${totalEarnings.toFixed(2)}
+                    </div>
+                  </div>
+                  <div style={{ paddingBottom: 5 }}>
+                    <div style={{ fontSize: 12, color: "rgba(255,255,255,0.38)", fontWeight: 600 }}>{bookingCount} booking{bookingCount !== 1 ? 's' : ''}</div>
+                    {bookingCount === 0 && <div style={{ fontSize: 10.5, color: "rgba(141,214,63,0.60)", fontWeight: 600, marginTop: 2 }}>List a spot to earn</div>}
+                  </div>
+                </div>
+
+                {/* Range tabs */}
+                <div style={{ display: "flex", gap: 5, marginBottom: 10 }}>
+                  {(['D','W','M','Y','ALL'] as const).map(r => (
+                    <button key={r} onClick={() => { setEarningsRange(r); setChartScrubIdx(null); }} style={{
+                      flex: 1, padding: "6px 0", borderRadius: 9,
+                      background: earningsRange === r ? "#8DD63F" : "rgba(255,255,255,0.07)",
+                      border: "none",
+                      color: earningsRange === r ? "#0E1F40" : "rgba(255,255,255,0.45)",
+                      fontSize: 11, fontWeight: 700, cursor: "pointer",
+                      fontFamily: "'DM Sans',sans-serif",
+                      transition: "background 0.15s,color 0.15s",
+                    }}>{r}</button>
+                  ))}
+                </div>
+
+                {/* SVG Chart */}
+                <div style={{ width: "100%", touchAction: "none", borderRadius: 16, overflow: "hidden", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                  <svg
+                    viewBox={`0 0 ${CW} ${CH}`}
+                    style={{ width: "100%", display: "block", userSelect: "none" }}
+                    onPointerDown={onCDown}
+                    onPointerMove={onCMove}
+                    onPointerUp={() => setChartScrubIdx(null)}
+                    onPointerLeave={() => setChartScrubIdx(null)}
+                  >
+                    <defs>
+                      <linearGradient id="hEarnGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#8DD63F" stopOpacity="0.32"/>
+                        <stop offset="100%" stopColor="#8DD63F" stopOpacity="0.01"/>
+                      </linearGradient>
+                    </defs>
+                    {/* Grid lines */}
+                    {[0.25,0.5,0.75].map(f => (
+                      <line key={f} x1={PL} y1={PT + ch - f*ch} x2={CW-PR} y2={PT + ch - f*ch}
+                        stroke="rgba(255,255,255,0.05)" strokeWidth="1"/>
+                    ))}
+                    {/* Baseline */}
+                    <line x1={PL} y1={PT+ch} x2={CW-PR} y2={PT+ch} stroke="rgba(255,255,255,0.10)" strokeWidth="1"/>
+                    {/* Area */}
+                    {areaPath && <path d={areaPath} fill="url(#hEarnGrad)"/>}
+                    {/* Line */}
+                    {linePath && <path d={linePath} fill="none" stroke="#8DD63F" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>}
+                    {/* Data dots on zero — subtle tick marks */}
+                    {pts.map((p, i) => (
+                      <circle key={i} cx={p.x} cy={PT+ch} r="1.5" fill="rgba(255,255,255,0.12)"/>
+                    ))}
+                    {/* X-axis labels */}
+                    {labelIdxs.map(i => (
+                      <text key={i} x={pts[i]?.x ?? 0} y={CH - 8}
+                        textAnchor="middle" fontSize="8.5" fill="rgba(255,255,255,0.28)"
+                        fontFamily="DM Sans,sans-serif" fontWeight="600"
+                      >{pts[i]?.label ?? ''}</text>
+                    ))}
+                    {/* Scrub */}
+                    {scrubPt && (() => {
+                      const bx = Math.max(34, Math.min(CW - 34, scrubPt.x));
+                      const by = Math.max(14, scrubPt.y - 26);
+                      return (
+                        <>
+                          <line x1={scrubPt.x} y1={PT} x2={scrubPt.x} y2={PT+ch}
+                            stroke="rgba(255,255,255,0.22)" strokeWidth="1.5" strokeDasharray="3 3"/>
+                          <circle cx={scrubPt.x} cy={scrubPt.y} r="5.5" fill="#8DD63F" stroke="#0a1628" strokeWidth="2.5"/>
+                          <rect x={bx-32} y={by-13} width={64} height={24} rx={7} fill="rgba(255,255,255,0.95)"/>
+                          <text x={bx} y={by+4} textAnchor="middle" fontSize="12" fontWeight="700" fill="#0E1F40" fontFamily="DM Sans,sans-serif">
+                            ${scrubPt.earnings.toFixed(2)}
+                          </text>
+                        </>
+                      );
+                    })()}
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            {/* ── QUICK ACTIONS ── */}
+            <div style={{ padding: "14px 20px calc(env(safe-area-inset-bottom) + 28px)", flex: 1 }}>
+              <div style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,0.32)", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>
+                Quick Actions
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                {actions.map(a => (
+                  <button key={a.label} onClick={() => goTo(a.page)} style={{
+                    display: "flex", flexDirection: "column", alignItems: "flex-start",
+                    padding: "16px 14px", borderRadius: 18,
+                    background: a.accent ? "rgba(141,214,63,0.09)" : "rgba(255,255,255,0.05)",
+                    border: a.accent ? "1.5px solid rgba(141,214,63,0.28)" : "1px solid rgba(255,255,255,0.09)",
+                    cursor: "pointer", fontFamily: "'DM Sans',sans-serif", textAlign: "left", gap: 10,
+                    WebkitTapHighlightColor: "transparent",
+                  }}>
+                    <div style={{ width: 42, height: 42, borderRadius: 12, background: a.accent ? "rgba(141,214,63,0.16)" : "rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center", color: a.accent ? "#8DD63F" : "rgba(255,255,255,0.65)" }}>
+                      {a.icon}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 13.5, fontWeight: 700, color: a.accent ? "#8DD63F" : "#fff", letterSpacing: -0.2 }}>{a.label}</div>
+                      <div style={{ fontSize: 11, color: a.accent ? "rgba(141,214,63,0.55)" : "rgba(255,255,255,0.38)", marginTop: 2 }}>{a.sub}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── LOCATION PROMPT ── */}
       {locPromptOpen && (

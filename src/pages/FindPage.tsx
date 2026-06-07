@@ -3932,135 +3932,164 @@ export default function FindPage() {
           { label: "Support", sub: "Get help", page: "customerservice", accent: false, icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg> },
         ];
 
+        const DASH_NAVY = "#0E1F40";
+        const DASH_GREEN = "#8DD63F";
+
         return (
           <div key="host-dash" style={{
             position: "absolute", inset: 0, zIndex: 50,
-            background: "#0a1628",
+            background: DASH_NAVY,
             display: "flex", flexDirection: "column",
             fontFamily: "'DM Sans',sans-serif",
-            overflowY: "auto", WebkitOverflowScrolling: "touch" as any,
           }}>
 
-            {/* ── TOP BAR ── */}
-            <div style={{ padding: "calc(env(safe-area-inset-top) + 16px) 20px 0", flexShrink: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
-                <div>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.32)", letterSpacing: 1.6, textTransform: "uppercase" }}>
-                    {profile?.first_name || "Host"} · Dashboard
+            {/* ── NAVY HEADER (mirrors ListerBookingsPage) ── */}
+            <div style={{ flexShrink: 0, padding: "calc(env(safe-area-inset-top) + 14px) 20px 18px" }}>
+              {/* Top row: back + title */}
+              <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 4 }}>
+                <button
+                  onClick={() => setDrawerMode("driver")}
+                  style={{
+                    width: 38, height: 38, borderRadius: "50%",
+                    background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.14)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    cursor: "pointer", flexShrink: 0, padding: 0,
+                  }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
+                    <path d="M19 12H5M12 5l-7 7 7 7"/>
+                  </svg>
+                </button>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 21, fontWeight: 800, color: "#fff", letterSpacing: -0.5 }}>Host Dashboard</div>
+                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.40)", marginTop: 1 }}>
+                    {scrubPt
+                      ? scrubPt.label
+                      : bookingCount > 0
+                        ? `${bookingCount} booking${bookingCount !== 1 ? 's' : ''} · $${totalEarnings.toFixed(2)} earned`
+                        : "All caught up"}
                   </div>
                 </div>
-                <button onClick={() => setDrawerMode("driver")} style={{
-                  padding: "6px 13px", borderRadius: 20,
-                  background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.11)",
-                  color: "rgba(255,255,255,0.55)", fontSize: 11, fontWeight: 600,
-                  cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
-                  letterSpacing: -0.1,
-                }}>← Driver</button>
+              </div>
+            </div>
+
+            {/* ── WHITE ROUNDED SHEET ── */}
+            <div style={{
+              flex: 1, overflowY: "auto",
+              background: "#F4F6FA",
+              borderRadius: "26px 26px 0 0",
+              WebkitOverflowScrolling: "touch" as any,
+              paddingBottom: "calc(env(safe-area-inset-bottom) + 20px)",
+            }}>
+              {/* Handle */}
+              <div style={{ display: "flex", justifyContent: "center", paddingTop: 10, paddingBottom: 2 }}>
+                <div style={{ width: 34, height: 4, borderRadius: 2, background: "rgba(14,31,64,0.12)" }}/>
               </div>
 
-              {/* Earnings headline — updates live on scrub */}
-              <div style={{ marginBottom: 18 }}>
-                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", fontWeight: 500, marginBottom: 3 }}>
-                  {scrubPt ? scrubPt.label : (earningsRange === 'D' ? "Today" : earningsRange === 'W' ? "This Week" : earningsRange === 'M' ? "This Month" : earningsRange === 'Y' ? "This Year" : "All Time")}
+              {/* ── EARNINGS SUMMARY ── */}
+              <div style={{ padding: "14px 20px 4px" }}>
+                <div style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(14,31,64,0.38)", letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>
+                  {earningsRange === 'D' ? "Today" : earningsRange === 'W' ? "This Week" : earningsRange === 'M' ? "This Month" : earningsRange === 'Y' ? "This Year" : "All Time"}
                 </div>
-                <div style={{ fontSize: 42, fontWeight: 800, color: "#fff", letterSpacing: -2, lineHeight: 1 }}>
+                <div style={{ fontSize: 38, fontWeight: 800, color: DASH_NAVY, letterSpacing: -1.8, lineHeight: 1 }}>
                   ${(scrubPt ? scrubPt.earnings : totalEarnings).toFixed(2)}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 5 }}>
-                  <span style={{ fontSize: 12.5, fontWeight: 600, color: "#8DD63F" }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "#3a6b0f" }}>
                     +{bookingCount} booking{bookingCount !== 1 ? 's' : ''}
                   </span>
                   {bookingCount === 0 && (
-                    <span style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", fontWeight: 400 }}>· List a spot to start earning</span>
+                    <span style={{ fontSize: 11, color: "rgba(14,31,64,0.35)", fontWeight: 400 }}>· List a spot to start earning</span>
                   )}
                 </div>
               </div>
-            </div>
 
-            {/* ── FULL-BLEED CHART ── */}
-            <div style={{ width: "100%", touchAction: "none", flexShrink: 0 }}>
-              <svg
-                viewBox={`0 0 ${CW} ${CH}`}
-                style={{ width: "100%", display: "block", userSelect: "none" }}
-                onPointerDown={onCDown}
-                onPointerMove={onCMove}
-                onPointerUp={() => setChartScrubIdx(null)}
-                onPointerLeave={() => setChartScrubIdx(null)}
-              >
-                <defs>
-                  <linearGradient id="hEarnGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#8DD63F" stopOpacity="0.22"/>
-                    <stop offset="88%" stopColor="#8DD63F" stopOpacity="0.01"/>
-                  </linearGradient>
-                </defs>
-                {areaPath && <path d={areaPath} fill="url(#hEarnGrad)"/>}
-                {linePath && <path d={linePath} fill="none" stroke="#8DD63F" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>}
-                {labelIdxs.map(i => (
-                  <text key={i} x={pts[i]?.x ?? 0} y={CH - 7}
-                    textAnchor="middle" fontSize="8" fill="rgba(255,255,255,0.20)"
-                    fontFamily="DM Sans,sans-serif" fontWeight="600"
-                  >{pts[i]?.label ?? ''}</text>
-                ))}
-                {scrubPt && (
-                  <>
-                    <line x1={scrubPt.x} y1={PT} x2={scrubPt.x} y2={PT + ch}
-                      stroke="rgba(255,255,255,0.28)" strokeWidth="1"/>
-                    <circle cx={scrubPt.x} cy={scrubPt.y} r="3.5" fill="#8DD63F" stroke="#0a1628" strokeWidth="2"/>
-                  </>
-                )}
-              </svg>
-            </div>
-
-            {/* ── RANGE TABS ── */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 2, padding: "4px 16px 10px" }}>
-              {(['D','W','M','Y','ALL'] as const).map(r => (
-                <button key={r} onClick={() => { setEarningsRange(r); setChartScrubIdx(null); }} style={{
-                  padding: "5px 13px", borderRadius: 20,
-                  background: earningsRange === r ? "rgba(255,255,255,0.13)" : "transparent",
-                  border: "none",
-                  color: earningsRange === r ? "#fff" : "rgba(255,255,255,0.32)",
-                  fontSize: 12, fontWeight: earningsRange === r ? 700 : 400,
-                  cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
-                  transition: "all 0.15s", letterSpacing: earningsRange === r ? -0.2 : 0,
-                }}>{r}</button>
-              ))}
-            </div>
-
-            {/* ── DIVIDER ── */}
-            <div style={{ height: 1, background: "rgba(255,255,255,0.07)" }}/>
-
-            {/* ── NAVIGATION ROWS ── */}
-            <div style={{ flex: 1, overflowY: "auto", paddingBottom: "calc(env(safe-area-inset-bottom) + 16px)" }}>
-              {actions.map((a, idx) => (
-                <div key={a.label}>
-                  {idx > 0 && (
-                    <div style={{ height: 1, background: "rgba(255,255,255,0.05)", marginLeft: 58 }}/>
+              {/* ── CHART CARD (dark navy embedded in white sheet) ── */}
+              <div style={{ margin: "14px 16px 0", borderRadius: 18, overflow: "hidden", background: "#0a1628", touchAction: "none" }}>
+                <svg
+                  viewBox={`0 0 ${CW} ${CH}`}
+                  style={{ width: "100%", display: "block", userSelect: "none" }}
+                  onPointerDown={onCDown}
+                  onPointerMove={onCMove}
+                  onPointerUp={() => setChartScrubIdx(null)}
+                  onPointerLeave={() => setChartScrubIdx(null)}
+                >
+                  <defs>
+                    <linearGradient id="hEarnGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={DASH_GREEN} stopOpacity="0.28"/>
+                      <stop offset="90%" stopColor={DASH_GREEN} stopOpacity="0.01"/>
+                    </linearGradient>
+                  </defs>
+                  {areaPath && <path d={areaPath} fill="url(#hEarnGrad)"/>}
+                  {linePath && <path d={linePath} fill="none" stroke={DASH_GREEN} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>}
+                  {labelIdxs.map(i => (
+                    <text key={i} x={pts[i]?.x ?? 0} y={CH - 7}
+                      textAnchor="middle" fontSize="8" fill="rgba(255,255,255,0.22)"
+                      fontFamily="DM Sans,sans-serif" fontWeight="600"
+                    >{pts[i]?.label ?? ''}</text>
+                  ))}
+                  {scrubPt && (
+                    <>
+                      <line x1={scrubPt.x} y1={PT} x2={scrubPt.x} y2={PT + ch}
+                        stroke="rgba(255,255,255,0.30)" strokeWidth="1"/>
+                      <circle cx={scrubPt.x} cy={scrubPt.y} r="3.5" fill={DASH_GREEN} stroke="#0a1628" strokeWidth="2"/>
+                    </>
                   )}
-                  <button onClick={() => goTo(a.page)} style={{
-                    display: "flex", alignItems: "center", gap: 14,
-                    width: "100%", padding: "13px 20px",
-                    background: "transparent", border: "none",
-                    cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
-                    WebkitTapHighlightColor: "transparent",
-                  }}>
-                    <div style={{
-                      width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-                      background: a.accent ? "rgba(141,214,63,0.14)" : "rgba(255,255,255,0.07)",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      color: a.accent ? "#8DD63F" : "rgba(255,255,255,0.52)",
-                    }}>{a.icon}</div>
-                    <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: a.accent ? "#8DD63F" : "#fff", letterSpacing: -0.2 }}>{a.label}</div>
-                      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.32)", marginTop: 1 }}>{a.sub}</div>
-                    </div>
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
-                      stroke={a.accent ? "rgba(141,214,63,0.50)" : "rgba(255,255,255,0.18)"}
-                      strokeWidth="2.5" strokeLinecap="round">
-                      <path d="m9 18 6-6-6-6"/>
-                    </svg>
-                  </button>
+                </svg>
+
+                {/* Range tabs — inside the dark card */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 2, padding: "2px 16px 12px" }}>
+                  {(['D','W','M','Y','ALL'] as const).map(r => (
+                    <button key={r} onClick={() => { setEarningsRange(r); setChartScrubIdx(null); }} style={{
+                      padding: "5px 13px", borderRadius: 20,
+                      background: earningsRange === r ? "rgba(255,255,255,0.14)" : "transparent",
+                      border: "none",
+                      color: earningsRange === r ? "#fff" : "rgba(255,255,255,0.32)",
+                      fontSize: 12, fontWeight: earningsRange === r ? 700 : 400,
+                      cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+                      transition: "all 0.15s",
+                    }}>{r}</button>
+                  ))}
                 </div>
-              ))}
+              </div>
+
+              {/* ── SECTION LABEL ── */}
+              <div style={{ padding: "22px 20px 8px" }}>
+                <div style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(14,31,64,0.38)", letterSpacing: 1, textTransform: "uppercase" }}>
+                  Quick Links
+                </div>
+              </div>
+
+              {/* ── ACTION ROWS (light bg, like Settings rows) ── */}
+              <div style={{ margin: "0 16px", background: "#fff", borderRadius: 16, overflow: "hidden", border: "1px solid rgba(14,31,64,0.07)" }}>
+                {actions.map((a, idx) => (
+                  <div key={a.label}>
+                    {idx > 0 && <div style={{ height: 1, background: "rgba(14,31,64,0.06)", marginLeft: 58 }}/>}
+                    <button onClick={() => goTo(a.page)} style={{
+                      display: "flex", alignItems: "center", gap: 14,
+                      width: "100%", padding: "13px 16px",
+                      background: "transparent", border: "none",
+                      cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+                      WebkitTapHighlightColor: "transparent",
+                    }}>
+                      <div style={{
+                        width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+                        background: a.accent ? "rgba(141,214,63,0.15)" : "rgba(14,31,64,0.06)",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        color: a.accent ? "#3a6b0f" : "rgba(14,31,64,0.45)",
+                      }}>{a.icon}</div>
+                      <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: a.accent ? "#3a6b0f" : DASH_NAVY, letterSpacing: -0.2 }}>{a.label}</div>
+                        <div style={{ fontSize: 11, color: "rgba(14,31,64,0.38)", marginTop: 1 }}>{a.sub}</div>
+                      </div>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+                        stroke="rgba(14,31,64,0.22)" strokeWidth="2.5" strokeLinecap="round">
+                        <path d="m9 18 6-6-6-6"/>
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         );

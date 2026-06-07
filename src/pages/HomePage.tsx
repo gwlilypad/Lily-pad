@@ -187,7 +187,7 @@ export default function HomePage() {
               fontSize: 16, fontWeight: 800, cursor: "pointer",
               letterSpacing: "-0.01em",
               boxShadow: "0 4px 20px rgba(141,214,63,0.28)",
-              marginBottom: 7,
+              marginBottom: 22,
             }}
           >
             Start Parking

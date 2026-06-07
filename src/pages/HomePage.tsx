@@ -146,9 +146,10 @@ export default function HomePage() {
           onPointerCancel={onLogoCancel}
           onContextMenu={e => e.preventDefault()}
           style={{
-            paddingTop: "calc(env(safe-area-inset-top) + 40px)",
-            marginBottom: "auto",
+            paddingTop: "calc(env(safe-area-inset-top) + 16px)",
+            flex: 1,
             display: "flex",
+            alignItems: "center",
             justifyContent: "center",
             transform: `translateX(${logoX}px)`,
             transition: dragging
@@ -166,7 +167,7 @@ export default function HomePage() {
             WebkitUserSelect: "none",
           }}
         >
-          <img src={lilypadLogo} alt="Lily Pad" style={{ width: 240, height: "auto", display: "block", pointerEvents: "none" }} />
+          <img src={lilypadLogo} alt="Lily Pad" style={{ width: 265, height: "auto", display: "block", pointerEvents: "none" }} />
         </div>
 
         {/* Bottom content: headline + button + FOR DRIVERS */}

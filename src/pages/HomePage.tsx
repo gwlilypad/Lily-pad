@@ -29,8 +29,6 @@ function AdminSlide({ open }: { open: boolean }) {
 }
 
 const SPLIT = 60;
-const PAD_SIZE = 64;
-const PAD_HALF = PAD_SIZE / 2;
 const CONNECT_THRESHOLD = 0.72;
 
 export default function HomePage() {
@@ -44,7 +42,7 @@ export default function HomePage() {
   const [refCode, setRefCode] = useState("");
   const [adminOpen, setAdminOpen] = useState(false);
 
-  const [padX, setPadX] = useState(0);
+  const [logoX, setLogoX] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -54,7 +52,7 @@ export default function HomePage() {
 
   function maxDrag() {
     const w = containerRef.current?.offsetWidth ?? window.innerWidth;
-    return w / 2 - PAD_HALF - 8;
+    return w * 0.40;
   }
 
   useEffect(() => {
@@ -64,8 +62,7 @@ export default function HomePage() {
   function triggerConnect() {
     if (triggered.current) return;
     triggered.current = true;
-    const mx = maxDrag();
-    setPadX(mx);
+    setLogoX(maxDrag());
     setDragging(false);
     setConnecting(true);
     setTimeout(() => {
@@ -74,7 +71,7 @@ export default function HomePage() {
     }, 280);
   }
 
-  function onPadDown(e: React.PointerEvent) {
+  function onLogoDown(e: React.PointerEvent) {
     if (connecting) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     dragStartClientX.current = e.clientX;
@@ -83,28 +80,28 @@ export default function HomePage() {
     setDragging(true);
   }
 
-  function onPadMove(e: React.PointerEvent) {
+  function onLogoMove(e: React.PointerEvent) {
     if (!dragStarted.current || connecting) return;
     const dx = Math.max(0, e.clientX - dragStartClientX.current);
     const mx = maxDrag();
     const clamped = Math.min(dx, mx);
-    setPadX(clamped);
+    setLogoX(clamped);
     if (clamped >= mx) { dragStarted.current = false; triggerConnect(); }
   }
 
-  function onPadUp() {
+  function onLogoUp() {
     if (!dragStarted.current) return;
     dragStarted.current = false;
     setDragging(false);
     const mx = maxDrag();
-    if (padX >= mx * CONNECT_THRESHOLD) { triggerConnect(); }
-    else { setPadX(0); triggered.current = false; }
+    if (logoX >= mx * CONNECT_THRESHOLD) { triggerConnect(); }
+    else { setLogoX(0); triggered.current = false; }
   }
 
-  function onPadCancel() {
+  function onLogoCancel() {
     dragStarted.current = false;
     setDragging(false);
-    if (!connecting) { setPadX(0); triggered.current = false; }
+    if (!connecting) { setLogoX(0); triggered.current = false; }
   }
 
   function applyCode() {
@@ -125,9 +122,7 @@ export default function HomePage() {
   }
 
   const mx = maxDrag();
-  const progress = mx > 0 ? Math.min(padX / mx, 1) : 0;
-  const trackOpacity = dragging || padX > 0 ? 1 : 0;
-  const dockGlow = progress > 0.5 ? progress : 0;
+  const progress = mx > 0 ? Math.min(logoX / mx, 1) : 0;
 
   return (
     <div
@@ -143,17 +138,43 @@ export default function HomePage() {
         padding: "0 24px", boxSizing: "border-box", zIndex: 5,
       }}>
 
-        {/* Logo — centered at top, pushes content below to bottom */}
-        <div style={{ paddingTop: "calc(env(safe-area-inset-top) + 40px)", marginBottom: "auto", display: "flex", justifyContent: "center" }}>
-          <img src={lilypadLogo} alt="Lily Pad" style={{ width: 130, height: "auto", display: "block" }} />
+        {/* ── LOGO (draggable right → admin) ── */}
+        <div
+          onPointerDown={onLogoDown}
+          onPointerMove={onLogoMove}
+          onPointerUp={onLogoUp}
+          onPointerCancel={onLogoCancel}
+          onContextMenu={e => e.preventDefault()}
+          style={{
+            paddingTop: "calc(env(safe-area-inset-top) + 40px)",
+            marginBottom: "auto",
+            display: "flex",
+            justifyContent: "center",
+            transform: `translateX(${logoX}px)`,
+            transition: dragging
+              ? "none"
+              : connecting
+                ? "transform 0.28s cubic-bezier(0.34,1.48,0.64,1), filter 0.2s ease"
+                : "transform 0.42s cubic-bezier(0.22,1,0.36,1), filter 0.2s ease",
+            filter: connecting
+              ? "drop-shadow(0 0 16px rgba(141,214,63,0.95))"
+              : progress > 0.25
+                ? `drop-shadow(0 0 ${4 + progress * 12}px rgba(141,214,63,${0.25 + progress * 0.6}))`
+                : "none",
+            cursor: connecting ? "default" : dragging ? "grabbing" : "grab",
+            touchAction: "none",
+            WebkitUserSelect: "none",
+          }}
+        >
+          <img src={lilypadLogo} alt="Lily Pad" style={{ width: 128, height: "auto", display: "block", pointerEvents: "none" }} />
         </div>
 
         {/* Bottom content: headline + button + FOR DRIVERS */}
-        <div style={{ width: "100%", paddingBottom: 24, display: "flex", flexDirection: "column", alignItems: "center", gap: 0 }}>
+        <div style={{ width: "100%", paddingBottom: 22, display: "flex", flexDirection: "column", alignItems: "center" }}>
           <h1 style={{
-            textAlign: "center", margin: "0 0 22px",
-            fontSize: 33, fontWeight: 800, color: "#fff",
-            lineHeight: 1.18, letterSpacing: "-0.03em", width: "100%",
+            textAlign: "center", margin: "0 0 20px",
+            fontSize: 27, fontWeight: 800, color: "#fff",
+            lineHeight: 1.2, letterSpacing: "-0.03em", width: "100%",
           }}>
             Your neighbor saved<br />you a spot.
           </h1>
@@ -162,19 +183,19 @@ export default function HomePage() {
             onClick={handleFindAPad}
             style={{
               width: "100%", background: "#8DD63F", color: "#0E1F40",
-              border: "none", borderRadius: 50, padding: "17px",
-              fontSize: 17, fontWeight: 800, cursor: "pointer",
+              border: "none", borderRadius: 50, padding: "16px",
+              fontSize: 16, fontWeight: 800, cursor: "pointer",
               letterSpacing: "-0.01em",
               boxShadow: "0 4px 20px rgba(141,214,63,0.28)",
-              marginBottom: 14,
+              marginBottom: 13,
             }}
           >
             Start Parking
           </button>
 
           <p style={{
-            margin: 0, fontSize: 10.5, fontWeight: 700,
-            letterSpacing: "0.20em", color: "rgba(255,255,255,0.32)",
+            margin: 0, fontSize: 10, fontWeight: 700,
+            letterSpacing: "0.22em", color: "rgba(255,255,255,0.30)",
             textTransform: "uppercase", textAlign: "center",
           }}>
             For Drivers
@@ -189,21 +210,21 @@ export default function HomePage() {
         display: "flex", flexDirection: "column", alignItems: "center",
         justifyContent: "center",
         padding: "0 24px calc(env(safe-area-inset-bottom) + 20px)",
-        boxSizing: "border-box", zIndex: 5, gap: 0,
+        boxSizing: "border-box", zIndex: 5,
       }}>
 
         <p style={{
-          margin: "0 0 8px", fontSize: 10.5, fontWeight: 700,
-          letterSpacing: "0.20em", color: "rgba(14,31,64,0.35)",
+          margin: "0 0 7px", fontSize: 10, fontWeight: 700,
+          letterSpacing: "0.22em", color: "rgba(14,31,64,0.33)",
           textTransform: "uppercase", textAlign: "center",
         }}>
           For Hosts
         </p>
 
         <h2 style={{
-          margin: "0 0 18px", fontSize: 28, fontWeight: 800,
+          margin: "0 0 16px", fontSize: 26, fontWeight: 800,
           color: "#0E1F40", letterSpacing: "-0.03em",
-          textAlign: "center", lineHeight: 1.15,
+          textAlign: "center", lineHeight: 1.18,
         }}>
           List your driveway.
         </h2>
@@ -213,18 +234,18 @@ export default function HomePage() {
           style={{
             width: "100%", background: "transparent",
             border: "2.5px solid #0E1F40", borderRadius: 50,
-            padding: "15px", fontSize: 16, fontWeight: 800,
+            padding: "14px", fontSize: 15, fontWeight: 800,
             color: "#0E1F40", cursor: "pointer",
-            letterSpacing: "-0.01em", marginBottom: 18,
+            letterSpacing: "-0.01em", marginBottom: 16,
           }}
         >
           Start Earning
         </button>
 
         <p style={{
-          margin: "0 0 8px", fontSize: 13, fontWeight: 600,
-          color: "rgba(14,31,64,0.38)", textAlign: "center",
-          letterSpacing: "0.08em", textTransform: "uppercase",
+          margin: "0 0 7px", fontSize: 12, fontWeight: 600,
+          color: "rgba(14,31,64,0.36)", textAlign: "center",
+          letterSpacing: "0.10em", textTransform: "uppercase",
         }}>
           FAQ
         </p>
@@ -232,8 +253,8 @@ export default function HomePage() {
         <div
           onClick={() => setModalOpen(true)}
           style={{
-            fontSize: 13, color: "rgba(14,31,64,0.45)", cursor: "pointer",
-            textDecoration: "underline", textDecorationColor: "rgba(14,31,64,0.25)",
+            fontSize: 12.5, color: "rgba(14,31,64,0.42)", cursor: "pointer",
+            textDecoration: "underline", textDecorationColor: "rgba(14,31,64,0.22)",
             textAlign: "center",
           }}
         >
@@ -241,70 +262,11 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* ── HORIZONTAL DRAG TRACK ── */}
-      <div style={{
-        position: "absolute", left: "50%", top: `${SPLIT}%`,
-        transform: "translate(0, -50%)",
-        width: `calc(50% - ${PAD_HALF + 8}px)`, height: 2,
-        zIndex: 8, opacity: trackOpacity,
-        transition: dragging ? "none" : "opacity 0.4s ease",
-        pointerEvents: "none", overflow: "visible",
-      }}>
-        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "100%", background: "rgba(141,214,63,0.18)", borderRadius: 2 }} />
-        <div style={{
-          position: "absolute", top: 0, left: 0, height: "100%",
-          width: `${progress * 100}%`,
-          background: `rgba(141,214,63,${0.4 + progress * 0.5})`,
-          borderRadius: 2,
-          transition: dragging ? "none" : "width 0.35s cubic-bezier(0.22,1,0.36,1)",
-          boxShadow: progress > 0.3 ? `0 0 ${6 + progress * 8}px rgba(141,214,63,${0.3 + progress * 0.4})` : "none",
-        }} />
-        <div style={{
-          position: "absolute", right: -14, top: "50%",
-          transform: "translate(50%, -50%)",
-          width: 28, height: 28, borderRadius: "50%",
-          border: `2px solid rgba(141,214,63,${0.3 + dockGlow * 0.7})`,
-          background: `rgba(141,214,63,${dockGlow * 0.25})`,
-          boxShadow: dockGlow > 0 ? `0 0 ${8 + dockGlow * 16}px rgba(141,214,63,${dockGlow * 0.6})` : "none",
-          transition: dragging ? "none" : "all 0.3s ease",
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
-            stroke={`rgba(141,214,63,${0.3 + dockGlow * 0.7})`} strokeWidth="2.5" strokeLinecap="round">
-            <rect x="3" y="11" width="18" height="11" rx="2"/>
-            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-          </svg>
-        </div>
-      </div>
-
-      {/* ── DRAGGABLE LILY PAD (divider / admin trigger) ── */}
-      <div
-        onPointerDown={onPadDown} onPointerMove={onPadMove}
-        onPointerUp={onPadUp} onPointerCancel={onPadCancel}
-        onContextMenu={e => e.preventDefault()}
-        style={{
-          position: "absolute",
-          left: `calc(50% + ${padX}px)`, top: `${SPLIT}%`,
-          transform: "translate(-50%, -50%)",
-          width: PAD_SIZE, height: PAD_SIZE, zIndex: 10,
-          cursor: dragging ? "grabbing" : "grab",
-          touchAction: "none",
-          transition: dragging ? "none" : (connecting ? "left 0.28s cubic-bezier(0.34,1.48,0.64,1)" : "left 0.42s cubic-bezier(0.22,1,0.36,1)"),
-          filter: connecting
-            ? "drop-shadow(0 0 14px rgba(141,214,63,0.9))"
-            : progress > 0.3
-              ? `drop-shadow(0 0 ${4 + progress * 10}px rgba(141,214,63,${0.3 + progress * 0.5}))`
-              : "none",
-        }}
-      >
-        <PadSVG size={PAD_SIZE} />
-      </div>
-
       {/* Connect flash */}
       {connecting && (
         <div style={{
           position: "absolute", inset: 0, zIndex: 190, pointerEvents: "none",
-          background: "rgba(141,214,63,0.12)",
+          background: "rgba(141,214,63,0.10)",
           opacity: adminOpen ? 0 : 1, transition: "opacity 0.3s ease",
         }} />
       )}

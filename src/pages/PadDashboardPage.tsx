@@ -487,7 +487,7 @@ export default function PadDashboardPage() {
       </div>
 
       {/* Body */}
-      <div style={{ flex: 1, overflowY: "auto", padding: openPad ? "20px 16px 32px" : "20px 16px 96px" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "20px 16px 40px" }}>
 
         {loadingPads ? (
           <div style={{ textAlign: "center", padding: "80px 0" }}>
@@ -590,6 +590,61 @@ export default function PadDashboardPage() {
                 Add another pad
               </button>
             </div>
+
+            {/* ══ BOOKINGS BUTTON ══ */}
+            {(() => {
+              const pendingCount = listerBookings.filter(b => b.status === "pending").length;
+              const totalCount   = listerBookings.length;
+              return (
+                <div style={{ marginTop: 8, marginBottom: 4 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                    <div style={{ width: 3, height: 16, borderRadius: 2, background: "#f59e0b" }} />
+                    <span style={{ fontSize: 12, fontWeight: 800, color: "#fff", letterSpacing: 0.3, textTransform: "uppercase" }}>Bookings</span>
+                    {pendingCount > 0 && (
+                      <span style={{ fontSize: 10, fontWeight: 800, color: "#fff", background: "#f59e0b", borderRadius: 100, padding: "2px 8px" }}>{pendingCount} new</span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => navigate("/listerbookings")}
+                    style={{
+                      width: "100%", display: "flex", alignItems: "center", gap: 14,
+                      padding: "16px 18px", borderRadius: 18,
+                      background: "#142A52",
+                      border: pendingCount > 0 ? "1.5px solid rgba(251,191,36,0.45)" : "1.5px solid rgba(255,255,255,0.10)",
+                      boxShadow: pendingCount > 0 ? "0 4px 20px rgba(251,191,36,0.12)" : "0 2px 10px rgba(0,0,0,0.25)",
+                      cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+                    }}
+                  >
+                    <div style={{
+                      width: 42, height: 42, borderRadius: 13, flexShrink: 0,
+                      background: pendingCount > 0 ? "rgba(251,191,36,0.15)" : "rgba(255,255,255,0.08)",
+                      border: pendingCount > 0 ? "1px solid rgba(251,191,36,0.30)" : "1px solid rgba(255,255,255,0.08)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={pendingCount > 0 ? "#f59e0b" : "rgba(255,255,255,0.60)"} strokeWidth="2" strokeLinecap="round">
+                        <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                      </svg>
+                    </div>
+                    <div style={{ flex: 1, textAlign: "left" }}>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: "#fff", letterSpacing: -0.2 }}>View Bookings</div>
+                      <div style={{ fontSize: 12, color: pendingCount > 0 ? "rgba(251,191,36,0.80)" : "rgba(255,255,255,0.40)", marginTop: 2 }}>
+                        {pendingCount > 0 ? `${pendingCount} pending approval · ${totalCount} total` : totalCount === 0 ? "No bookings yet" : `${totalCount} booking${totalCount !== 1 ? "s" : ""}`}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                      {pendingCount > 0 && (
+                        <div style={{ background: "#f59e0b", borderRadius: 100, minWidth: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 7px", fontSize: 11, fontWeight: 800, color: "#fff" }}>
+                          {pendingCount}
+                        </div>
+                      )}
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.28)" strokeWidth="2.5" strokeLinecap="round">
+                        <path d="M9 18l6-6-6-6"/>
+                      </svg>
+                    </div>
+                  </button>
+                </div>
+              );
+            })()}
 
           </>
         ) : (
@@ -982,65 +1037,6 @@ export default function PadDashboardPage() {
         </div>
       )}
 
-      {/* ══ BOOKINGS PEEK BAR (list view only) ══ */}
-      {!openPad && (() => {
-        const pendingCount = listerBookings.filter(b => b.status === "pending").length;
-        const totalCount   = listerBookings.length;
-        return (
-          <div style={{
-            position: "absolute", bottom: 0, left: 0, right: 0,
-            zIndex: 30,
-            background: "linear-gradient(to top, rgba(8,15,32,0.92) 0%, transparent 100%)",
-            padding: "20px 16px 28px",
-            pointerEvents: "none",
-          }}>
-            <button
-              onClick={() => navigate("/listerbookings")}
-              style={{
-                width: "100%", display: "flex", alignItems: "center", gap: 14,
-                padding: "14px 18px", borderRadius: 20,
-                background: "#142A52",
-                border: pendingCount > 0 ? "1.5px solid rgba(251,191,36,0.45)" : "1.5px solid rgba(255,255,255,0.10)",
-                boxShadow: pendingCount > 0
-                  ? "0 4px 24px rgba(251,191,36,0.14), 0 2px 8px rgba(0,0,0,0.4)"
-                  : "0 4px 20px rgba(0,0,0,0.4)",
-                cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
-                pointerEvents: "all",
-              }}
-            >
-              {/* Handle nub */}
-              <div style={{ position: "absolute", top: -24, left: "50%", transform: "translateX(-50%)", width: 36, height: 4, borderRadius: 2, background: "rgba(255,255,255,0.18)" }} />
-
-              {/* Icon */}
-              <div style={{ width: 40, height: 40, borderRadius: 12, background: pendingCount > 0 ? "rgba(251,191,36,0.15)" : "rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, border: pendingCount > 0 ? "1px solid rgba(251,191,36,0.28)" : "1px solid rgba(255,255,255,0.08)" }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={pendingCount > 0 ? "#f59e0b" : "rgba(255,255,255,0.55)"} strokeWidth="2" strokeLinecap="round">
-                  <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-                </svg>
-              </div>
-
-              {/* Text */}
-              <div style={{ flex: 1, textAlign: "left" }}>
-                <div style={{ fontSize: 14.5, fontWeight: 800, color: "#fff", letterSpacing: -0.2 }}>Bookings</div>
-                <div style={{ fontSize: 11.5, color: pendingCount > 0 ? "rgba(251,191,36,0.80)" : "rgba(255,255,255,0.40)", marginTop: 1 }}>
-                  {pendingCount > 0 ? `${pendingCount} pending · ${totalCount} total` : totalCount === 0 ? "No bookings yet" : `${totalCount} booking${totalCount !== 1 ? "s" : ""}`}
-                </div>
-              </div>
-
-              {/* Badge + chevron */}
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                {pendingCount > 0 && (
-                  <div style={{ background: "#f59e0b", borderRadius: 100, minWidth: 22, height: 22, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 6px", fontSize: 11, fontWeight: 800, color: "#fff" }}>
-                    {pendingCount}
-                  </div>
-                )}
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.30)" strokeWidth="2.5" strokeLinecap="round">
-                  <path d="M9 18l6-6-6-6"/>
-                </svg>
-              </div>
-            </button>
-          </div>
-        );
-      })()}
     </div>
   );
 }

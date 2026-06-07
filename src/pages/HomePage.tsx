@@ -86,7 +86,7 @@ export default function HomePage() {
     const mx = maxDrag();
     const clamped = Math.min(dx, mx);
     setLogoX(clamped);
-    if (clamped >= mx) { dragStarted.current = false; triggerConnect(); }
+    if (clamped >= mx * CONNECT_THRESHOLD) { dragStarted.current = false; triggerConnect(); }
   }
 
   function onLogoUp() {
@@ -166,7 +166,7 @@ export default function HomePage() {
             WebkitUserSelect: "none",
           }}
         >
-          <img src={lilypadLogo} alt="Lily Pad" style={{ width: 160, height: "auto", display: "block", pointerEvents: "none" }} />
+          <img src={lilypadLogo} alt="Lily Pad" style={{ width: 240, height: "auto", display: "block", pointerEvents: "none" }} />
         </div>
 
         {/* Bottom content: headline + button + FOR DRIVERS */}

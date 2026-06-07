@@ -133,7 +133,7 @@ export default function ListerBookingsPage() {
           </button>
 
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 22, fontWeight: 800, color: "#fff", letterSpacing: -0.6 }}>Bookings</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: "#fff", letterSpacing: -0.6 }}>My Reservations</div>
             {!loading && (
               <div style={{ fontSize: 12, color: "rgba(255,255,255,0.40)", marginTop: 1 }}>
                 {newReqs.length > 0 ? `${newReqs.length} pending approval` : "All caught up"}

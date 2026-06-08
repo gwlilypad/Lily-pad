@@ -583,19 +583,80 @@ function PadPhotoCard({
 }
 
 // ── Analytics coming soon — chart will show real data once payment is live ────
-function GrowthChart() {
+function UserGrowthChart({ users }: { users: MockUser[] }) {
+  const now = new Date();
+  const months: { label: string; year: number; month: number }[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({ label: d.toLocaleDateString("en-US", { month: "short" }), year: d.getFullYear(), month: d.getMonth() });
+  }
+
+  const counts = months.map(({ year, month }) => {
+    const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59);
+    return users.filter(u => {
+      if (!u.joined || u.joined === "Unknown") return false;
+      const d = new Date(u.joined);
+      return !isNaN(d.getTime()) && d <= endOfMonth;
+    }).length;
+  });
+
+  const maxVal = Math.max(...counts, 1);
+  const W = 260, H = 88, padX = 4, padY = 8;
+
+  const pts = counts.map((v, i) => ({
+    x: padX + (i / (months.length - 1)) * (W - padX * 2),
+    y: padY + (1 - v / maxVal) * (H - padY * 2),
+  }));
+
+  function smoothPath(ps: { x: number; y: number }[]) {
+    if (ps.length < 2) return "";
+    let d = `M ${ps[0].x} ${ps[0].y}`;
+    for (let i = 0; i < ps.length - 1; i++) {
+      const cp1x = ps[i].x + (ps[i + 1].x - ps[i].x) / 3;
+      const cp2x = ps[i].x + (2 * (ps[i + 1].x - ps[i].x)) / 3;
+      d += ` C ${cp1x} ${ps[i].y} ${cp2x} ${ps[i + 1].y} ${ps[i + 1].x} ${ps[i + 1].y}`;
+    }
+    return d;
+  }
+
+  const linePath = smoothPath(pts);
+  const fillPath = linePath + ` L ${pts[pts.length - 1].x} ${H} L ${pts[0].x} ${H} Z`;
+  const total = counts[counts.length - 1];
+  const growth = total - counts[0];
+
   return (
-    <div style={{
-      background: "#fff", borderRadius: 18, padding: "28px 20px",
-      boxShadow: "0 2px 12px rgba(14,31,64,0.08)", border: "1px solid rgba(14,31,64,0.07)",
-      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-      gap: 8, minHeight: 160, textAlign: "center",
-    }}>
-      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="rgba(14,31,64,0.18)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+    <div style={{ background: "#fff", borderRadius: 18, padding: "16px 16px 10px", boxShadow: "0 2px 12px rgba(14,31,64,0.08)", border: "1px solid rgba(14,31,64,0.07)" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 10 }}>
+        <div>
+          <p style={{ fontSize: 10, fontWeight: 700, color: "rgba(14,31,64,0.38)", letterSpacing: "0.13em", textTransform: "uppercase", margin: 0 }}>User Growth</p>
+          <p style={{ fontSize: 24, fontWeight: 800, color: NAVY, margin: "1px 0 0", letterSpacing: "-0.03em" }}>{total.toLocaleString()}</p>
+        </div>
+        {growth > 0 && (
+          <span style={{ fontSize: 11, fontWeight: 700, color: GREEN, background: "rgba(141,214,63,0.12)", padding: "4px 10px", borderRadius: 100, marginTop: 2 }}>↑ {growth} this period</span>
+        )}
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ overflow: "visible", display: "block" }}>
+        <defs>
+          <linearGradient id="ugGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={GREEN} stopOpacity="0.20" />
+            <stop offset="100%" stopColor={GREEN} stopOpacity="0.00" />
+          </linearGradient>
+        </defs>
+        <path d={fillPath} fill="url(#ugGrad)" />
+        <path d={linePath} fill="none" stroke={GREEN} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+        {pts.map((p, i) => (
+          <circle key={i} cx={p.x} cy={p.y}
+            r={i === pts.length - 1 ? 4 : 2.5}
+            fill={i === pts.length - 1 ? GREEN : "#fff"}
+            stroke={GREEN} strokeWidth="2"
+          />
+        ))}
       </svg>
-      <p style={{ fontSize: 14, fontWeight: 700, color: "rgba(14,31,64,0.45)", margin: 0 }}>Financial Analytics</p>
-      <p style={{ fontSize: 12, color: "rgba(14,31,64,0.30)", margin: 0, maxWidth: 240 }}>Revenue trends will appear here once real bookings are processed</p>
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 5 }}>
+        {months.map((m, i) => (
+          <span key={i} style={{ fontSize: 9, fontWeight: 600, color: "rgba(14,31,64,0.32)", letterSpacing: "0.03em" }}>{m.label}</span>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1911,16 +1972,16 @@ export default function AdminPage() {
             <button onClick={handleSignOut} style={{ background: "#fff", border: "1.5px solid rgba(14,31,64,0.15)", borderRadius: 100, padding: "8px 16px", fontSize: 12, fontWeight: 700, color: NAVY, cursor: "pointer", fontFamily: '"DM Sans", sans-serif' }}>Sign out</button>
           </div>
 
-          {/* Financial growth chart — admin only */}
-          {role === "admin" && <GrowthChart />}
+          {/* User growth chart */}
+          <UserGrowthChart users={users} />
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <StatCard
               label="Total Pads"
               value={adminStats ? String(adminStats.totalSpots) : "—"}
               breakdown={adminStats ? [
                 { label: "Active", value: String(adminStats.activeSpots), dot: GREEN },
-                { label: "Pending review", value: String(adminStats.pendingSpots), dot: "#F59E0B" },
+                { label: "Pending", value: String(adminStats.pendingSpots), dot: "#F59E0B" },
               ] : []}
             />
             <StatCard
@@ -1928,23 +1989,6 @@ export default function AdminPage() {
               value={adminStats ? String(adminStats.totalUsers) : "—"}
               sub={adminStats ? `↑ ${adminStats.newUsersThisWeek} this week` : "Loading…"}
             />
-          </div>
-
-          {/* User management entry */}
-          <div onClick={() => setView("users")} style={{
-            background: "#fff", borderRadius: 18, padding: "16px 18px",
-            boxShadow: "0 2px 12px rgba(14,31,64,0.08)",
-            display: "flex", alignItems: "center", gap: 14, cursor: "pointer",
-            border: "1px solid rgba(14,31,64,0.07)",
-          }}>
-            <div style={{ width: 42, height: 42, borderRadius: 100, background: `rgba(141,214,63,0.14)`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth="2" strokeLinecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ fontSize: 14, fontWeight: 700, color: NAVY, margin: 0 }}>User Management</p>
-              <p style={{ fontSize: 11.5, color: "rgba(14,31,64,0.50)", margin: "2px 0 0" }}>{users.length} accounts · Master controls</p>
-            </div>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(14,31,64,0.35)" strokeWidth="2.5"><path d="m9 18 6-6-6-6"/></svg>
           </div>
 
           {/* ── Invite Staff — admin only ── */}

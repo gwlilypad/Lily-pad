@@ -237,38 +237,35 @@ export default function OnboardingModal() {
         ))}
       </div>
 
-      {/* ── Skip / Next ── */}
+      {/* ── Next / Skip ── */}
       <div style={{
-        display: "flex", alignItems: "center",
-        justifyContent: "space-between",
-        width: "100%", padding: "16px 28px 0",
-        boxSizing: "border-box",
+        display: "flex", flexDirection: "column", alignItems: "center",
+        width: "100%", padding: "18px 28px 0",
+        boxSizing: "border-box", gap: 12,
       }}>
-        <button
-          onClick={dismiss}
-          style={{
-            background: "transparent",
-            border: "1px solid rgba(255,255,255,0.22)",
-            color: "rgba(255,255,255,0.6)", borderRadius: 100,
-            padding: "9px 20px", fontSize: 12.5, fontWeight: 600,
-            cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
-            letterSpacing: "0.01em",
-          }}
-        >
-          Skip
-        </button>
-
         <button
           onClick={next}
           style={{
-            background: "#8DD63F", border: "none",
+            width: "100%", background: "#fff", border: "none",
             color: "#0E1F40", borderRadius: 100,
-            padding: "9px 22px", fontSize: 12.5, fontWeight: 800,
+            padding: "0 24px", height: 56, fontSize: 16, fontWeight: 800,
             cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
-            letterSpacing: "0.01em",
+            letterSpacing: "-0.02em",
           }}
         >
-          {isLast ? "Finish" : "Next →"}
+          {isLast ? "Finish" : "Next"}
+        </button>
+
+        <button
+          onClick={dismiss}
+          style={{
+            background: "transparent", border: "none",
+            color: "rgba(255,255,255,0.45)", borderRadius: 100,
+            padding: "6px 16px", fontSize: 13, fontWeight: 500,
+            cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+          }}
+        >
+          Skip
         </button>
       </div>
     </div>

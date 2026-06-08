@@ -201,22 +201,6 @@ export default function HomePage() {
             Start Parking
           </button>
 
-          {!user && (
-            <div
-              onClick={() => navigate("/signin")}
-              style={{
-                marginTop: 12, cursor: "pointer",
-                fontSize: 13, fontWeight: 600,
-                color: "rgba(255,255,255,0.60)",
-                letterSpacing: 0.1,
-              }}
-            >
-              Already have an account?{" "}
-              <span style={{ color: "#8DD63F", fontWeight: 700, textDecoration: "underline", textDecorationColor: "rgba(141,214,63,0.4)" }}>
-                Sign in
-              </span>
-            </div>
-          )}
         </div>
 
         {/* FOR DRIVERS — pinned near the dividing line */}
@@ -280,6 +264,24 @@ export default function HomePage() {
         }}>
           FAQ
         </p>
+
+        {!user && (
+          <div
+            onClick={() => navigate("/signin")}
+            style={{
+              marginTop: 18, cursor: "pointer",
+              fontSize: 13, fontWeight: 600,
+              color: "rgba(14,31,64,0.50)",
+              textAlign: "center",
+              letterSpacing: 0.1,
+            }}
+          >
+            Already have an account?{" "}
+            <span style={{ color: "#0E1F40", fontWeight: 700, textDecoration: "underline", textDecorationColor: "rgba(14,31,64,0.3)" }}>
+              Sign in
+            </span>
+          </div>
+        )}
 
       </div>
 

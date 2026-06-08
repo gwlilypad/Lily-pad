@@ -121,7 +121,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    setLoading(true);
     try {
       const res = await fetch("/api/auth/signin", {
         method: "POST",
@@ -130,20 +129,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       const data = await res.json();
       if (!res.ok || data.error) {
-        setLoading(false);
         if (data.staff_redirect) return { error: "Please use the staff portal to sign in." };
         return { error: data.error || "Invalid email or password." };
       }
-      // Establish the Supabase client session from the server-returned tokens
-      if (data.access_token && data.refresh_token) {
-        await supabase.auth.setSession({
-          access_token: data.access_token,
-          refresh_token: data.refresh_token,
-        });
+      // Write session directly into localStorage in Supabase's expected format
+      // so getSession() picks it up reliably on next page load
+      if (data.access_token) {
+        try {
+          localStorage.setItem(
+            "sb-mcfxoimaqgpyntvasbsw-auth-token",
+            JSON.stringify({
+              access_token: data.access_token,
+              refresh_token: data.refresh_token,
+              token_type: data.token_type || "bearer",
+              expires_in: data.expires_in,
+              expires_at: data.expires_at,
+              user: data.user,
+            })
+          );
+        } catch { /* storage blocked — ignore */ }
+        // Also try setSession for same-page state update (may fail in iframe contexts)
+        try {
+          await supabase.auth.setSession({
+            access_token: data.access_token,
+            refresh_token: data.refresh_token,
+          });
+        } catch { /* ignore — localStorage fallback above covers this */ }
       }
       return { error: null };
     } catch (e: any) {
-      setLoading(false);
       return { error: e.message || "Sign in failed. Please try again." };
     }
   };

@@ -39,8 +39,9 @@ export default function SignInPage() {
     if (err) {
       setError(err.includes("Invalid") ? "Incorrect email or password." : err);
     } else {
+      // Full page reload so Supabase reads the session from localStorage cleanly
       const redirect = searchParams.get("redirect");
-      navigate(redirect || "/find", { replace: true });
+      window.location.replace(redirect || "/find");
     }
   }
 

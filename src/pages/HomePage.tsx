@@ -270,6 +270,24 @@ export default function HomePage() {
         >
           Have a referral code?
         </div>
+
+        {/* Sign in link — only shown when not signed in */}
+        {!user && (
+          <div style={{ marginTop: "auto", paddingTop: 16, textAlign: "center" }}>
+            <span
+              onClick={() => navigate("/signin")}
+              style={{
+                fontSize: 13, fontWeight: 600,
+                color: "rgba(14,31,64,0.55)", cursor: "pointer",
+              }}
+            >
+              Already have an account?{" "}
+              <span style={{ color: "#0E1F40", textDecoration: "underline", textDecorationColor: "rgba(14,31,64,0.3)" }}>
+                Sign in
+              </span>
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Connect flash */}

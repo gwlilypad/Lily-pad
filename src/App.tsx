@@ -60,31 +60,8 @@ function AppInner() {
   const navigate = useNavigate();
   const location = useLocation();
   const { role, loading: authLoading, isBetaTester } = useAuth();
-  const isAdminOrStaff = role === "admin" || role === "staff";
   const [fading, setFading] = useState(false);
   const [state, setState] = useState<AppState>(loadInitialState);
-  // Read early access flag injected by server into window.__EARLY_ACCESS__.
-  // Default to true (early access ON) as a fail-safe so the main app never
-  // flashes while we're still determining the config state.
-  const [earlyAccess, setEarlyAccess] = useState<boolean>(() => {
-    const w = window as unknown as Record<string, unknown>;
-    if (typeof w.__EARLY_ACCESS__ !== 'undefined') return !!w.__EARLY_ACCESS__;
-    return true; // fail-safe: assume early access until server says otherwise
-  });
-  const [configLoaded, setConfigLoaded] = useState<boolean>(
-    () => typeof (window as unknown as Record<string, unknown>).__EARLY_ACCESS__ !== 'undefined'
-  );
-
-  useEffect(() => {
-    // If window.__EARLY_ACCESS__ was injected by server we already have the value;
-    // only fall back to the API fetch when the global is missing (local dev, etc.)
-    if (typeof (window as unknown as Record<string, unknown>).__EARLY_ACCESS__ !== 'undefined') return;
-    fetch("/api/config")
-      .then(r => r.json())
-      .then(d => { setEarlyAccess(!!d.earlyAccess); })
-      .catch(() => { setEarlyAccess(false); }) // if fetch fails, open the app
-      .finally(() => setConfigLoaded(true));
-  }, []);
 
   // Sync auth role → accountType whenever the user signs in or profile loads
   useEffect(() => {
@@ -115,22 +92,11 @@ function AppInner() {
     }, 180);
   }, [navigate]);
 
-  // ── Path helpers ──────────────────────────────────────────────────────────
+  // Beta testers cannot access admin — redirect to /find
   const isAdminPath = location.pathname.startsWith("/admin");
-
-  // Beta testers cannot access admin — redirect to /find (Coming Soon screen)
   if (isBetaTester && isAdminPath) {
     navigate("/find", { replace: true });
     return null;
-  }
-
-  // While we don't yet know the early-access state, show a blank navy screen.
-  if (!configLoaded) {
-    return (
-      <AppContext.Provider value={{ goTo, state, setState, earlyAccess, isAdminOrStaff }}>
-        <div className="screen" style={{ background: "#0E1F40" }} />
-      </AppContext.Provider>
-    );
   }
 
   // ── Admin simulation toolbar (shown on customer pages when adminPreview active) ──
@@ -204,7 +170,7 @@ function AppInner() {
   ) : null;
 
   return (
-    <AppContext.Provider value={{ goTo, state, setState, earlyAccess, isAdminOrStaff }}>
+    <AppContext.Provider value={{ goTo, state, setState }}>
       <div className={`screen${fading ? " fade-out" : ""}`}>
         <Routes>
           <Route path="/" element={<HomePage />} />

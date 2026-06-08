@@ -14,7 +14,6 @@ const SVC_KEY       = process.env.SUPABASE_SERVICE_ROLE_KEY  || '';
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '')
   .split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
 
-const EARLY_ACCESS = (process.env.EARLY_ACCESS || '').toLowerCase() === 'true';
 
 const SVC_HEADERS = {
   'apikey'       : SVC_KEY,
@@ -420,10 +419,6 @@ ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS role  TEXT DEFAULT 'driver'
 `);
 });
 
-// ── Public config — exposes non-secret feature flags to the frontend ──────────
-app.get('/api/config', (req, res) => {
-  res.json({ earlyAccess: EARLY_ACCESS });
-});
 
 // ── Health check — shows masked key status ────────────────────────────────────
 app.get('/api/health', (req, res) => {
@@ -556,86 +551,7 @@ app.post('/api/auth/signup', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── Early access signup ───────────────────────────────────────────────────────
-app.post('/api/early-access/signup', async (req, res) => {
-  const { name, email, password, role } = req.body || {};
-  if (!email || !password || !name) return res.status(400).json({ error: 'name, email and password required' });
-  const emailLower = email.toLowerCase().trim();
-  try {
-    // Create Supabase auth user (pre-confirmed, no SMTP needed)
-    const authRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
-      method : 'POST',
-      headers: { 'apikey': SVC_KEY, 'Authorization': `Bearer ${SVC_KEY}`, 'Content-Type': 'application/json' },
-      body   : JSON.stringify({
-        email: emailLower, password,
-        email_confirm: true,
-        user_metadata: { full_name: name, account_type: role || 'driver' },
-      }),
-    });
-    const authData = await authRes.json();
-    if (!authRes.ok) {
-      const msg = authData.error_description || authData.message || JSON.stringify(authData);
-      return res.status(authRes.status).json({ error: msg });
-    }
-    const userId = authData.id;
 
-    // Upsert profile row
-    if (userId) {
-      await fetch(`${SUPABASE_URL}/rest/v1/profiles`, {
-        method : 'POST',
-        headers: { ...SVC_HEADERS, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
-        body   : JSON.stringify({ id: userId, email: emailLower, full_name: name, account_type: role || 'driver' }),
-      }).catch(() => {});
-    }
-
-    // Insert early_access_signups row
-    await fetch(`${SUPABASE_URL}/rest/v1/early_access_signups`, {
-      method : 'POST',
-      headers: { ...SVC_HEADERS, 'Prefer': 'return=minimal' },
-      body   : JSON.stringify({ name, email: emailLower, role: role || 'driver', user_id: userId || null, status: 'pending' }),
-    }).catch(() => {});
-
-    res.json({ ok: true, userId });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// ── Admin: list early access signups ─────────────────────────────────────────
-app.get('/api/admin/early-access-signups', async (req, res) => {
-  if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });
-  try {
-    const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/early_access_signups?order=submitted_at.desc&limit=500`,
-      { headers: SVC_HEADERS }
-    );
-    const data = await r.json();
-    if (!r.ok) {
-      const isTableMissing = JSON.stringify(data).includes('PGRST205') || JSON.stringify(data).includes('does not exist');
-      // Return tableReady=false so admin UI can show setup instructions
-      if (isTableMissing) return res.json({ signups: [], tableReady: false });
-      return res.status(r.status).json({ error: JSON.stringify(data) });
-    }
-    res.json({ signups: Array.isArray(data) ? data : [], tableReady: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// ── Admin: update early access signup (approve / add notes) ───────────────────
-app.patch('/api/admin/early-access-signups/:id', async (req, res) => {
-  if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });
-  const { id } = req.params;
-  const { status, notes } = req.body || {};
-  const patch = {};
-  if (status !== undefined) patch.status = status;
-  if (notes  !== undefined) patch.notes  = notes;
-  if (!Object.keys(patch).length) return res.status(400).json({ error: 'nothing to update' });
-  try {
-    const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/early_access_signups?id=eq.${encodeURIComponent(id)}`,
-      { method: 'PATCH', headers: { ...SVC_HEADERS, 'Prefer': 'return=minimal' }, body: JSON.stringify(patch) }
-    );
-    if (!r.ok) { const d = await r.text(); return res.status(r.status).json({ error: d }); }
-    res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
 
 // ── Staff/admin activation — step 1: whitelist check only (OTP sent by client via Supabase JS) ──
 app.post('/api/staff/check-whitelist', async (req, res) => {
@@ -2578,9 +2494,7 @@ const DIST = path.join(__dirname, 'dist');
 // index:false so index.html is NOT auto-served — the SPA fallback below handles it
 app.use(express.static(DIST, { index: false }));
 
-// ── Server-rendered early access page (pure HTML — no React bundle sent) ───────
-// When EARLY_ACCESS=true the browser never receives the main app at all.
-function buildEarlyAccessHtml(logoUrl) {
+function _unusedBuildEarlyAccessHtml_REMOVED(logoUrl) {
   return '<!DOCTYPE html>\n' +
 '<html lang="en">\n' +
 '<head>\n' +
@@ -2802,9 +2716,7 @@ function buildEarlyAccessHtml(logoUrl) {
 '</html>';
 }
 
-// SPA fallback — when EARLY_ACCESS=true serve the early access page directly
-// (no React bundle sent to browser). Admin/auth paths always get the React app.
-const REACT_ONLY_PATHS = ['/admin', '/signin', '/forgot', '/verify', '/paddashboard', '/listerbookings'];
+// ── SPA fallback — serve React app for all unmatched routes ──────────────────
 app.get('*', (req, res) => {
   const noCacheHeaders = () => {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
@@ -2812,29 +2724,12 @@ app.get('*', (req, res) => {
     res.setHeader('Expires', '0');
   };
 
-  // ── Early access: serve pure HTML, never the React bundle ──────────────────
-  const needsReact = REACT_ONLY_PATHS.some(p => req.path.startsWith(p));
-  if (EARLY_ACCESS && !needsReact) {
-    let logoUrl = '/assets/lilypad-logo-full-D8TgQcmp.png'; // known build hash
-    try {
-      const assetFiles = fs.readdirSync(path.join(DIST, 'assets'));
-      const f = assetFiles.find(n => n.startsWith('lilypad-logo-full') && n.endsWith('.png'));
-      if (f) logoUrl = '/assets/' + f;
-    } catch {}
-    noCacheHeaders();
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    return res.send(buildEarlyAccessHtml(logoUrl));
-  }
-
-  // ── Normal React app ────────────────────────────────────────────────────────
   const indexHtml = path.join(DIST, 'index.html');
   if (!fs.existsSync(indexHtml)) {
     return res.status(503).send('<h1>Building\u2026</h1><p>Restart once <code>npm run build</code> completes.</p>');
   }
   try {
-    let html = fs.readFileSync(indexHtml, 'utf8');
-    const inject = '<script>window.__EARLY_ACCESS__=false;</script>';
-    html = html.replace('<head>', '<head>\n' + inject);
+    const html = fs.readFileSync(indexHtml, 'utf8');
     noCacheHeaders();
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(html);

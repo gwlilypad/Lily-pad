@@ -73,16 +73,12 @@ export interface AppCtx {
   goTo: (page: PageId) => void;
   state: AppState;
   setState: React.Dispatch<React.SetStateAction<AppState>>;
-  earlyAccess: boolean;
-  isAdminOrStaff: boolean;
 }
 
 export const AppContext = createContext<AppCtx>({
   goTo: () => {},
   state: DEFAULT_STATE,
   setState: () => {},
-  earlyAccess: false,
-  isAdminOrStaff: false,
 });
 
 export function useApp() { return useContext(AppContext); }

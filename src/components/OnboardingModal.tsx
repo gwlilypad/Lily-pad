@@ -14,7 +14,7 @@ const SLIDES = [
     body: "Lily Pad brings convenient parking to busy areas—downtown districts, campuses, airports, nightlife, event venues, and shopping centers—while helping homeowners earn passive income and making cities feel more connected.",
   },
   {
-    title: "What happens next",
+    title: "Join the marketplace",
     body: "Complete your account to join the marketplace. Have questions? Email us at ",
     email: "support@lilypadparking.com",
   },

@@ -125,7 +125,9 @@ function AppInner() {
   const isAdminOrStaff = role === "admin" || role === "staff";
 
   // Beta testers get the customer app but cannot access admin
+  console.log("[App] gate check — isBetaTester:", isBetaTester, "isAdminPath:", isAdminPath, "authLoading:", authLoading);
   if (isBetaTester && isAdminPath) {
+    console.log("[App] beta tester on admin → redirecting to /find");
     navigate("/find", { replace: true });
     return null;
   }

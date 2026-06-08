@@ -48,6 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function checkBetaTester(email: string) {
     try {
+      console.log("[AuthCtx] checkBetaTester →", email);
       const res = await fetch("/api/beta/check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -55,10 +56,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       if (res.ok) {
         const data = await res.json();
+        console.log("[AuthCtx] isBetaTester =", data.isBetaTester);
         setIsBetaTester(!!data.isBetaTester);
       }
-    } catch {
-      // non-critical — fail silently
+    } catch (e: any) {
+      console.error("[AuthCtx] checkBetaTester error:", e.message);
     }
   }
 

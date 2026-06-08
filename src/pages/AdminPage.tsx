@@ -1306,26 +1306,28 @@ export default function AdminPage() {
     setTestError("");
     setTestLoading(true);
     try {
+      console.log("[TestPortal] attempting signIn for", testEmail.trim().toLowerCase());
       const { error: authErr } = await supabase.auth.signInWithPassword({
         email: testEmail.trim().toLowerCase(),
         password: testPassword,
       });
+      console.log("[TestPortal] signIn result:", authErr ? authErr.message : "OK");
       if (authErr) { setTestError("Incorrect email or password."); return; }
+      console.log("[TestPortal] calling /api/beta/check");
       const res = await fetch("/api/beta/check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: testEmail.trim().toLowerCase() }),
       });
       const data = await res.json();
+      console.log("[TestPortal] beta check result:", data);
       if (!data.isBetaTester) {
         await supabase.auth.signOut();
         setTestError("This account is not a beta tester.");
         return;
       }
-      // Auth context will set isBetaTester=true and App.tsx will auto-redirect
-      // to /find once the profile + beta check resolves. Just show a message.
-      setTestError("");
-    } catch { setTestError("Network error. Please try again."); }
+      console.log("[TestPortal] confirmed beta tester — waiting for auth context redirect");
+    } catch (e: any) { console.error("[TestPortal] error:", e); setTestError("Network error. Please try again."); }
     finally { setTestLoading(false); }
   }
 

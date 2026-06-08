@@ -28,7 +28,7 @@ function AdminSlide({ open }: { open: boolean }) {
   );
 }
 
-const SPLIT = 57;
+const SPLIT = 52;
 const CONNECT_THRESHOLD = 0.72;
 
 export default function HomePage() {
@@ -218,7 +218,7 @@ export default function HomePage() {
         borderRadius: "28px 28px 0 0",
         display: "flex", flexDirection: "column", alignItems: "center",
         justifyContent: "flex-start",
-        padding: "70px 24px calc(env(safe-area-inset-bottom) + 24px)",
+        padding: "70px 24px calc(env(safe-area-inset-bottom) + 32px)",
         boxSizing: "border-box", zIndex: 5,
       }}>
 
@@ -232,7 +232,7 @@ export default function HomePage() {
         </p>
 
         <h2 style={{
-          margin: "0 0 12px", fontSize: 19, fontWeight: 800,
+          margin: "0 0 10px", fontSize: 19, fontWeight: 800,
           color: "#0E1F40", letterSpacing: "-0.03em",
           textAlign: "center", lineHeight: 1.18,
         }}>
@@ -246,14 +246,14 @@ export default function HomePage() {
             border: "2.5px solid #0E1F40", borderRadius: 50,
             padding: "12px", fontSize: 12, fontWeight: 800,
             color: "#0E1F40", cursor: "pointer",
-            letterSpacing: "-0.01em", marginBottom: 10,
+            letterSpacing: "-0.01em", marginBottom: 8,
           }}
         >
           Start Earning
         </button>
 
         <p style={{
-          margin: "0 0 5px", fontSize: 11, fontWeight: 600,
+          margin: "0 0 4px", fontSize: 11, fontWeight: 600,
           color: "rgba(14,31,64,0.36)", textAlign: "center",
           letterSpacing: "0.10em", textTransform: "uppercase",
         }}>
@@ -273,19 +273,23 @@ export default function HomePage() {
 
         {/* Sign in link — only shown when not signed in */}
         {!user && (
-          <div style={{ marginTop: "auto", paddingTop: 16, textAlign: "center" }}>
-            <span
+          <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid rgba(14,31,64,0.10)", textAlign: "center" }}>
+            <button
               onClick={() => navigate("/signin")}
               style={{
-                fontSize: 13, fontWeight: 600,
-                color: "rgba(14,31,64,0.55)", cursor: "pointer",
+                background: "rgba(14,31,64,0.07)",
+                border: "1.5px solid rgba(14,31,64,0.18)",
+                borderRadius: 100,
+                padding: "10px 28px",
+                fontSize: 14, fontWeight: 700,
+                color: "#0E1F40",
+                cursor: "pointer",
+                fontFamily: "'DM Sans',sans-serif",
+                letterSpacing: 0.1,
               }}
             >
-              Already have an account?{" "}
-              <span style={{ color: "#0E1F40", textDecoration: "underline", textDecorationColor: "rgba(14,31,64,0.3)" }}>
-                Sign in
-              </span>
-            </span>
+              Sign in
+            </button>
           </div>
         )}
       </div>

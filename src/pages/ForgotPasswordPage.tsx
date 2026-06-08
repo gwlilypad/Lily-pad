@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { supabase } from "@/lib/supabase";
 
 const GREEN = "#8DD63F";
 const NAVY = "#0E1F40";
@@ -15,7 +14,7 @@ export default function ForgotPasswordPage() {
   const [passwordFocus, setPasswordFocus] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [resetToken, setResetToken] = useState<string | null>(null);
 
   async function handleSendCode(e: React.FormEvent) {
     e.preventDefault();
@@ -23,8 +22,13 @@ export default function ForgotPasswordPage() {
     if (!em) { setError("Enter your email address."); return; }
     setError(""); setLoading(true);
     try {
-      const { error: otpErr } = await supabase.auth.signInWithOtp({ email: em, options: { shouldCreateUser: false } });
-      if (otpErr) { setError(otpErr.message || "Failed to send code. Check your email address."); return; }
+      const r = await fetch("/api/auth/reset-send-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: em }),
+      });
+      const data = await r.json();
+      if (!r.ok) { setError(data.error || "Failed to send code. Check your email address."); return; }
       setStep("otp");
     } catch { setError("Network error. Try again."); }
     finally { setLoading(false); }
@@ -35,9 +39,14 @@ export default function ForgotPasswordPage() {
     if (!otp.trim()) { setError("Enter the code from your email."); return; }
     setError(""); setLoading(true);
     try {
-      const { data, error: vErr } = await supabase.auth.verifyOtp({ email: email.trim().toLowerCase(), token: otp.trim(), type: "email" });
-      if (vErr) { setError(vErr.message || "Invalid or expired code."); return; }
-      setAccessToken(data?.session?.access_token ?? null);
+      const r = await fetch("/api/auth/reset-verify-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim().toLowerCase(), code: otp.trim() }),
+      });
+      const data = await r.json();
+      if (!r.ok) { setError(data.error || "Invalid or expired code."); return; }
+      setResetToken(data.reset_token);
       setStep("password");
     } catch { setError("Network error. Try again."); }
     finally { setLoading(false); }
@@ -46,13 +55,13 @@ export default function ForgotPasswordPage() {
   async function handleSetPassword(e: React.FormEvent) {
     e.preventDefault();
     if (password.trim().length < 8) { setError("Password must be at least 8 characters."); return; }
-    if (!accessToken) { setError("Session expired. Please go back and request a new code."); return; }
+    if (!resetToken) { setError("Session expired. Please go back and request a new code."); return; }
     setError(""); setLoading(true);
     try {
-      const r = await fetch("/api/auth/update-password", {
+      const r = await fetch("/api/auth/reset-set-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ access_token: accessToken, password }),
+        body: JSON.stringify({ reset_token: resetToken, password }),
       });
       const data = await r.json();
       if (!r.ok) { setError(data.error || "Failed to update password."); return; }

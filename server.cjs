@@ -486,6 +486,116 @@ app.post('/api/auth/forgot', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Auth: password reset — step 1: send OTP via Resend (bypasses Supabase SMTP) ─
+const resetCodes = new Map(); // email → { code, userId, expires }
+function pruneResetCodes() {
+  const now = Date.now();
+  for (const [k, v] of resetCodes) { if (v.expires < now) resetCodes.delete(k); }
+}
+
+app.post('/api/auth/reset-send-code', async (req, res) => {
+  const { email } = req.body || {};
+  if (!email) return res.status(400).json({ error: 'email required' });
+  const emailLower = email.toLowerCase().trim();
+  if (!SVC_KEY) return res.status(500).json({ error: 'Server not configured' });
+  try {
+    pruneResetCodes();
+    // Look up the user via admin API to confirm account exists
+    const usersRes = await fetch(
+      `${SUPABASE_URL}/auth/v1/admin/users?email=${encodeURIComponent(emailLower)}&per_page=1`,
+      { headers: { apikey: SVC_KEY, Authorization: `Bearer ${SVC_KEY}` } }
+    );
+    const usersData = await usersRes.json().catch(() => ({}));
+    const user = Array.isArray(usersData?.users) ? usersData.users.find(u => u.email?.toLowerCase() === emailLower) : null;
+    if (!user) return res.status(404).json({ error: 'No account found with that email address.' });
+
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    resetCodes.set(emailLower, { code, userId: user.id, expires: Date.now() + 10 * 60 * 1000 });
+
+    const RESEND_KEY = process.env.RESEND_API_KEY || '';
+    if (!RESEND_KEY) {
+      console.warn('[Reset] RESEND_API_KEY not set — dev code:', code);
+      return res.json({ ok: true });
+    }
+    const emailRes = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: 'Lily Pad <noreply@lilypadparking.com>',
+        to: [emailLower],
+        subject: 'Your Lily Pad password reset code',
+        html: `
+<div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;background:#0E1F40;border-radius:20px;padding:40px 32px;color:#fff;">
+  <p style="font-size:11px;font-weight:700;letter-spacing:0.18em;color:#8DD63F;text-transform:uppercase;margin:0 0 8px;">Lily Pad Parking</p>
+  <h1 style="font-size:26px;font-weight:800;margin:0 0 16px;letter-spacing:-0.02em;">Reset your password</h1>
+  <p style="font-size:15px;color:rgba(255,255,255,0.78);line-height:1.6;margin:0 0 24px;">
+    Enter this code in the app to reset your password. It expires in <strong style="color:#fff;">10 minutes</strong>.
+  </p>
+  <div style="text-align:center;background:rgba(141,214,63,0.12);border:1.5px solid rgba(141,214,63,0.40);border-radius:16px;padding:24px;margin-bottom:28px;">
+    <span style="font-size:42px;font-weight:800;letter-spacing:0.25em;color:#8DD63F;">${code}</span>
+  </div>
+  <p style="font-size:12px;color:rgba(255,255,255,0.40);line-height:1.6;margin:0;text-align:center;">
+    If you didn't request this, you can safely ignore it.
+  </p>
+</div>`,
+      }),
+    });
+    if (!emailRes.ok) {
+      const emailErr = await emailRes.json().catch(() => ({}));
+      console.error('[Reset] Resend failed:', emailErr);
+      return res.status(500).json({ error: 'Failed to send code. Please try again.' });
+    }
+    console.log(`[Reset] Code sent to ${emailLower}`);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Auth: password reset — step 2: verify OTP, return reset token ─────────────
+const resetVerified = new Map(); // token → { userId, expires }
+app.post('/api/auth/reset-verify-code', async (req, res) => {
+  const { email, code } = req.body || {};
+  if (!email || !code) return res.status(400).json({ error: 'email and code required' });
+  const emailLower = email.toLowerCase().trim();
+  pruneResetCodes();
+  const stored = resetCodes.get(emailLower);
+  if (!stored) return res.status(400).json({ error: 'No active code for this email. Request a new one.' });
+  if (Date.now() > stored.expires) {
+    resetCodes.delete(emailLower);
+    return res.status(400).json({ error: 'Code expired. Please request a new one.' });
+  }
+  if (stored.code !== code.trim()) return res.status(400).json({ error: 'Incorrect code. Please try again.' });
+  resetCodes.delete(emailLower);
+  // Issue a short-lived reset token
+  const token = require('crypto').randomBytes(32).toString('hex');
+  resetVerified.set(token, { userId: stored.userId, expires: Date.now() + 15 * 60 * 1000 });
+  res.json({ ok: true, reset_token: token });
+});
+
+// ── Auth: password reset — step 3: set new password using reset token ─────────
+app.post('/api/auth/reset-set-password', async (req, res) => {
+  const { reset_token, password } = req.body || {};
+  if (!reset_token || !password) return res.status(400).json({ error: 'reset_token and password required' });
+  if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+  const entry = resetVerified.get(reset_token);
+  if (!entry) return res.status(400).json({ error: 'Reset session expired. Please start over.' });
+  if (Date.now() > entry.expires) {
+    resetVerified.delete(reset_token);
+    return res.status(400).json({ error: 'Reset session expired. Please start over.' });
+  }
+  try {
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${entry.userId}`, {
+      method: 'PUT',
+      headers: { apikey: SVC_KEY, Authorization: `Bearer ${SVC_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    });
+    const data = await r.json();
+    if (!r.ok) return res.status(r.status).json({ error: data.message || 'Failed to set password.' });
+    resetVerified.delete(reset_token);
+    console.log(`[Reset] Password updated for user ${entry.userId}`);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Auth: server-side token refresh ───────────────────────────────────────────
 app.post('/api/auth/refresh', async (req, res) => {
   const { refresh_token } = req.body || {};

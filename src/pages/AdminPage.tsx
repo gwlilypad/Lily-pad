@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useApp } from "@/context/AppContext";
 import { supabase } from "@/lib/supabase";
 import {
@@ -591,29 +591,77 @@ function PadPhotoCard({
   );
 }
 
-// ── Analytics coming soon — chart will show real data once payment is live ────
+type ChartPeriod = "D" | "W" | "M" | "Y" | "All";
+
 function UserGrowthChart({ users }: { users: MockUser[] }) {
-  const now = new Date();
-  const months: { label: string; year: number; month: number }[] = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    months.push({ label: d.toLocaleDateString("en-US", { month: "short" }), year: d.getFullYear(), month: d.getMonth() });
-  }
+  const [period, setPeriod] = useState<ChartPeriod>("M");
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
 
-  const counts = months.map(({ year, month }) => {
-    const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59);
-    return users.filter(u => {
-      if (!u.joined || u.joined === "Unknown") return false;
-      const d = new Date(u.joined);
-      return !isNaN(d.getTime()) && d <= endOfMonth;
-    }).length;
-  });
+  const { labels, counts } = useMemo(() => {
+    const now = new Date();
+    const parsed = users
+      .map(u => (u.joined && u.joined !== "Unknown" ? new Date(u.joined) : null))
+      .filter((d): d is Date => d !== null && !isNaN(d.getTime()));
 
+    type Bucket = { label: string; end: Date };
+    const buckets: Bucket[] = [];
+
+    if (period === "D") {
+      for (let i = 23; i >= 0; i--) {
+        const end = new Date(now.getTime() - i * 3_600_000);
+        end.setMinutes(59, 59, 999);
+        const h = end.getHours();
+        const lbl = h === 0 ? "12a" : h === 6 ? "6a" : h === 12 ? "12p" : h === 18 ? "6p" : "";
+        buckets.push({ label: lbl, end });
+      }
+    } else if (period === "W") {
+      for (let i = 6; i >= 0; i--) {
+        const end = new Date(now);
+        end.setDate(end.getDate() - i);
+        end.setHours(23, 59, 59, 999);
+        buckets.push({ label: end.toLocaleDateString("en-US", { weekday: "short" }), end });
+      }
+    } else if (period === "M") {
+      for (let i = 29; i >= 0; i--) {
+        const end = new Date(now);
+        end.setDate(end.getDate() - i);
+        end.setHours(23, 59, 59, 999);
+        const d = end.getDate();
+        const lbl = (d === 1 || d === 8 || d === 15 || d === 22 || i === 0)
+          ? end.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "";
+        buckets.push({ label: lbl, end });
+      }
+    } else if (period === "Y") {
+      for (let i = 11; i >= 0; i--) {
+        const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59, 999);
+        buckets.push({ label: end.toLocaleDateString("en-US", { month: "short" }), end });
+      }
+    } else {
+      const earliest = parsed.length > 0
+        ? parsed.reduce((a, b) => (a < b ? a : b))
+        : new Date(now.getFullYear() - 1, now.getMonth(), 1);
+      const sy = earliest.getFullYear(), sm = earliest.getMonth();
+      const total = (now.getFullYear() - sy) * 12 + (now.getMonth() - sm) + 1;
+      for (let i = 0; i < total; i++) {
+        const end = new Date(sy, sm + i + 1, 0, 23, 59, 59, 999);
+        const show = i === 0 || i === total - 1 || (total > 4 && i % Math.max(1, Math.floor(total / 4)) === 0);
+        buckets.push({ label: show ? end.toLocaleDateString("en-US", { month: "short", year: "2-digit" }) : "", end });
+      }
+    }
+
+    return {
+      labels: buckets.map(b => b.label),
+      counts: buckets.map(b => parsed.filter(d => d <= b.end).length),
+    };
+  }, [users, period]);
+
+  const W = 260, H = 76, padX = 4, padY = 6;
+  const n = counts.length;
   const maxVal = Math.max(...counts, 1);
-  const W = 260, H = 88, padX = 4, padY = 8;
 
   const pts = counts.map((v, i) => ({
-    x: padX + (i / (months.length - 1)) * (W - padX * 2),
+    x: padX + (n < 2 ? (W - padX * 2) / 2 : (i / (n - 1)) * (W - padX * 2)),
     y: padY + (1 - v / maxVal) * (H - padY * 2),
   }));
 
@@ -629,41 +677,100 @@ function UserGrowthChart({ users }: { users: MockUser[] }) {
   }
 
   const linePath = smoothPath(pts);
-  const fillPath = linePath + ` L ${pts[pts.length - 1].x} ${H} L ${pts[0].x} ${H} Z`;
-  const total = counts[counts.length - 1];
-  const growth = total - counts[0];
+  const fillPath = pts.length > 1 ? `${linePath} L ${pts[n - 1].x} ${H} L ${pts[0].x} ${H} Z` : "";
+
+  const activeIdx = hoverIdx ?? n - 1;
+  const displayCount = counts[activeIdx] ?? 0;
+  const activeLabel = labels[activeIdx] ?? "";
+  const growth = (counts[n - 1] ?? 0) - (counts[0] ?? 0);
+
+  function getIdxFromPointer(clientX: number): number {
+    const svg = svgRef.current;
+    if (!svg || n < 2) return n - 1;
+    const rect = svg.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    return Math.round(ratio * (n - 1));
+  }
 
   return (
-    <div style={{ background: "#242C3E", borderRadius: 18, padding: "16px 16px 10px", boxShadow: "0 4px 24px rgba(0,0,0,0.28)", border: "1px solid rgba(255,255,255,0.07)" }}>
+    <div style={{ background: "#242C3E", borderRadius: 18, padding: "14px 14px 8px", boxShadow: "0 4px 24px rgba(0,0,0,0.28)", border: "1px solid rgba(255,255,255,0.07)", userSelect: "none" }}>
+      {/* Header */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 10 }}>
         <div>
-          <p style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.38)", letterSpacing: "0.13em", textTransform: "uppercase", margin: 0 }}>User Growth</p>
-          <p style={{ fontSize: 24, fontWeight: 800, color: "#fff", margin: "1px 0 0", letterSpacing: "-0.03em" }}>{total.toLocaleString()}</p>
+          <p style={{ fontSize: 9.5, fontWeight: 700, color: "rgba(255,255,255,0.35)", letterSpacing: "0.13em", textTransform: "uppercase", margin: 0 }}>
+            Users{hoverIdx !== null && activeLabel ? ` · ${activeLabel}` : ""}
+          </p>
+          <p style={{ fontSize: 26, fontWeight: 800, color: "#fff", margin: "2px 0 0", letterSpacing: "-0.03em", lineHeight: 1 }}>
+            {displayCount.toLocaleString()}
+          </p>
         </div>
-        {growth > 0 && (
-          <span style={{ fontSize: 11, fontWeight: 700, color: GREEN, background: "rgba(141,214,63,0.14)", padding: "4px 10px", borderRadius: 100, marginTop: 2 }}>↑ {growth} this period</span>
+        {hoverIdx === null && growth > 0 && (
+          <span style={{ fontSize: 10, fontWeight: 700, color: GREEN, background: "rgba(141,214,63,0.13)", padding: "3px 9px", borderRadius: 100, marginTop: 3 }}>↑ {growth}</span>
         )}
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ overflow: "visible", display: "block" }}>
+
+      {/* Period toggle */}
+      <div style={{ display: "flex", gap: 3, marginBottom: 10, background: "rgba(255,255,255,0.05)", borderRadius: 100, padding: 3 }}>
+        {(["D", "W", "M", "Y", "All"] as ChartPeriod[]).map(p => (
+          <button
+            key={p}
+            onClick={() => { setPeriod(p); setHoverIdx(null); }}
+            style={{
+              flex: 1, padding: "5px 0", borderRadius: 100, border: "none",
+              background: period === p ? GREEN : "transparent",
+              color: period === p ? NAVY : "rgba(255,255,255,0.38)",
+              fontWeight: 700, fontSize: 10, fontFamily: '"DM Sans",sans-serif',
+              cursor: "pointer", transition: "all 0.15s",
+            }}
+          >{p}</button>
+        ))}
+      </div>
+
+      {/* Chart */}
+      <svg
+        ref={svgRef}
+        viewBox={`0 0 ${W} ${H}`}
+        width="100%" height={H}
+        style={{ overflow: "visible", display: "block", touchAction: "none" }}
+        onPointerMove={e => { e.preventDefault(); setHoverIdx(getIdxFromPointer(e.clientX)); }}
+        onPointerLeave={() => setHoverIdx(null)}
+        onPointerDown={e => {
+          (e.currentTarget as SVGSVGElement).setPointerCapture(e.pointerId);
+          setHoverIdx(getIdxFromPointer(e.clientX));
+        }}
+      >
         <defs>
           <linearGradient id="ugGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={GREEN} stopOpacity="0.30" />
+            <stop offset="0%" stopColor={GREEN} stopOpacity="0.28" />
             <stop offset="100%" stopColor={GREEN} stopOpacity="0.00" />
           </linearGradient>
         </defs>
-        <path d={fillPath} fill="url(#ugGrad)" />
-        <path d={linePath} fill="none" stroke={GREEN} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-        {pts.map((p, i) => (
-          <circle key={i} cx={p.x} cy={p.y}
-            r={i === pts.length - 1 ? 4 : 2.5}
-            fill={i === pts.length - 1 ? GREEN : "#242C3E"}
-            stroke={GREEN} strokeWidth="2"
-          />
-        ))}
+        {fillPath && <path d={fillPath} fill="url(#ugGrad)" />}
+        {linePath && <path d={linePath} fill="none" stroke={GREEN} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />}
+
+        {hoverIdx !== null && pts[hoverIdx] && (
+          <>
+            <line x1={pts[hoverIdx].x} y1={0} x2={pts[hoverIdx].x} y2={H}
+              stroke="rgba(255,255,255,0.14)" strokeWidth="1" strokeDasharray="3 3" />
+            <circle cx={pts[hoverIdx].x} cy={pts[hoverIdx].y} r={4.5}
+              fill={GREEN} stroke="#242C3E" strokeWidth="2.5" />
+          </>
+        )}
+        {hoverIdx === null && pts.length > 0 && (
+          <circle cx={pts[n - 1].x} cy={pts[n - 1].y} r={4}
+            fill={GREEN} stroke="#242C3E" strokeWidth="2" />
+        )}
       </svg>
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 5 }}>
-        {months.map((m, i) => (
-          <span key={i} style={{ fontSize: 9, fontWeight: 600, color: "rgba(255,255,255,0.28)", letterSpacing: "0.03em" }}>{m.label}</span>
+
+      {/* X-axis labels */}
+      <div style={{ display: "flex", marginTop: 5 }}>
+        {labels.map((l, i) => (
+          <span key={i} style={{
+            flex: 1, fontSize: 8.5, fontWeight: 600, textAlign: "center",
+            color: i === activeIdx && hoverIdx !== null ? GREEN : "rgba(255,255,255,0.24)",
+            letterSpacing: "0.02em", transition: "color 0.1s",
+            visibility: l ? "visible" : "hidden",
+          }}>{l || "x"}</span>
         ))}
       </div>
     </div>
@@ -1984,22 +2091,24 @@ export default function AdminPage() {
           {/* User growth chart */}
           <UserGrowthChart users={users} />
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            <StatCard
-              dark
-              label="Total Pads"
-              value={adminStats ? String(adminStats.totalSpots) : "—"}
-              breakdown={adminStats ? [
-                { label: "Active", value: String(adminStats.activeSpots), dot: GREEN },
-                { label: "Pending", value: String(adminStats.pendingSpots), dot: "#F59E0B" },
-              ] : []}
-            />
-            <StatCard
-              dark
-              label="Users"
-              value={adminStats ? String(adminStats.totalUsers) : "—"}
-              sub={adminStats ? `↑ ${adminStats.newUsersThisWeek} this week` : "Loading…"}
-            />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <div style={{ background: "rgba(255,255,255,0.04)", borderRadius: 12, padding: "10px 12px", border: "1px solid rgba(255,255,255,0.05)" }}>
+              <p style={{ fontSize: 8.5, fontWeight: 700, color: "rgba(255,255,255,0.28)", letterSpacing: "0.12em", textTransform: "uppercase", margin: 0 }}>Pads</p>
+              <p style={{ fontSize: 22, fontWeight: 800, color: "#fff", margin: "2px 0 4px", letterSpacing: "-0.03em", lineHeight: 1 }}>{adminStats ? adminStats.totalSpots : "—"}</p>
+              {adminStats && (
+                <div style={{ display: "flex", gap: 8 }}>
+                  <span style={{ fontSize: 9, color: GREEN, fontWeight: 600 }}>● {adminStats.activeSpots} active</span>
+                  <span style={{ fontSize: 9, color: "#F59E0B", fontWeight: 600 }}>● {adminStats.pendingSpots} pend.</span>
+                </div>
+              )}
+            </div>
+            <div style={{ background: "rgba(255,255,255,0.04)", borderRadius: 12, padding: "10px 12px", border: "1px solid rgba(255,255,255,0.05)" }}>
+              <p style={{ fontSize: 8.5, fontWeight: 700, color: "rgba(255,255,255,0.28)", letterSpacing: "0.12em", textTransform: "uppercase", margin: 0 }}>Users</p>
+              <p style={{ fontSize: 22, fontWeight: 800, color: "#fff", margin: "2px 0 4px", letterSpacing: "-0.03em", lineHeight: 1 }}>{adminStats ? adminStats.totalUsers : "—"}</p>
+              {adminStats && adminStats.newUsersThisWeek > 0 && (
+                <span style={{ fontSize: 9, color: GREEN, fontWeight: 600 }}>↑ {adminStats.newUsersThisWeek} this week</span>
+              )}
+            </div>
           </div>
 
           {/* ── Invite Staff — admin only ── */}

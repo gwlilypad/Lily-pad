@@ -47,16 +47,21 @@ body {
 
 /* On a real phone: fill edge-to-edge, no frame, fully locked viewport */
 @media (max-width: 480px) {
-  html, body {
-    position: fixed;
-    inset: 0;
+  html {
+    height: 100%;
+    height: 100dvh;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  body {
+    /* NO position:fixed — that makes body a containing block, breaking position:fixed children */
+    position: static;
     width: 100%;
     height: 100%;
+    height: 100dvh;
     overflow: hidden;
     overscroll-behavior: none;
     touch-action: none;
-  }
-  body {
     padding: 0;
     background: #EDEEF0;
     align-items: stretch;

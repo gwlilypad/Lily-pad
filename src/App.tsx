@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { AppContext, type PageId, type AppState, DEFAULT_STATE, STORAGE_KEY, TRANSIENT_KEYS, loadInitialState } from "@/context/AppContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
@@ -211,37 +212,37 @@ function AppInner() {
       </div>
       {adminSimBar}
 
-      {/* Sign in — rendered OUTSIDE .screen (overflow:hidden) so it's always visible on every device */}
-      {!user && location.pathname === "/" && (
+      {/* Sign in — portal into document.body, escapes ALL overflow:hidden/position:fixed parents */}
+      {!user && location.pathname === "/" && createPortal(
         <div style={{
           position: "fixed",
           bottom: 0, left: 0, right: 0,
-          zIndex: 9999,
+          zIndex: 99999,
           display: "flex",
           justifyContent: "center",
-          padding: "14px 24px calc(env(safe-area-inset-bottom) + 16px)",
-          background: "linear-gradient(to top, rgba(240,242,247,1) 55%, rgba(240,242,247,0))",
-          pointerEvents: "none",
+          padding: "14px 24px calc(env(safe-area-inset-bottom, 20px) + 16px)",
+          background: "linear-gradient(to top, #F0F2F7 60%, rgba(240,242,247,0))",
         }}>
           <button
             onClick={() => navigate("/signin")}
             style={{
-              pointerEvents: "auto",
               background: "#0E1F40",
               border: "none",
               borderRadius: 100,
-              padding: "13px 40px",
-              fontSize: 14, fontWeight: 700,
+              padding: "14px 44px",
+              fontSize: 15, fontWeight: 700,
               color: "#fff",
               cursor: "pointer",
               fontFamily: "'DM Sans',sans-serif",
-              boxShadow: "0 4px 20px rgba(14,31,64,0.28)",
+              boxShadow: "0 4px 24px rgba(14,31,64,0.32)",
               letterSpacing: 0.1,
+              WebkitTapHighlightColor: "transparent",
             }}
           >
             Sign in
           </button>
-        </div>
+        </div>,
+        document.body
       )}
     </AppContext.Provider>
   );

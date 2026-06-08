@@ -218,8 +218,9 @@ export default function HomePage() {
         borderRadius: "28px 28px 0 0",
         display: "flex", flexDirection: "column", alignItems: "center",
         justifyContent: "flex-start",
-        padding: "70px 24px calc(env(safe-area-inset-bottom) + 32px)",
+        padding: "44px 24px calc(env(safe-area-inset-bottom) + 28px)",
         boxSizing: "border-box", zIndex: 5,
+        overflowY: "auto",
       }}>
 
         {/* FOR HOSTS — top of white section, near the line */}

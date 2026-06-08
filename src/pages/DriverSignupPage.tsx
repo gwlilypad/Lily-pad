@@ -38,6 +38,7 @@ export default function DriverSignupPage() {
   const [inputVal, setInputVal] = useState("");
   const [locked, setLocked] = useState(false);
   const [done, setDone] = useState(false);
+  const [editFromDone, setEditFromDone] = useState(false);
   const [checkEmail, setCheckEmail] = useState(false);
   const [signupError, setSignupError] = useState("");
   const [fieldError, setFieldError] = useState("");
@@ -71,6 +72,12 @@ export default function DriverSignupPage() {
     if (err) { setFieldError(err); return; }
     const newAns = { ...ans, [cur]: v };
     setAns(newAns);
+    if (editFromDone) {
+      setEditFromDone(false);
+      setDone(true);
+      setAppState(prev => ({ ...prev, drAns: newAns }));
+      return;
+    }
     const next = cur + 1;
     if (next >= DR_QUESTIONS.length) {
       setDone(true);
@@ -197,7 +204,7 @@ export default function DriverSignupPage() {
               </div>
               <div className="answer-stack">
                 {DR_QUESTIONS.map((qq, i) => (
-                  <div key={i} className="answer-card" onClick={() => !locked && setCur(i)}>
+                  <div key={i} className="answer-card" onClick={() => { if (!locked) { setEditFromDone(true); setDone(false); setCur(i); } }}>
                     <div className="answer-card-left">
                       <span className="answer-card-lbl">{qq.label}</span>
                       <span className="answer-card-val">{qq.type === "password" ? "••••••••" : (ans[i] || "")}</span>

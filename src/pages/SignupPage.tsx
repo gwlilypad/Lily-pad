@@ -122,9 +122,9 @@ export default function SignupPage() {
 
   function goEdit(idx: number) {
     if (locked) return;
+    setShowConfirm(false);
     setEditIdx(idx);
     setCur(idx);
-    setInputVal(q.type === "password" ? "" : (ans[idx] || ""));
   }
 
   const displayCur = editIdx !== null ? editIdx : cur;

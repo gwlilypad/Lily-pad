@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import OnboardingModal from "@/components/OnboardingModal";
 import { useAuth } from "@/context/AuthContext";
@@ -33,7 +32,6 @@ const PW_IDX = 4;
 
 export default function SignupPage() {
   const { goTo, setState: setAppState } = useApp();
-  const navigate = useNavigate();
   const { signUp, verifyOtp, user } = useAuth();
   const [cur, setCur] = useState(0);
   const [ans, setAns] = useState<Record<number, string>>({});
@@ -214,8 +212,7 @@ export default function SignupPage() {
       <div className="s-divider" />
       <div className="s-body">
         <NavBar
-          onBack={() => navigate(-1)}
-          onHome={() => goTo("home")}
+          onBack={() => goTo("home")}
           dots={SU_QUESTIONS.map((_, i) => i)}
           currentDot={displayCur}
           onDotClick={(idx) => { if (!locked) goEdit(idx); }}

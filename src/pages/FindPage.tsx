@@ -2014,44 +2014,48 @@ export default function FindPage() {
     <div ref={pageRef} className="page active" style={{ position: "relative", fontFamily: "'DM Sans', sans-serif" }}>
 
       {/* ── COMING SOON SCREEN (non-admin/staff users) ── */}
+      {/* ── COMING SOON: locked blurred map ── */}
+      {comingSoon && (
+        <div style={{
+          position: "absolute", inset: 0, zIndex: 1,
+          filter: "blur(6px)",
+          pointerEvents: "none",
+          transform: "scale(1.04)",
+        }}>
+          <MapContainer
+            center={CITY_CENTER}
+            zoom={9}
+            zoomControl={false}
+            style={{ width: "100%", height: "100%" }}
+            attributionControl={false}
+            dragging={false}
+            scrollWheelZoom={false}
+            touchZoom={false}
+            doubleClickZoom={false}
+            keyboard={false}
+          >
+            <TileLayer key={activeTile} url={activeTile} />
+          </MapContainer>
+        </div>
+      )}
+
+      {/* ── COMING SOON: tint overlay + badge ── */}
       {comingSoon && (
         <div style={{
           position: "absolute", inset: 0, zIndex: 10,
-          background: "#0E1F40",
+          background: "rgba(14,31,64,0.55)",
           display: "flex", flexDirection: "column",
           alignItems: "center", justifyContent: "center",
-          padding: "0 32px",
           fontFamily: "'DM Sans', sans-serif",
+          pointerEvents: "none",
         }}>
           <div style={{
-            width: 72, height: 72, borderRadius: "50%",
-            background: "rgba(141,214,63,0.14)",
-            border: "1.5px solid rgba(141,214,63,0.30)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            marginBottom: 22,
-          }}>
-            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#8DD63F" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="10" r="6" />
-              <path d="M12 16v5M8 21h8" />
-            </svg>
-          </div>
-          <div style={{
-            background: "rgba(141,214,63,0.12)",
-            border: "1px solid rgba(141,214,63,0.28)",
-            borderRadius: 100, padding: "5px 14px",
-            fontSize: 10, fontWeight: 800, letterSpacing: "0.14em",
-            color: "#8DD63F", textTransform: "uppercase", marginBottom: 16,
+            background: "rgba(141,214,63,0.15)",
+            border: "1.5px solid rgba(141,214,63,0.40)",
+            borderRadius: 100, padding: "8px 22px",
+            fontSize: 11, fontWeight: 800, letterSpacing: "0.18em",
+            color: "#8DD63F", textTransform: "uppercase",
           }}>Coming Soon</div>
-          <p style={{
-            fontSize: 26, fontWeight: 800, color: "#fff",
-            margin: "0 0 12px", letterSpacing: "-0.02em", textAlign: "center",
-          }}>Parking is on its way.</p>
-          <p style={{
-            fontSize: 14, color: "rgba(255,255,255,0.50)",
-            margin: 0, lineHeight: 1.6, textAlign: "center", maxWidth: 280,
-          }}>
-            Real Houston driveways are being added. Use your account below to manage your listing or settings.
-          </p>
         </div>
       )}
 

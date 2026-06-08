@@ -91,9 +91,9 @@ export default function OnboardingModal() {
         position: "absolute", inset: 0, zIndex: 200,
         background: "rgba(0,0,0,0.78)",
         display: "flex", flexDirection: "column",
-        alignItems: "center", justifyContent: "center",
+        alignItems: "center", justifyContent: "flex-end",
         fontFamily: "'DM Sans', sans-serif",
-        padding: "40px 0 36px",
+        padding: "0 0 52px",
       }}
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
@@ -126,14 +126,13 @@ export default function OnboardingModal() {
                   flexShrink: 0,
                   background: "#fff",
                   borderRadius: 22,
-                  padding: "40px 26px 36px",
+                  padding: "26px 24px 22px",
                   boxShadow: isCenter
                     ? "0 20px 56px rgba(0,0,0,0.32), 0 4px 16px rgba(0,0,0,0.14)"
                     : "0 4px 18px rgba(0,0,0,0.10)",
                   transform: `scale(${isCenter ? 1 : 0.87})`,
                   opacity: dist === 0 ? 1 : dist === 1 ? 0.72 : 0,
                   transition: "transform 0.38s cubic-bezier(0.22,1,0.36,1), opacity 0.38s cubic-bezier(0.22,1,0.36,1), box-shadow 0.38s",
-                  minHeight: 330,
                   display: "flex", flexDirection: "column",
                   justifyContent: "center",
                   cursor: isCenter ? "default" : "pointer",
@@ -178,15 +177,15 @@ export default function OnboardingModal() {
       </div>
 
       {/* ── Dots ── */}
-      <div style={{ display: "flex", gap: 7, alignItems: "center", marginTop: 26 }}>
+      <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 20 }}>
         {SLIDES.map((_, i) => (
           <div
             key={i}
             onClick={() => goTo(i)}
             style={{
-              width: i === slide ? 22 : 7, height: 7,
+              width: i === slide ? 18 : 6, height: 6,
               borderRadius: 100,
-              background: i === slide ? "#8DD63F" : "rgba(255,255,255,0.32)",
+              background: i === slide ? "#8DD63F" : "rgba(255,255,255,0.28)",
               transition: "all 0.3s cubic-bezier(0.22,1,0.36,1)",
               cursor: "pointer",
             }}
@@ -198,18 +197,18 @@ export default function OnboardingModal() {
       <div style={{
         display: "flex", alignItems: "center",
         justifyContent: "space-between",
-        width: "100%", padding: "22px 32px 0",
+        width: "100%", padding: "16px 28px 0",
         boxSizing: "border-box",
       }}>
         <button
           onClick={dismiss}
           style={{
             background: "transparent",
-            border: "1.5px solid rgba(255,255,255,0.26)",
-            color: "rgba(255,255,255,0.72)", borderRadius: 100,
-            padding: "11px 26px", fontSize: 13, fontWeight: 700,
+            border: "1px solid rgba(255,255,255,0.22)",
+            color: "rgba(255,255,255,0.6)", borderRadius: 100,
+            padding: "9px 20px", fontSize: 12.5, fontWeight: 600,
             cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
-            letterSpacing: "-0.01em",
+            letterSpacing: "0.01em",
           }}
         >
           Skip
@@ -220,9 +219,9 @@ export default function OnboardingModal() {
           style={{
             background: "#8DD63F", border: "none",
             color: "#0E1F40", borderRadius: 100,
-            padding: "11px 26px", fontSize: 13, fontWeight: 800,
+            padding: "9px 22px", fontSize: 12.5, fontWeight: 800,
             cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
-            letterSpacing: "-0.01em",
+            letterSpacing: "0.01em",
           }}
         >
           {isLast ? "Join" : "Next →"}

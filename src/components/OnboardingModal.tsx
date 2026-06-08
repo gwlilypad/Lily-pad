@@ -122,9 +122,9 @@ export default function OnboardingModal() {
         position: "absolute", inset: 0, zIndex: 200,
         background: "rgba(0,0,0,0.78)",
         display: "flex", flexDirection: "column",
-        alignItems: "center", justifyContent: "flex-end",
+        alignItems: "center", justifyContent: "center",
         fontFamily: "'DM Sans', sans-serif",
-        padding: "0 0 52px",
+        padding: "0",
       }}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
@@ -163,7 +163,7 @@ export default function OnboardingModal() {
                   flexShrink: 0,
                   background: "linear-gradient(145deg, #1a3560 0%, #0E1F40 100%)",
                   borderRadius: 22,
-                  padding: "26px 24px 22px",
+                  padding: "20px 22px 18px",
                   border: "1px solid rgba(255,255,255,0.10)",
                   boxShadow: isCenter
                     ? "0 20px 56px rgba(0,0,0,0.48), 0 4px 16px rgba(0,0,0,0.28)"
@@ -214,53 +214,50 @@ export default function OnboardingModal() {
         </div>
       </div>
 
-      {/* ── Dots ── */}
-      <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 20 }}>
-        {SLIDES.map((_, i) => (
-          <div
-            key={i}
-            onClick={() => goTo(i)}
+      {/* ── Dots + controls ── */}
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, marginTop: 20 }}>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          {SLIDES.map((_, i) => (
+            <div
+              key={i}
+              onClick={() => goTo(i)}
+              style={{
+                width: i === slide ? 18 : 6, height: 6,
+                borderRadius: 100,
+                background: i === slide ? "#8DD63F" : "rgba(255,255,255,0.28)",
+                transition: "all 0.3s cubic-bezier(0.22,1,0.36,1)",
+                cursor: "pointer",
+              }}
+            />
+          ))}
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+          <button
+            onClick={dismiss}
             style={{
-              width: i === slide ? 18 : 6, height: 6,
-              borderRadius: 100,
-              background: i === slide ? "#8DD63F" : "rgba(255,255,255,0.28)",
-              transition: "all 0.3s cubic-bezier(0.22,1,0.36,1)",
-              cursor: "pointer",
+              background: "transparent", border: "none",
+              color: "rgba(255,255,255,0.38)", fontSize: 12, fontWeight: 500,
+              cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+              padding: "4px 8px",
             }}
-          />
-        ))}
-      </div>
-
-      {/* ── Next / Skip ── */}
-      <div style={{
-        display: "flex", flexDirection: "column", alignItems: "center",
-        width: "100%", padding: "18px 28px 0",
-        boxSizing: "border-box", gap: 12,
-      }}>
-        <button
-          onClick={next}
-          style={{
-            width: "100%", background: "#fff", border: "none",
-            color: "#0E1F40", borderRadius: 100,
-            padding: "0 24px", height: 56, fontSize: 16, fontWeight: 800,
-            cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
-            letterSpacing: "-0.02em",
-          }}
-        >
-          {isLast ? "Finish" : "Next"}
-        </button>
-
-        <button
-          onClick={dismiss}
-          style={{
-            background: "transparent", border: "none",
-            color: "rgba(255,255,255,0.45)", borderRadius: 100,
-            padding: "6px 16px", fontSize: 13, fontWeight: 500,
-            cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
-          }}
-        >
-          Skip
-        </button>
+          >
+            Skip
+          </button>
+          <button
+            onClick={next}
+            style={{
+              background: "rgba(255,255,255,0.12)",
+              border: "1px solid rgba(255,255,255,0.22)",
+              color: "#fff", borderRadius: 100,
+              padding: "8px 24px", fontSize: 13, fontWeight: 700,
+              cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+              letterSpacing: "-0.01em",
+            }}
+          >
+            {isLast ? "Finish" : "Next →"}
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -175,7 +175,7 @@ export default function HomePage() {
 
         {/* Centre content: headline + button + sign in */}
         <div style={{
-          width: "100%", padding: "0 24px 36px",
+          width: "100%", padding: "0 24px 62px",
           display: "flex", flexDirection: "column",
           alignItems: "center",
           boxSizing: "border-box",
@@ -203,9 +203,9 @@ export default function HomePage() {
 
         </div>
 
-        {/* FOR DRIVERS — pinned near the dividing line */}
+        {/* FOR DRIVERS — same distance from dividing line as FOR HOSTS */}
         <p style={{
-          position: "absolute", bottom: 10, left: 0, right: 0,
+          position: "absolute", bottom: 44, left: 0, right: 0,
           margin: 0, fontSize: 10, fontWeight: 700,
           letterSpacing: "0.22em", color: "rgba(255,255,255,0.30)",
           textTransform: "uppercase", textAlign: "center",

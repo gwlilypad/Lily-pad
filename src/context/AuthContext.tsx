@@ -82,7 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             avatar_url: data.avatar_url || "",
           });
           setRole(userRole);
-          if (email) checkBetaTester(email);
+          if (email) await checkBetaTester(email);
         }
       }
     } catch {

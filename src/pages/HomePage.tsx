@@ -217,7 +217,7 @@ export default function HomePage() {
         position: "absolute", bottom: 0, left: 0, right: 0, height: `${100 - SPLIT}%`,
         background: "#F0F2F7",
         display: "flex", flexDirection: "column", alignItems: "center",
-        justifyContent: "center",
+        justifyContent: "flex-start",
         padding: "24px 24px calc(env(safe-area-inset-bottom) + 24px)",
         boxSizing: "border-box", zIndex: 5,
       }}>

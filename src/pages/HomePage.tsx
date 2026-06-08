@@ -171,14 +171,13 @@ export default function HomePage() {
           <img src={lilypadLogo} alt="Lily Pad" style={{ width: "100%", height: "auto", display: "block", pointerEvents: "none" }} />
         </div>
 
-        {/* Centre content: headline + button — vertically centred in remaining space */}
+        {/* Centre content: headline + button — anchored fixed distance above FOR DRIVERS */}
         <div style={{
-          flex: 1,
-          width: "100%",
+          position: "absolute",
+          bottom: 60,
+          left: 24, right: 24,
           display: "flex", flexDirection: "column",
-          alignItems: "center", justifyContent: "center",
-          padding: "0 24px 52px",   /* 52px bottom keeps button above FOR DRIVERS */
-          boxSizing: "border-box",
+          alignItems: "center",
         }}>
           <h1 style={{
             textAlign: "center", margin: "0 0 16px",

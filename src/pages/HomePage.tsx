@@ -272,27 +272,6 @@ export default function HomePage() {
           Have a referral code?
         </div>
 
-        {/* Sign in link — only shown when not signed in */}
-        {!user && (
-          <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid rgba(14,31,64,0.10)", textAlign: "center" }}>
-            <button
-              onClick={() => navigate("/signin")}
-              style={{
-                background: "rgba(14,31,64,0.07)",
-                border: "1.5px solid rgba(14,31,64,0.18)",
-                borderRadius: 100,
-                padding: "10px 28px",
-                fontSize: 14, fontWeight: 700,
-                color: "#0E1F40",
-                cursor: "pointer",
-                fontFamily: "'DM Sans',sans-serif",
-                letterSpacing: 0.1,
-              }}
-            >
-              Sign in
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Connect flash */}
@@ -305,6 +284,39 @@ export default function HomePage() {
       )}
 
       <AdminSlide open={adminOpen} />
+
+      {/* ── SIGN IN — fixed to bottom, always visible ── */}
+      {!user && (
+        <div style={{
+          position: "fixed",
+          bottom: 0, left: 0, right: 0,
+          zIndex: 200,
+          display: "flex",
+          justifyContent: "center",
+          padding: "12px 24px calc(env(safe-area-inset-bottom) + 14px)",
+          background: "linear-gradient(to top, #F0F2F7 60%, rgba(240,242,247,0))",
+          pointerEvents: "none",
+        }}>
+          <button
+            onClick={() => navigate("/signin")}
+            style={{
+              pointerEvents: "auto",
+              background: "#0E1F40",
+              border: "none",
+              borderRadius: 100,
+              padding: "12px 36px",
+              fontSize: 14, fontWeight: 700,
+              color: "#fff",
+              cursor: "pointer",
+              fontFamily: "'DM Sans',sans-serif",
+              letterSpacing: 0.1,
+              boxShadow: "0 4px 18px rgba(14,31,64,0.22)",
+            }}
+          >
+            Sign in
+          </button>
+        </div>
+      )}
 
       {/* ── REFERRAL MODAL ── */}
       <div className={`modal-overlay${modalOpen ? " show" : ""}`} onClick={closeModal}>

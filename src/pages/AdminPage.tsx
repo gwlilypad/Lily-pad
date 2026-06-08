@@ -1687,9 +1687,7 @@ export default function AdminPage() {
           </div>
           <div style={{ flex: 1, overflowY: "auto", background: "#fff", borderRadius: "28px 28px 0 0", padding: "28px 24px 40px" }}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
-              <div style={{ width: 52, height: 52, borderRadius: "50%", background: "rgba(14,31,64,0.07)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="rgba(14,31,64,0.40)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-              </div>
+              <img src="/lily-pad-icon.png" alt="Lily Pad" style={{ width: 96, height: 96, objectFit: "contain" }} />
               <p style={{ fontSize: 22, fontWeight: 800, color: NAVY, margin: 0, letterSpacing: "-0.02em", textAlign: "center" }}>Choose your role</p>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 20 }}>

@@ -2023,7 +2023,7 @@ export default function FindPage() {
       {comingSoon && (
         <div style={{
           position: "absolute", inset: 0, zIndex: 1,
-          filter: "blur(6px)",
+          filter: "blur(2px)",
           pointerEvents: "none",
           transform: "scale(1.04)",
         }}>
@@ -2048,7 +2048,7 @@ export default function FindPage() {
       {comingSoon && (
         <div style={{
           position: "absolute", inset: 0, zIndex: 10,
-          background: "rgba(14,31,64,0.55)",
+          background: "rgba(14,31,64,0.38)",
           display: "flex", flexDirection: "column",
           alignItems: "center", justifyContent: "center",
           fontFamily: "'DM Sans', sans-serif",

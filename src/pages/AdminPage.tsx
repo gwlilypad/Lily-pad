@@ -1620,6 +1620,13 @@ export default function AdminPage() {
     if (patch.status) fetch("/api/staff/update-status", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, status: patch.status }) }).catch(() => {});
   }
 
+  async function removeStaff(id: string) {
+    try {
+      await fetch("/api/staff/remove", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+      setStaffList(prev => prev.filter(s => s.id !== id));
+    } catch {}
+  }
+
   function updatePadBox(userId: number, padIdx: number, box: PadInfo["box"]) {
     setUsers(prev => prev.map(u => {
       if (u.id !== userId || !u.pads) return u;
@@ -2996,7 +3003,7 @@ export default function AdminPage() {
                     />
                     <div style={{ display: "flex", gap: 6 }}>
                       {(["admin","staff"] as const).map(r => (
-                        <button key={r} onClick={() => { setInviteRole(r); setInviteError(""); }} style={{ flex: 1, padding: "8px", borderRadius: 10, cursor: "pointer", fontFamily: '"DM Sans",sans-serif', fontSize: 12, fontWeight: 700, border: `1.5px solid ${inviteRole === r ? (r === "admin" ? GREEN : "rgba(255,255,255,0.40)") : "rgba(255,255,255,0.10)"}`, background: inviteRole === r ? (r === "admin" ? "rgba(141,214,63,0.12)" : "rgba(255,255,255,0.07)") : "transparent", color: inviteRole === r ? (r === "admin" ? GREEN : "#fff") : "rgba(255,255,255,0.40)", textTransform: "capitalize" }}>{r}</button>
+                        <button key={r} onClick={() => { setInviteRole(r); setInviteError(""); }} style={{ flex: 1, padding: "8px", borderRadius: 10, cursor: "pointer", fontFamily: '"DM Sans",sans-serif', fontSize: 12, fontWeight: 700, border: `1.5px solid ${inviteRole === r ? (r === "admin" ? GREEN : NAVY) : "rgba(14,31,64,0.18)"}`, background: inviteRole === r ? (r === "admin" ? "rgba(141,214,63,0.12)" : "rgba(14,31,64,0.07)") : "#fff", color: inviteRole === r ? (r === "admin" ? GREEN : NAVY) : "rgba(14,31,64,0.45)", textTransform: "capitalize" }}>{r}</button>
                       ))}
                     </div>
                     {inviteError && <p style={{ color: "#ef4444", fontSize: 11.5, fontWeight: 600, margin: 0 }}>{inviteError}</p>}
@@ -3037,7 +3044,7 @@ export default function AdminPage() {
                   // the same string used as `agentName()` when sending messages.
                   // Also include the email-prefix as an alias so any messages
                   // attributed under the legacy short form still aggregate here.
-                  const displayName = `${s.firstName} ${s.lastName}`;
+                  const displayName = s.lastName ? `${s.firstName} ${s.lastName}` : s.firstName;
                   const emailPrefix = s.email.split("@")[0] || "";
                   const qa = staffRating(tickets, displayName, [emailPrefix]);
                   return (
@@ -3055,7 +3062,7 @@ export default function AdminPage() {
                           color: isAdmin ? GREEN : NAVY,
                           display: "flex", alignItems: "center", justifyContent: "center",
                           fontWeight: 800, fontSize: 14, flexShrink: 0,
-                        }}>{(s.firstName[0] + s.lastName[0]).toUpperCase()}</div>
+                        }}>{(s.firstName[0] + (s.lastName[0] || '')).toUpperCase()}</div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                             <span style={{ fontSize: 14, fontWeight: 800, color: NAVY, letterSpacing: "-0.01em" }}>{displayName}</span>
@@ -3072,26 +3079,43 @@ export default function AdminPage() {
                           <p style={{ fontSize: 11.5, color: "rgba(14,31,64,0.50)", margin: "2px 0 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.email}</p>
                           <p style={{ fontSize: 10.5, color: "rgba(14,31,64,0.35)", margin: "1px 0 0" }}>Last sign-in · {s.lastSignIn}</p>
                         </div>
-                        <button
-                          onClick={() => {
-                            setStaffAuthError(""); setStaffAuthPassword("");
-                            setStaffAuthAction({
-                              kind: suspended ? "reinstate" : "suspend",
-                              staffId: s.id,
-                              staffName: displayName,
-                            });
-                          }}
-                          style={{
-                            background: suspended ? "rgba(141,214,63,0.12)" : "rgba(239,68,68,0.08)",
-                            color: suspended ? GREEN : "#ef4444",
-                            border: `1px solid ${suspended ? "rgba(141,214,63,0.25)" : "rgba(239,68,68,0.18)"}`,
-                            borderRadius: 100, padding: "7px 14px",
-                            fontSize: 11, fontWeight: 800, cursor: "pointer",
-                            fontFamily: '"DM Sans",sans-serif', flexShrink: 0,
-                          }}
-                        >
-                          {suspended ? "Reinstate" : "Suspend"}
-                        </button>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
+                          <button
+                            onClick={() => {
+                              setStaffAuthError(""); setStaffAuthPassword("");
+                              setStaffAuthAction({
+                                kind: suspended ? "reinstate" : "suspend",
+                                staffId: s.id,
+                                staffName: displayName,
+                              });
+                            }}
+                            style={{
+                              background: suspended ? "rgba(141,214,63,0.12)" : "rgba(239,68,68,0.08)",
+                              color: suspended ? GREEN : "#ef4444",
+                              border: `1px solid ${suspended ? "rgba(141,214,63,0.25)" : "rgba(239,68,68,0.18)"}`,
+                              borderRadius: 100, padding: "6px 12px",
+                              fontSize: 11, fontWeight: 800, cursor: "pointer",
+                              fontFamily: '"DM Sans",sans-serif',
+                            }}
+                          >
+                            {suspended ? "Reinstate" : "Suspend"}
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (window.confirm(`Remove ${displayName} from the team?`)) removeStaff(s.id);
+                            }}
+                            style={{
+                              background: "transparent",
+                              color: "rgba(14,31,64,0.40)",
+                              border: "1px solid rgba(14,31,64,0.14)",
+                              borderRadius: 100, padding: "5px 12px",
+                              fontSize: 10.5, fontWeight: 700, cursor: "pointer",
+                              fontFamily: '"DM Sans",sans-serif',
+                            }}
+                          >
+                            Remove
+                          </button>
+                        </div>
                       </div>
 
                       {/* Performance scorecard — review summary for this staff member. */}

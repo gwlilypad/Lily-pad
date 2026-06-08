@@ -33,6 +33,23 @@ function pruneActivationCodes() {
 // Map<emailLower, { code: string, expires: number }>
 const betaResetCodes = new Map();
 
+// ── Staff status store — persisted to /tmp/staff_status.json ─────────────────
+// Map<"admin:<id>" | "staff:<id>", "active" | "suspended">
+const STAFF_STATUS_FILE = '/tmp/staff_status.json';
+const staffStatusMap = (() => {
+  try { return new Map(Object.entries(JSON.parse(fs.readFileSync(STAFF_STATUS_FILE,'utf8')))); } catch { return new Map(); }
+})();
+function saveStaffStatus() {
+  try { fs.writeFileSync(STAFF_STATUS_FILE, JSON.stringify(Object.fromEntries(staffStatusMap))); } catch {}
+}
+function getStaffStatus(table, id) {
+  return staffStatusMap.get(`${table}:${id}`) || 'active';
+}
+function setStaffStatus(table, id, status) {
+  staffStatusMap.set(`${table}:${id}`, status);
+  saveStaffStatus();
+}
+
 // ── Email helper (Resend) ────────────────────────────────────────────────────
 async function sendEmail(to, subject, html) {
   const key = process.env.RESEND_API_KEY;
@@ -855,37 +872,63 @@ app.post('/api/staff/invite', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── Staff list — returns all admin_users rows mapped to StaffAccount shape ────
+// ── Staff list — merges admin_whitelist + staff_whitelist into StaffAccount shape
 app.get('/api/staff/list', async (req, res) => {
   if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });
   try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/admin_users?select=id,email,full_name,role,status,last_login_at&order=created_at.asc`, { headers: SVC_HEADERS });
-    const rows = await r.json();
-    if (!Array.isArray(rows)) return res.json([]);
-    const list = rows.map(row => ({
-      id: row.id,
-      name: row.full_name || row.email,
-      email: row.email,
-      role: row.role || 'staff',
-      status: row.status || 'active',
-      lastSignIn: row.last_login_at ? new Date(row.last_login_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Never',
-    }));
-    res.json(list);
+    const [awRes, swRes] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/admin_whitelist?select=id,email&order=id.asc`, { headers: SVC_HEADERS }),
+      fetch(`${SUPABASE_URL}/rest/v1/staff_whitelist?select=id,email&order=id.asc`, { headers: SVC_HEADERS }),
+    ]);
+    const [adminRows, staffRows] = await Promise.all([awRes.json(), swRes.json()]);
+    const toAccount = (row, role, table) => {
+      const prefix = row.email.split('@')[0] || row.email;
+      const parts = prefix.split(/[._\-\s]+/);
+      const firstName = parts[0] ? parts[0].charAt(0).toUpperCase() + parts[0].slice(1) : prefix;
+      const lastName  = parts[1] ? parts[1].charAt(0).toUpperCase() + parts[1].slice(1) : '';
+      return {
+        id       : `${table}:${row.id}`,
+        firstName,
+        lastName,
+        email    : row.email,
+        role,
+        status   : getStaffStatus(table, row.id),
+        lastSignIn: 'Never',
+      };
+    };
+    const adminList = Array.isArray(adminRows) ? adminRows.map(r => toAccount(r, 'admin', 'admin_whitelist')) : [];
+    const staffList = Array.isArray(staffRows) ? staffRows.map(r => toAccount(r, 'staff', 'staff_whitelist')) : [];
+    res.json([...adminList, ...staffList]);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── Staff update-status — PATCH admin_users status by id ─────────────────────
+// ── Staff update-status — tracks active/suspended in memory + file ────────────
 app.post('/api/staff/update-status', async (req, res) => {
-  if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });
   const { id, status } = req.body || {};
   if (!id || !status) return res.status(400).json({ error: 'id and status required' });
+  // id is "table:rowId" (e.g. "admin_whitelist:3")
+  const [table, rowId] = id.split(':');
+  if (!table || !rowId) return res.status(400).json({ error: 'invalid id format' });
+  setStaffStatus(table, rowId, status);
+  res.json({ updated: true });
+});
+
+// ── Staff remove — deletes from admin_whitelist or staff_whitelist ─────────────
+app.post('/api/staff/remove', async (req, res) => {
+  if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });
+  const { id } = req.body || {};
+  if (!id) return res.status(400).json({ error: 'id required' });
+  const [table, rowId] = id.split(':');
+  if (!['admin_whitelist','staff_whitelist'].includes(table) || !rowId)
+    return res.status(400).json({ error: 'invalid id' });
   try {
-    await fetch(`${SUPABASE_URL}/rest/v1/admin_users?id=eq.${encodeURIComponent(id)}`, {
-      method: 'PATCH',
+    await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${encodeURIComponent(rowId)}`, {
+      method: 'DELETE',
       headers: { ...SVC_HEADERS, 'Prefer': 'return=minimal' },
-      body: JSON.stringify({ status }),
     });
-    res.json({ updated: true });
+    staffStatusMap.delete(`${table}:${rowId}`);
+    saveStaffStatus();
+    res.json({ removed: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

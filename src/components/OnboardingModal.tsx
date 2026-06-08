@@ -11,7 +11,7 @@ const SLIDES = [
   },
   {
     title: "Who it's for",
-    body: "Lily Pad was built for areas where parking is hardest to find—downtown districts, campuses, airports, events, concerts, nightlife areas, and shopping centers. Bringing convenience back to parking, helping homeowners earn passive income, and making cities feel a little more connected.",
+    body: "Lily Pad brings convenient parking to busy areas—downtown districts, campuses, airports, nightlife, event venues, and shopping centers—while helping homeowners earn passive income and making cities feel more connected.",
   },
   {
     title: "What happens next",

@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 
+const SEEN_KEY = "lp_onboarding_seen";
+
 const SLIDES = [
   {
     title: "Welcome, neighbor",
@@ -23,7 +25,9 @@ const SLIDES = [
 const GAP = 14;
 
 export default function OnboardingModal() {
-  const [visible, setVisible] = useState(true);
+  const [visible, setVisible] = useState(() => {
+    try { return localStorage.getItem(SEEN_KEY) !== "1"; } catch { return true; }
+  });
   const [slide, setSlide] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const [cardW, setCardW] = useState(0);
@@ -48,7 +52,10 @@ export default function OnboardingModal() {
 
   if (!visible) return null;
 
-  const dismiss = () => setVisible(false);
+  const dismiss = () => {
+    try { localStorage.setItem(SEEN_KEY, "1"); } catch { /* ignore */ }
+    setVisible(false);
+  };
 
   const goTo = (idx: number) => {
     if (animating || idx === slide) return;

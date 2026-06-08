@@ -74,7 +74,7 @@ body {
 }
 
 .fade-out { opacity: 0; }
-.page { display: flex; flex-direction: column; height: 100%; overflow: hidden; touch-action: pan-y; }
+.page { display: flex; flex-direction: column; height: 100%; overflow: hidden; touch-action: pan-y; background: #0E1F40; }
 
 /* Re-enable touch scrolling inside scrollable containers (overrides body touch-action: none) */
 .s-body, .avail-body, .spot-detail-body, .spots-scroll, .find-filters { touch-action: pan-y; }
@@ -140,7 +140,7 @@ body {
 .found-msg { font-size: 11px; color: rgba(255,255,255,0.55); text-align: center; margin-top: 4px; opacity: 0; transition: opacity 0.4s; height: 15px; }
 .found-msg.show { opacity: 1; }
 .s-divider { width: 100%; height: 0.5px; background: rgba(141,214,63,0.3); flex-shrink: 0; }
-.s-body { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 14px 24px 18px; overflow-y: auto; overflow-x: hidden; }
+.s-body { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 14px 24px 18px; overflow-y: auto; overflow-x: hidden; background: #EDEEF0; border-radius: 28px 28px 0 0; }
 .s-nav { width: 100%; display: flex; align-items: center; margin-bottom: 8px; min-height: 24px; flex-shrink: 0; }
 .back-btn { display: flex; align-items: center; gap: 4px; background: none; border: none; cursor: pointer; font-family: "DM Sans", sans-serif; }
 .back-lbl { font-size: 13px; color: rgba(14,31,64,0.4); }

@@ -9,7 +9,7 @@
     "start": "NODE_ENV=production node server.cjs"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20.0.0"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

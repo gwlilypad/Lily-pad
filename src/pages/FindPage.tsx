@@ -2156,7 +2156,7 @@ export default function FindPage() {
       )}
 
       {/* ── TEMP HOME BUTTON — floats above sheet on the left, mirrors recenter on the right ── */}
-      {!globeMode && (
+      {!globeMode && !comingSoon && (
         <button
           onClick={() => {
             if (state.adminPreview || sessionStorage.getItem("lp_admin_preview") === "1") {
@@ -2420,16 +2420,16 @@ export default function FindPage() {
       )}
 
       {/* ── FROSTED BOTTOM SHEET ── */}
-      {!comingSoon && <div
+      <div
         onWheel={e => e.stopPropagation()}
         onTouchStart={e => { if (!dragging) e.stopPropagation(); }}
         onTouchMove={e => { if (!dragging) e.stopPropagation(); }}
         onTouchEnd={e => e.stopPropagation()}
         onMouseDown={e => e.stopPropagation()}
-        onPointerDown={onSheetPointerDown}
-        onPointerMove={onSheetPointerMove}
-        onPointerUp={onSheetPointerUp}
-        onPointerCancel={onSheetPointerUp}
+        onPointerDown={comingSoon ? undefined : onSheetPointerDown}
+        onPointerMove={comingSoon ? undefined : onSheetPointerMove}
+        onPointerUp={comingSoon ? undefined : onSheetPointerUp}
+        onPointerCancel={comingSoon ? undefined : onSheetPointerUp}
         style={{
           position: "absolute", bottom: 0, left: 0, right: 0,
           height: liveSheetH,
@@ -2451,27 +2451,26 @@ export default function FindPage() {
 
         {/* Top row: handle pill + optional action buttons ── */}
         <div
-          onPointerDown={onHandlePointerDown}
-          onPointerMove={onHandlePointerMove}
-          onPointerUp={onHandlePointerUp}
-          onPointerCancel={onHandlePointerUp}
+          onPointerDown={comingSoon ? undefined : onHandlePointerDown}
+          onPointerMove={comingSoon ? undefined : onHandlePointerMove}
+          onPointerUp={comingSoon ? undefined : onHandlePointerUp}
+          onPointerCancel={comingSoon ? undefined : onHandlePointerUp}
           onTouchStart={e => e.stopPropagation()}
           style={{
             display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start",
-            // Bigger top padding when the sheet is at "full" so the grab pill
-            // sits well clear of the device top edge / status bar.
             padding: sheetState === "full"
               ? `calc(env(safe-area-inset-top, 0px) + 18px) 16px 12px`
               : "10px 16px 8px",
             flexShrink: 0, position: "relative",
             minHeight: sheetState === "full" ? 64 : 48,
-            touchAction: "none", cursor: dragging ? "grabbing" : "grab",
+            touchAction: comingSoon ? "auto" : "none",
+            cursor: comingSoon ? "default" : dragging ? "grabbing" : "grab",
             userSelect: "none",
             transition: "min-height 0.32s cubic-bezier(0.22,1,0.36,1), padding 0.32s cubic-bezier(0.22,1,0.36,1)",
           }}>
           <div style={{
-            width: dragging ? 52 : 40, height: 5,
-            background: dragging ? "rgba(255,255,255,0.70)" : "rgba(255,255,255,0.35)",
+            width: 40, height: 5,
+            background: comingSoon ? "rgba(255,255,255,0.18)" : dragging ? "rgba(255,255,255,0.70)" : "rgba(255,255,255,0.35)",
             borderRadius: 100,
             transition: "width 0.2s, background 0.2s",
           }} />
@@ -2502,7 +2501,7 @@ export default function FindPage() {
         </div>
 
         {/* ── Collapsed: swipe hint ── */}
-        {sheetState === "collapsed" && (
+        {sheetState === "collapsed" && !comingSoon && (
           <div style={{ flexShrink: 0, padding: "4px 0 14px", textAlign: "center", pointerEvents: "none", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8DD63F" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.9 }}>
               <path d="M18 15l-6-6-6 6"/>
@@ -3252,7 +3251,7 @@ export default function FindPage() {
             </div>
           );
         })()}
-      </div>}
+      </div>
 
       {/* ── BOOKING CONFIRMATION OVERLAY ── */}
       {!comingSoon && bookingConf && (() => {

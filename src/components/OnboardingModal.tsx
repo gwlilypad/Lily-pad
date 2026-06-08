@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 
-const STORAGE_KEY = "lp_onboarding_seen_v3";
+const STORAGE_KEY = "lp_onboarding_seen_v4";
 
 const SLIDES = [
   {

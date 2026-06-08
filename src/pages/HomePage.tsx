@@ -28,7 +28,7 @@ function AdminSlide({ open }: { open: boolean }) {
   );
 }
 
-const SPLIT = 73;
+const SPLIT = 57;
 const CONNECT_THRESHOLD = 0.72;
 
 export default function HomePage() {
@@ -170,22 +170,30 @@ export default function HomePage() {
           <img src={lilypadLogo} alt="Lily Pad" style={{ width: "100%", height: "auto", display: "block", pointerEvents: "none" }} />
         </div>
 
-        {/* Bottom content: headline + button */}
-        <div style={{ width: "100%", padding: "0 24px 8vh", display: "flex", flexDirection: "column", alignItems: "center", boxSizing: "border-box" }}>
+        {/* Bottom content: headline + button + FOR DRIVERS label */}
+        <div style={{ width: "100%", padding: "0 24px 20px", display: "flex", flexDirection: "column", alignItems: "center", boxSizing: "border-box" }}>
           <h1 style={{
-            textAlign: "center", margin: "0 0 22px",
-            fontSize: 33, fontWeight: 800, color: "#fff",
+            textAlign: "center", margin: "0 0 16px",
+            fontSize: 20, fontWeight: 800, color: "#fff",
             lineHeight: 1.2, letterSpacing: "-0.03em", width: "100%",
           }}>
             Your neighbor saved<br />you a spot.
           </h1>
 
+          <p style={{
+            margin: "0 0 10px", fontSize: 10, fontWeight: 700,
+            letterSpacing: "0.22em", color: "rgba(255,255,255,0.30)",
+            textTransform: "uppercase", textAlign: "center",
+          }}>
+            For Drivers
+          </p>
+
           <button
             onClick={handleFindAPad}
             style={{
               width: "80%", background: "#8DD63F", color: "#0E1F40",
-              border: "none", borderRadius: 50, padding: "18px",
-              fontSize: 20, fontWeight: 800, cursor: "pointer",
+              border: "none", borderRadius: 50, padding: "12px",
+              fontSize: 12, fontWeight: 800, cursor: "pointer",
               letterSpacing: "-0.01em",
               boxShadow: "0 4px 20px rgba(141,214,63,0.28)",
             }}
@@ -193,16 +201,6 @@ export default function HomePage() {
             Start Parking
           </button>
         </div>
-
-        {/* FOR DRIVERS — pinned near the dividing line */}
-        <p style={{
-          position: "absolute", bottom: 18, left: 0, right: 0,
-          margin: 0, fontSize: 10, fontWeight: 700,
-          letterSpacing: "0.22em", color: "rgba(255,255,255,0.30)",
-          textTransform: "uppercase", textAlign: "center",
-        }}>
-          For Drivers
-        </p>
       </div>
 
       {/* ── LIGHT SECTION ── */}
@@ -210,7 +208,8 @@ export default function HomePage() {
         position: "absolute", bottom: 0, left: 0, right: 0, height: `${100 - SPLIT}%`,
         background: "#F0F2F7",
         display: "flex", flexDirection: "column", alignItems: "center",
-        padding: "14px 24px calc(env(safe-area-inset-bottom) + 10px)",
+        justifyContent: "center",
+        padding: "24px 24px calc(env(safe-area-inset-bottom) + 24px)",
         boxSizing: "border-box", zIndex: 5,
       }}>
 
@@ -224,7 +223,7 @@ export default function HomePage() {
         </p>
 
         <h2 style={{
-          margin: "0 0 12px", fontSize: 29, fontWeight: 800,
+          margin: "0 0 12px", fontSize: 19, fontWeight: 800,
           color: "#0E1F40", letterSpacing: "-0.03em",
           textAlign: "center", lineHeight: 1.18,
         }}>
@@ -236,9 +235,9 @@ export default function HomePage() {
           style={{
             width: "80%", background: "transparent",
             border: "2.5px solid #0E1F40", borderRadius: 50,
-            padding: "16px", fontSize: 19, fontWeight: 800,
+            padding: "11px", fontSize: 11, fontWeight: 800,
             color: "#0E1F40", cursor: "pointer",
-            letterSpacing: "-0.01em", marginBottom: 12,
+            letterSpacing: "-0.01em", marginBottom: 10,
           }}
         >
           Start Earning

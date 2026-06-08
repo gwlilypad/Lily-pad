@@ -1664,7 +1664,7 @@ app.post('/api/spots/:id/approve', async (req, res) => {
     </a>
   </div>
   <p style="font-size:12px;color:rgba(255,255,255,0.40);line-height:1.6;margin:0;text-align:center;">
-    If you have questions, contact us at support@lilypadparking.com
+    If you have questions, contact us at hq@axispad.com
   </p>
 </div>`,
         }),
@@ -2479,7 +2479,7 @@ app.post('/api/contact', async (req, res) => {
         </div>
       </div>`;
 
-    await sendEmail('support@lilypadparking.com', `Support request from ${name.trim()}`, html);
+    await sendEmail('hq@axispad.com', `Support request from ${name.trim()}`, html);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

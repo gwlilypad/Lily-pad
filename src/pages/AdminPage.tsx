@@ -1322,7 +1322,9 @@ export default function AdminPage() {
         setTestError("This account is not a beta tester.");
         return;
       }
-      goTo("find");
+      // Auth context will set isBetaTester=true and App.tsx will auto-redirect
+      // to /find once the profile + beta check resolves. Just show a message.
+      setTestError("");
     } catch { setTestError("Network error. Please try again."); }
     finally { setTestLoading(false); }
   }

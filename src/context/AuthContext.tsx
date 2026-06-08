@@ -102,7 +102,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchProfile(session.user.id).finally(() => setLoading(false));
+        const sessionEmail = session.user.email ?? "";
+        fetchProfile(session.user.id)
+          .then(async () => {
+            // Fallback: if profile had no email, still check beta status via session email
+            if (sessionEmail) await checkBetaTester(sessionEmail);
+          })
+          .finally(() => setLoading(false));
       } else {
         setProfile(null);
         setRole(null);

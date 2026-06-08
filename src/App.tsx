@@ -63,6 +63,15 @@ function AppInner() {
   const [fading, setFading] = useState(false);
   const [state, setState] = useState<AppState>(loadInitialState);
 
+  // On first load, redirect away from mid-flow pages so the app always starts fresh
+  const FLOW_PATHS = ["/bizsignup", "/addpad", "/padtype", "/photointro", "/photo", "/availability", "/payment", "/signup", "/driversignup", "/listingsuccess"];
+  useEffect(() => {
+    if (FLOW_PATHS.some(p => location.pathname.startsWith(p))) {
+      navigate("/", { replace: true });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Sync auth role → accountType whenever the user signs in or profile loads
   useEffect(() => {
     if (role === "host") setState(s => ({ ...s, accountType: "padRenter" }));

@@ -500,17 +500,9 @@ app.post('/api/auth/reset-send-code', async (req, res) => {
   if (!SVC_KEY) return res.status(500).json({ error: 'Server not configured' });
   try {
     pruneResetCodes();
-    // Look up the user via admin API to confirm account exists
-    const usersRes = await fetch(
-      `${SUPABASE_URL}/auth/v1/admin/users?email=${encodeURIComponent(emailLower)}&per_page=1`,
-      { headers: { apikey: SVC_KEY, Authorization: `Bearer ${SVC_KEY}` } }
-    );
-    const usersData = await usersRes.json().catch(() => ({}));
-    const user = Array.isArray(usersData?.users) ? usersData.users.find(u => u.email?.toLowerCase() === emailLower) : null;
-    if (!user) return res.status(404).json({ error: 'No account found with that email address.' });
-
+    // Generate code — user existence verified at verify step
     const code = String(Math.floor(100000 + Math.random() * 900000));
-    resetCodes.set(emailLower, { code, userId: user.id, expires: Date.now() + 10 * 60 * 1000 });
+    resetCodes.set(emailLower, { code, expires: Date.now() + 10 * 60 * 1000 });
 
     const RESEND_KEY = process.env.RESEND_API_KEY || '';
     if (!RESEND_KEY) {
@@ -550,7 +542,7 @@ app.post('/api/auth/reset-send-code', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── Auth: password reset — step 2: verify OTP, return reset token ─────────────
+// ── Auth: password reset — step 2: verify OTP, look up user, return reset token ─
 const resetVerified = new Map(); // token → { userId, expires }
 app.post('/api/auth/reset-verify-code', async (req, res) => {
   const { email, code } = req.body || {};
@@ -565,10 +557,31 @@ app.post('/api/auth/reset-verify-code', async (req, res) => {
   }
   if (stored.code !== code.trim()) return res.status(400).json({ error: 'Incorrect code. Please try again.' });
   resetCodes.delete(emailLower);
-  // Issue a short-lived reset token
-  const token = require('crypto').randomBytes(32).toString('hex');
-  resetVerified.set(token, { userId: stored.userId, expires: Date.now() + 15 * 60 * 1000 });
-  res.json({ ok: true, reset_token: token });
+
+  // Look up user by fetching all users and matching email client-side
+  // (GoTrue list API does not filter by email — must search client-side)
+  try {
+    let userId = null;
+    let page = 1;
+    while (!userId) {
+      const r = await fetch(
+        `${SUPABASE_URL}/auth/v1/admin/users?page=${page}&per_page=1000`,
+        { headers: { apikey: SVC_KEY, Authorization: `Bearer ${SVC_KEY}` } }
+      );
+      const data = await r.json().catch(() => ({}));
+      const users = Array.isArray(data.users) ? data.users : [];
+      const match = users.find(u => u.email?.toLowerCase() === emailLower);
+      if (match) { userId = match.id; break; }
+      if (users.length < 1000) break; // no more pages
+      page++;
+    }
+    if (!userId) return res.status(404).json({ error: 'No account found with that email address.' });
+
+    const token = require('crypto').randomBytes(32).toString('hex');
+    resetVerified.set(token, { userId, expires: Date.now() + 15 * 60 * 1000 });
+    console.log(`[Reset] Code verified for ${emailLower}`);
+    res.json({ ok: true, reset_token: token });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ── Auth: password reset — step 3: set new password using reset token ─────────

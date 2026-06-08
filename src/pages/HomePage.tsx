@@ -126,7 +126,7 @@ export default function HomePage() {
   return (
     <div
       ref={containerRef}
-      style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden", userSelect: "none", fontFamily: '"DM Sans", sans-serif' }}
+      style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden", background: "#0E1F40", userSelect: "none", fontFamily: '"DM Sans", sans-serif' }}
     >
 
       {/* ── NAVY SECTION ── */}
@@ -215,6 +215,7 @@ export default function HomePage() {
       <div style={{
         position: "absolute", bottom: 0, left: 0, right: 0, height: `${100 - SPLIT}%`,
         background: "#F0F2F7",
+        borderRadius: "28px 28px 0 0",
         display: "flex", flexDirection: "column", alignItems: "center",
         justifyContent: "flex-start",
         padding: "70px 24px calc(env(safe-area-inset-bottom) + 24px)",

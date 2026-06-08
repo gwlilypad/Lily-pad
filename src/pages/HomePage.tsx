@@ -174,7 +174,7 @@ export default function HomePage() {
         {/* Centre content: headline + button — anchored fixed distance above FOR DRIVERS */}
         <div style={{
           position: "absolute",
-          bottom: 60,
+          bottom: 95,
           left: 24, right: 24,
           display: "flex", flexDirection: "column",
           alignItems: "center",
@@ -203,7 +203,7 @@ export default function HomePage() {
 
         {/* FOR DRIVERS — same distance from dividing line as FOR HOSTS is on the other side */}
         <p style={{
-          position: "absolute", bottom: 24, left: 0, right: 0,
+          position: "absolute", bottom: 70, left: 0, right: 0,
           margin: 0, fontSize: 10, fontWeight: 700,
           letterSpacing: "0.22em", color: "rgba(255,255,255,0.30)",
           textTransform: "uppercase", textAlign: "center",
@@ -218,7 +218,7 @@ export default function HomePage() {
         background: "#F0F2F7",
         display: "flex", flexDirection: "column", alignItems: "center",
         justifyContent: "flex-start",
-        padding: "24px 24px calc(env(safe-area-inset-bottom) + 24px)",
+        padding: "70px 24px calc(env(safe-area-inset-bottom) + 24px)",
         boxSizing: "border-box", zIndex: 5,
       }}>
 

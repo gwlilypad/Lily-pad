@@ -138,7 +138,7 @@ export default function HomePage() {
         padding: 0, boxSizing: "border-box", zIndex: 5,
       }}>
 
-        {/* ── LOGO (draggable right → admin) ── */}
+        {/* ── LOGO (draggable right → admin) — pinned to top ── */}
         <div
           onPointerDown={onLogoDown}
           onPointerMove={onLogoMove}
@@ -146,11 +146,12 @@ export default function HomePage() {
           onPointerCancel={onLogoCancel}
           onContextMenu={e => e.preventDefault()}
           style={{
-            paddingTop: "calc(env(safe-area-inset-top) + 16px)",
-            flex: 1,
+            paddingTop: "calc(env(safe-area-inset-top) + 12px)",
+            flex: "0 0 auto",
             display: "flex",
-            alignItems: "center",
+            alignItems: "flex-start",
             justifyContent: "center",
+            width: "100%",
             transform: `translateX(${logoX}px)`,
             transition: dragging
               ? "none"
@@ -170,8 +171,15 @@ export default function HomePage() {
           <img src={lilypadLogo} alt="Lily Pad" style={{ width: "100%", height: "auto", display: "block", pointerEvents: "none" }} />
         </div>
 
-        {/* Bottom content: headline + button + FOR DRIVERS label */}
-        <div style={{ width: "100%", padding: "0 24px 20px", display: "flex", flexDirection: "column", alignItems: "center", boxSizing: "border-box" }}>
+        {/* Centre content: headline + button — vertically centred in remaining space */}
+        <div style={{
+          flex: 1,
+          width: "100%",
+          display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center",
+          padding: "0 24px 52px",   /* 52px bottom keeps button above FOR DRIVERS */
+          boxSizing: "border-box",
+        }}>
           <h1 style={{
             textAlign: "center", margin: "0 0 16px",
             fontSize: 20, fontWeight: 800, color: "#fff",
@@ -179,14 +187,6 @@ export default function HomePage() {
           }}>
             Your neighbor saved<br />you a spot.
           </h1>
-
-          <p style={{
-            margin: "0 0 10px", fontSize: 10, fontWeight: 700,
-            letterSpacing: "0.22em", color: "rgba(255,255,255,0.30)",
-            textTransform: "uppercase", textAlign: "center",
-          }}>
-            For Drivers
-          </p>
 
           <button
             onClick={handleFindAPad}
@@ -201,6 +201,16 @@ export default function HomePage() {
             Start Parking
           </button>
         </div>
+
+        {/* FOR DRIVERS — same distance from dividing line as FOR HOSTS is on the other side */}
+        <p style={{
+          position: "absolute", bottom: 24, left: 0, right: 0,
+          margin: 0, fontSize: 10, fontWeight: 700,
+          letterSpacing: "0.22em", color: "rgba(255,255,255,0.30)",
+          textTransform: "uppercase", textAlign: "center",
+        }}>
+          For Drivers
+        </p>
       </div>
 
       {/* ── LIGHT SECTION ── */}

@@ -24,11 +24,11 @@ export default function PadTypePage() {
         </div>
         <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", width: "100%", gap: 22, paddingBottom: 20 }}>
           <div style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-            <button onClick={() => goTo(user ? "addpad" : "signup")} style={{ width: "100%", padding: "18px 0", background: "#fff", color: "#0E1F40", fontSize: 16, fontWeight: 600, border: "none", borderRadius: 100, cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>Personal</button>
+            <button onClick={() => goTo(user ? "addpad" : "signup")} style={{ width: "80%", padding: "12px", background: "#fff", color: "#0E1F40", fontSize: 12, fontWeight: 800, border: "none", borderRadius: 50, cursor: "pointer", fontFamily: "'DM Sans', sans-serif", letterSpacing: "-0.01em" }}>Personal</button>
             <p style={{ fontSize: 12, fontWeight: 300, color: "rgba(255,255,255,0.45)", textAlign: "center", lineHeight: 1.5, padding: "0 16px" }}>Driveway, garage, or private home parking spot</p>
           </div>
           <div style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-            <button onClick={() => goTo("bizsignup")} style={{ width: "100%", padding: "18px 0", background: "#fff", color: "#0E1F40", fontSize: 16, fontWeight: 600, border: "none", borderRadius: 100, cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>Business</button>
+            <button onClick={() => goTo("bizsignup")} style={{ width: "80%", padding: "12px", background: "#fff", color: "#0E1F40", fontSize: 12, fontWeight: 800, border: "none", borderRadius: 50, cursor: "pointer", fontFamily: "'DM Sans', sans-serif", letterSpacing: "-0.01em" }}>Business</button>
             <p style={{ fontSize: 12, fontWeight: 300, color: "rgba(255,255,255,0.45)", textAlign: "center", lineHeight: 1.5, padding: "0 16px" }}>Church, parking lot, commercial property, or 4+ spots</p>
           </div>
           <p style={{ fontSize: 11, fontWeight: 300, color: "rgba(255,255,255,0.2)", textAlign: "center", padding: "0 20px", lineHeight: 1.6, marginTop: 4 }}>Not sure? Choose Personal for your own home, Business if you manage a lot or multiple spots.</p>

@@ -203,7 +203,7 @@ export default function HomePage() {
 
         {/* FOR DRIVERS — same distance from dividing line as FOR HOSTS is on the other side */}
         <p style={{
-          position: "absolute", bottom: 70, left: 0, right: 0,
+          position: "absolute", bottom: 55, left: 0, right: 0,
           margin: 0, fontSize: 10, fontWeight: 700,
           letterSpacing: "0.22em", color: "rgba(255,255,255,0.30)",
           textTransform: "uppercase", textAlign: "center",

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lily-pad-v1';
+const CACHE_NAME = 'lily-pad-v3';
 const SHELL = ['/', '/index.html'];
 
 self.addEventListener('install', event => {

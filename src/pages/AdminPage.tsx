@@ -1525,7 +1525,11 @@ export default function AdminPage() {
         flexShrink: 0,
       }}>
         <button
-          onClick={() => goTo("home")}
+          onClick={() => {
+            if (view === "userDetail") { setView("users"); setSelectedUserId(null); }
+            else if (view === "users" || view === "service" || view === "staff") setView("dashboard");
+            else goTo("home");
+          }}
           style={{ background: "rgba(255,255,255,0.08)", border: "none", borderRadius: "50%", width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#fff", flexShrink: 0 }}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

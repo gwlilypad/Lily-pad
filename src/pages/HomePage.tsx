@@ -28,7 +28,7 @@ function AdminSlide({ open }: { open: boolean }) {
   );
 }
 
-const SPLIT = 78;
+const SPLIT = 73;
 const CONNECT_THRESHOLD = 0.72;
 
 export default function HomePage() {
@@ -173,8 +173,8 @@ export default function HomePage() {
         {/* Bottom content: headline + button */}
         <div style={{ width: "100%", padding: "0 24px 8vh", display: "flex", flexDirection: "column", alignItems: "center", boxSizing: "border-box" }}>
           <h1 style={{
-            textAlign: "center", margin: "0 0 20px",
-            fontSize: 27, fontWeight: 800, color: "#fff",
+            textAlign: "center", margin: "0 0 22px",
+            fontSize: 33, fontWeight: 800, color: "#fff",
             lineHeight: 1.2, letterSpacing: "-0.03em", width: "100%",
           }}>
             Your neighbor saved<br />you a spot.
@@ -184,8 +184,8 @@ export default function HomePage() {
             onClick={handleFindAPad}
             style={{
               width: "80%", background: "#8DD63F", color: "#0E1F40",
-              border: "none", borderRadius: 50, padding: "16px",
-              fontSize: 16, fontWeight: 800, cursor: "pointer",
+              border: "none", borderRadius: 50, padding: "18px",
+              fontSize: 20, fontWeight: 800, cursor: "pointer",
               letterSpacing: "-0.01em",
               boxShadow: "0 4px 20px rgba(141,214,63,0.28)",
             }}
@@ -224,7 +224,7 @@ export default function HomePage() {
         </p>
 
         <h2 style={{
-          margin: "0 0 10px", fontSize: 24, fontWeight: 800,
+          margin: "0 0 12px", fontSize: 29, fontWeight: 800,
           color: "#0E1F40", letterSpacing: "-0.03em",
           textAlign: "center", lineHeight: 1.18,
         }}>
@@ -236,9 +236,9 @@ export default function HomePage() {
           style={{
             width: "80%", background: "transparent",
             border: "2.5px solid #0E1F40", borderRadius: 50,
-            padding: "12px", fontSize: 15, fontWeight: 800,
+            padding: "16px", fontSize: 19, fontWeight: 800,
             color: "#0E1F40", cursor: "pointer",
-            letterSpacing: "-0.01em", marginBottom: 10,
+            letterSpacing: "-0.01em", marginBottom: 12,
           }}
         >
           Start Earning

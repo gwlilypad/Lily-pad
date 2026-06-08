@@ -28,7 +28,7 @@ function AdminSlide({ open }: { open: boolean }) {
   );
 }
 
-const SPLIT = 60;
+const SPLIT = 68;
 const CONNECT_THRESHOLD = 0.72;
 
 export default function HomePage() {
@@ -211,7 +211,7 @@ export default function HomePage() {
         background: "#F0F2F7",
         display: "flex", flexDirection: "column", alignItems: "center",
         justifyContent: "center",
-        padding: "0 24px calc(env(safe-area-inset-bottom) + 20px)",
+        padding: "42px 24px calc(env(safe-area-inset-bottom) + 20px)",
         boxSizing: "border-box", zIndex: 5,
       }}>
 

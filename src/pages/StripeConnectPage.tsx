@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import SharedHeader from "@/components/SharedHeader";
 import NavBar from "@/components/NavBar";
@@ -18,6 +19,7 @@ type Status = 'idle' | 'loading' | 'redirecting' | 'returned' | 'complete' | 'er
 
 export default function StripeConnectPage() {
   const { goTo, state } = useApp();
+  const navigate = useNavigate();
   const [status, setStatus] = useState<Status>('idle');
   const [accountId, setAccountId] = useState('');
   const [error, setError] = useState('');
@@ -74,7 +76,7 @@ export default function StripeConnectPage() {
       <SharedHeader step="Step 5 of 6" title="Set up payments." progress={83} label="Profile 83% complete" />
       <div className="s-divider" />
       <div className="s-body">
-        <NavBar onBack={() => goTo("availability")} onHome={() => goTo("home")} dots={[0]} currentDot={0} onDotClick={() => {}} />
+        <NavBar onBack={() => navigate(-1)} onHome={() => goTo("home")} dots={[0]} currentDot={0} onDotClick={() => {}} />
 
         <div className="form-center-wrap">
           {status === 'idle' && (

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import SharedHeader from "@/components/SharedHeader";
 import NavBar from "@/components/NavBar";
@@ -114,6 +115,7 @@ function HourPickers({ fromHour, toHour, setFrom, setTo, selectStyle }: {
 
 export default function AvailabilityPage() {
   const { goTo, state, setState } = useApp();
+  const navigate = useNavigate();
 
   const [alwaysOn, setAlwaysOn] = useState(true);
 
@@ -192,7 +194,7 @@ export default function AvailabilityPage() {
       <div className="s-divider" />
       <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
         <div style={{ flexShrink: 0, padding: "14px 16px 0" }}>
-          <NavBar onBack={() => goTo("photo")} onHome={() => goTo("home")} dots={[0,1,2,3,4,5]} currentDot={3} />
+          <NavBar onBack={() => navigate(-1)} onHome={() => goTo("home")} dots={[0,1,2,3,4,5]} currentDot={3} />
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: "24px 16px 32px", display: "flex", flexDirection: "column", gap: 0 }}>

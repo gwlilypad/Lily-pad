@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import SharedHeader from "@/components/SharedHeader";
 import NavBar from "@/components/NavBar";
@@ -33,6 +34,7 @@ const BIZ_PW_IDX = 9;
 
 export default function BizSignupPage() {
   const { goTo, setState: setAppState } = useApp();
+  const navigate = useNavigate();
   const [cur, setCur] = useState(0);
   const [ans, setAns] = useState<Record<number, string>>({});
   const [inputVal, setInputVal] = useState("");
@@ -179,7 +181,7 @@ export default function BizSignupPage() {
           onBack={() => {
             if (editIdx !== null) { setEditIdx(null); setDone(true); return; }
             if (cur > 0) setCur(cur - 1);
-            else goTo("padtype");
+            else navigate(-1);
           }}
           onHome={() => goTo("home")}
           dots={BIZ_QUESTIONS.map((_, i) => i)}

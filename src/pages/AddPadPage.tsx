@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/context/AuthContext";
 import SharedHeader from "@/components/SharedHeader";
@@ -22,6 +23,7 @@ const AP_QUESTIONS: Question[] = [
 
 export default function AddPadPage() {
   const { goTo, state, setState: setAppState } = useApp();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [cur, setCur] = useState(0);
   const [ans, setAns] = useState<Record<number, string>>({});
@@ -331,7 +333,7 @@ export default function AddPadPage() {
       <div className="s-divider" />
       <div className="s-body">
         <NavBar
-          onBack={() => cur > 0 ? setCur(cur - 1) : goTo(state.addingExtraPad ? "paddashboard" : (user ? "padtype" : "signup"))}
+          onBack={() => cur > 0 ? setCur(cur - 1) : (state.addingExtraPad ? goTo("paddashboard") : navigate(-1))}
           onHome={() => goTo("home")}
           dots={AP_QUESTIONS.map((_, i) => i)}
           currentDot={cur}

@@ -33,6 +33,9 @@ export default function OnboardingModal() {
   const [cardW, setCardW] = useState(0);
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
+  const dragStartX = useRef<number | null>(null);
+  const isDragging = useRef(false);
+  const [dragDelta, setDragDelta] = useState(0);
   const [animating, setAnimating] = useState(false);
 
   useEffect(() => {
@@ -70,10 +73,17 @@ export default function OnboardingModal() {
     touchStartX.current = e.touches[0].clientX;
     touchStartY.current = e.touches[0].clientY;
   };
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (touchStartX.current === null) return;
+    const dx = e.touches[0].clientX - touchStartX.current;
+    const dy = Math.abs(e.touches[0].clientY - (touchStartY.current ?? 0));
+    if (dy < 60) setDragDelta(dx);
+  };
   const onTouchEnd = (e: React.TouchEvent) => {
     if (touchStartX.current === null) return;
     const dx = e.changedTouches[0].clientX - touchStartX.current;
     const dy = Math.abs(e.changedTouches[0].clientY - (touchStartY.current ?? 0));
+    setDragDelta(0);
     if (Math.abs(dx) > 44 && dy < 60) {
       if (dx < 0 && slide < SLIDES.length - 1) goTo(slide + 1);
       if (dx > 0 && slide > 0) goTo(slide - 1);
@@ -82,8 +92,36 @@ export default function OnboardingModal() {
     touchStartY.current = null;
   };
 
+  const onMouseDown = (e: React.MouseEvent) => {
+    dragStartX.current = e.clientX;
+    isDragging.current = true;
+  };
+  const onMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging.current || dragStartX.current === null) return;
+    setDragDelta(e.clientX - dragStartX.current);
+  };
+  const onMouseUp = (e: React.MouseEvent) => {
+    if (!isDragging.current || dragStartX.current === null) return;
+    const dx = e.clientX - dragStartX.current;
+    setDragDelta(0);
+    isDragging.current = false;
+    dragStartX.current = null;
+    if (Math.abs(dx) > 44) {
+      if (dx < 0 && slide < SLIDES.length - 1) goTo(slide + 1);
+      if (dx > 0 && slide > 0) goTo(slide - 1);
+    }
+  };
+  const onMouseLeave = () => {
+    if (isDragging.current) {
+      setDragDelta(0);
+      isDragging.current = false;
+      dragStartX.current = null;
+    }
+  };
+
   const isLast = slide === SLIDES.length - 1;
-  const trackOffset = cardW ? (containerRef.current!.clientWidth - cardW) / 2 - slide * (cardW + GAP) : 0;
+  const baseOffset = cardW ? (containerRef.current!.clientWidth - cardW) / 2 - slide * (cardW + GAP) : 0;
+  const trackOffset = baseOffset + dragDelta;
 
   return (
     <div
@@ -96,7 +134,12 @@ export default function OnboardingModal() {
         padding: "0 0 52px",
       }}
       onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
+      onMouseDown={onMouseDown}
+      onMouseMove={onMouseMove}
+      onMouseUp={onMouseUp}
+      onMouseLeave={onMouseLeave}
     >
       {/* ── Card carousel ── */}
       <div
@@ -110,8 +153,9 @@ export default function OnboardingModal() {
           style={{
             display: "flex", gap: GAP,
             transform: `translateX(${trackOffset}px)`,
-            transition: "transform 0.38s cubic-bezier(0.22,1,0.36,1)",
+            transition: dragDelta !== 0 ? "none" : "transform 0.38s cubic-bezier(0.22,1,0.36,1)",
             willChange: "transform",
+            cursor: isDragging.current ? "grabbing" : "grab",
           }}
         >
           {SLIDES.map((s, i) => {
@@ -224,7 +268,7 @@ export default function OnboardingModal() {
             letterSpacing: "0.01em",
           }}
         >
-          {isLast ? "Join" : "Next →"}
+          {isLast ? "Finish" : "Next →"}
         </button>
       </div>
     </div>

@@ -146,7 +146,7 @@ export default function HomePage() {
           onPointerCancel={onLogoCancel}
           onContextMenu={e => e.preventDefault()}
           style={{
-            paddingTop: "calc(env(safe-area-inset-top) + 12px)",
+            paddingTop: "calc(env(safe-area-inset-top) + 4px)",
             flex: "0 0 auto",
             display: "flex",
             alignItems: "flex-start",

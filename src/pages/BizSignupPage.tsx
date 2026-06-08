@@ -22,13 +22,27 @@ const BIZ_QUESTIONS: Question[] = [
   { label: "Your relationship", text: "What's your relationship to this lot?", type: "choice-other", choices: ["Owner", "Property Manager / Authorized Agent", "Other (please specify)"] },
   { label: "Address", text: "What's the address?", type: "text", placeholder: "123 Main St, City, State", hint: "Include city and state" },
   { label: "Approx. spaces", text: "About how many spaces does the lot have?", type: "number", placeholder: "e.g. 25" },
-  { label: "Contact first name", text: "What's your first name?", type: "text", placeholder: "e.g. Alex", hint: "We'll use this to verify the listing" },
-  { label: "Contact last name", text: "And your last name?", type: "text", placeholder: "e.g. Johnson" },
+  { label: "Legal first name", text: "What's your legal first name?", type: "text", placeholder: "e.g. Alex", hint: "As it appears on your ID" },
+  { label: "Legal last name", text: "And your legal last name?", type: "text", placeholder: "e.g. Johnson", hint: "As it appears on your ID" },
   { label: "Email", text: "What's your email?", type: "email", placeholder: "you@business.com", hint: "We'll reach out here to complete your listing" },
   { label: "Phone", text: "And your phone number?", type: "tel", placeholder: "(555) 000-0000" },
   { label: "Password", text: "Create a password.", type: "password", placeholder: "Create a strong password" },
   { label: "Lot photos", text: "Add a few photos of your lot.", type: "photos", hint: "Wide shots, entrance, and any signage. You can skip and add these later." },
 ];
+
+function validateField(label: string, type: string, value: string): string {
+  const v = value.trim();
+  if (type === "text" && label.toLowerCase().includes("name")) {
+    if (v.replace(/[^a-zA-Z]/g, "").length < 2) return "Please enter your legal name (at least 2 letters).";
+  }
+  if (type === "email") {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) return "Please enter a valid email address.";
+  }
+  if (type === "tel") {
+    if (v.replace(/\D/g, "").length < 10) return "Please enter your full 10-digit phone number.";
+  }
+  return "";
+}
 
 const BIZ_PW_IDX = 9;
 
@@ -42,6 +56,7 @@ export default function BizSignupPage() {
   const [photoCount, setPhotoCount] = useState(0);
   const [locked, setLocked] = useState(false);
   const [done, setDone] = useState(false);
+  const [fieldError, setFieldError] = useState("");
   const [editIdx, setEditIdx] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -54,6 +69,7 @@ export default function BizSignupPage() {
     const v = ans[activeIdx] || "";
     setInputVal(q?.type === "password" ? "" : v);
     setOtherVal(v.startsWith("Other: ") ? v.slice(7) : "");
+    setFieldError("");
     if (q?.type === "text" || q?.type === "email" || q?.type === "tel" || q?.type === "password" || q?.type === "number") {
       setTimeout(() => inputRef.current?.focus(), 100);
     }
@@ -143,6 +159,8 @@ export default function BizSignupPage() {
     const v = (val !== undefined ? val : inputVal).trim();
     if (!v) return;
     if (isPwStep && !pwValidation.allValid) return;
+    const err = validateField(q?.label || "", q?.type || "", v);
+    if (err) { setFieldError(err); return; }
     commitAndNext(v);
   }
 
@@ -215,11 +233,12 @@ export default function BizSignupPage() {
                       type={q.type === "number" ? "number" : q.type}
                       placeholder={q.placeholder}
                       value={inputVal}
-                      onChange={e => setInputVal(e.target.value)}
+                      onChange={e => { setInputVal(e.target.value); setFieldError(""); }}
                       onKeyDown={handleKeyDown}
                     />
                   </div>
-                  {q.hint && <p className="hint">{q.hint}</p>}
+                  {q.hint && !fieldError && <p className="hint">{q.hint}</p>}
+                  {fieldError && <p style={{ fontSize: 12.5, color: "#ef4444", fontWeight: 600, margin: "6px 0 0", lineHeight: 1.4 }}>{fieldError}</p>}
                   {inputVal.trim() && (
                     <div className="cta-area" style={{ marginTop: 16 }}>
                       <button className="cta-btn" onClick={() => advance()}>{editIdx !== null ? "Save" : "Continue"}</button>

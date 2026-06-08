@@ -6,13 +6,27 @@ import NavBar from "@/components/NavBar";
 import PasswordRequirements, { validatePassword } from "@/components/PasswordRequirements";
 
 const DR_QUESTIONS = [
-  { label: "First name", text: "What's your first name?", type: "text", placeholder: "e.g. Jordan", hint: "" },
-  { label: "Last name", text: "And your last name?", type: "text", placeholder: "e.g. Smith", hint: "" },
+  { label: "Legal first name", text: "What's your legal first name?", type: "text", placeholder: "e.g. Jordan", hint: "As it appears on your ID" },
+  { label: "Legal last name", text: "And your legal last name?", type: "text", placeholder: "e.g. Smith", hint: "As it appears on your ID" },
   { label: "Email", text: "What's your email?", type: "email", placeholder: "you@email.com", hint: "We'll send booking receipts here" },
   { label: "Phone", text: "Your phone number?", type: "tel", placeholder: "(555) 000-0000", hint: "" },
   { label: "Vehicle", text: "What do you drive?", type: "text", placeholder: "e.g. 2022 Honda Civic", hint: "Helps hosts verify the right car" },
   { label: "Password", text: "Create a password.", type: "password", placeholder: "Create a strong password", hint: "" },
 ];
+
+function validateField(label: string, type: string, value: string): string {
+  const v = value.trim();
+  if (type === "text" && label.toLowerCase().includes("name")) {
+    if (v.replace(/[^a-zA-Z]/g, "").length < 2) return "Please enter your legal name (at least 2 letters).";
+  }
+  if (type === "email") {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) return "Please enter a valid email address.";
+  }
+  if (type === "tel") {
+    if (v.replace(/\D/g, "").length < 10) return "Please enter your full 10-digit phone number.";
+  }
+  return "";
+}
 
 const DR_PW_IDX = 5;
 
@@ -26,6 +40,7 @@ export default function DriverSignupPage() {
   const [done, setDone] = useState(false);
   const [checkEmail, setCheckEmail] = useState(false);
   const [signupError, setSignupError] = useState("");
+  const [fieldError, setFieldError] = useState("");
   const [otpDigits, setOtpDigits] = useState(["","","","","",""]);
   const [otpError, setOtpError]   = useState("");
   const [otpLoading, setOtpLoading] = useState(false);
@@ -37,6 +52,7 @@ export default function DriverSignupPage() {
 
   useEffect(() => {
     setInputVal(ans[cur] || "");
+    setFieldError("");
     setTimeout(() => inputRef.current?.focus(), 100);
   }, [cur]);
 
@@ -45,12 +61,14 @@ export default function DriverSignupPage() {
     password: isPwStep ? inputVal : "",
     email: ans[2], firstName: ans[0], lastName: ans[1],
   });
-  const canAdvance = inputVal.trim().length > 0 && (!isPwStep || pwValidation.allValid);
+  const canAdvance = inputVal.trim().length > 0 && !fieldError && (!isPwStep || pwValidation.allValid);
 
   function advance() {
     const v = inputVal.trim();
     if (!v) return;
     if (isPwStep && !pwValidation.allValid) return;
+    const err = validateField(q.label, q.type, v);
+    if (err) { setFieldError(err); return; }
     const newAns = { ...ans, [cur]: v };
     setAns(newAns);
     const next = cur + 1;
@@ -154,9 +172,10 @@ export default function DriverSignupPage() {
               <p className="q-text">{q.text}</p>
               <div style={{ width: "100%" }}>
                 <div className="pill-wrap">
-                  <input ref={inputRef} className="pill-input" type={q.type} placeholder={q.placeholder} value={inputVal} onChange={e => setInputVal(e.target.value)} onKeyDown={e => e.key === "Enter" && advance()} />
+                  <input ref={inputRef} className="pill-input" type={q.type} placeholder={q.placeholder} value={inputVal} onChange={e => { setInputVal(e.target.value); setFieldError(""); }} onKeyDown={e => e.key === "Enter" && advance()} />
                 </div>
-                {q.hint && <p className="hint">{q.hint}</p>}
+                {q.hint && !fieldError && <p className="hint">{q.hint}</p>}
+                {fieldError && <p style={{ fontSize: 12.5, color: "#ef4444", fontWeight: 600, margin: "6px 0 0", lineHeight: 1.4 }}>{fieldError}</p>}
                 {q.type === "password" && (
                   <PasswordRequirements
                     password={inputVal}

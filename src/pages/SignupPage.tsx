@@ -8,12 +8,26 @@ import NavBar from "@/components/NavBar";
 import PasswordRequirements, { validatePassword } from "@/components/PasswordRequirements";
 
 const SU_QUESTIONS = [
-  { label: "First name", text: "What's your first name?", type: "text", placeholder: "e.g. Alex", hint: "" },
-  { label: "Last name", text: "And your last name?", type: "text", placeholder: "e.g. Johnson", hint: "" },
+  { label: "Legal first name", text: "What's your legal first name?", type: "text", placeholder: "e.g. Alex", hint: "As it appears on your ID" },
+  { label: "Legal last name", text: "And your legal last name?", type: "text", placeholder: "e.g. Johnson", hint: "As it appears on your ID" },
   { label: "Email", text: "What's your email?", type: "email", placeholder: "you@email.com", hint: "We'll send booking notifications here" },
   { label: "Phone", text: "And your phone number?", type: "tel", placeholder: "(555) 000-0000", hint: "Drivers may need to reach you" },
   { label: "Password", text: "Create a password.", type: "password", placeholder: "Create a strong password", hint: "" },
 ];
+
+function validateField(label: string, type: string, value: string): string {
+  const v = value.trim();
+  if (type === "text" && label.toLowerCase().includes("name")) {
+    if (v.replace(/[^a-zA-Z]/g, "").length < 2) return "Please enter your legal name (at least 2 letters).";
+  }
+  if (type === "email") {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) return "Please enter a valid email address.";
+  }
+  if (type === "tel") {
+    if (v.replace(/\D/g, "").length < 10) return "Please enter your full 10-digit phone number.";
+  }
+  return "";
+}
 
 const PW_IDX = 4;
 
@@ -29,6 +43,7 @@ export default function SignupPage() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [checkEmail, setCheckEmail] = useState(false);
   const [signupError, setSignupError] = useState("");
+  const [fieldError, setFieldError] = useState("");
   const [otpDigits, setOtpDigits] = useState(["","","","","",""]);
   const [otpError, setOtpError]   = useState("");
   const [otpLoading, setOtpLoading] = useState(false);
@@ -49,6 +64,7 @@ export default function SignupPage() {
     } else {
       setInputVal(ans[cur] || "");
     }
+    setFieldError("");
     setTimeout(() => inputRef.current?.focus(), 100);
   }, [cur, editIdx]);
 
@@ -57,13 +73,16 @@ export default function SignupPage() {
     password: isPasswordStep ? inputVal : "",
     email: ans[2], firstName: ans[0], lastName: ans[1],
   });
-  const canAdvance = inputVal.trim().length > 0 && (!isPasswordStep || pwValidation.allValid);
+  const canAdvance = inputVal.trim().length > 0 && !fieldError && (!isPasswordStep || pwValidation.allValid);
 
   function advance() {
     const v = inputVal.trim();
     if (!v) return;
     if (isPasswordStep && !pwValidation.allValid) return;
     const idx = editIdx !== null ? editIdx : cur;
+    const q = SU_QUESTIONS[idx];
+    const err = validateField(q.label, q.type, v);
+    if (err) { setFieldError(err); return; }
     const newAns = { ...ans, [idx]: v };
     setAns(newAns);
     if (editIdx !== null) {
@@ -214,11 +233,12 @@ export default function SignupPage() {
                     type={displayQ.type}
                     placeholder={displayQ.placeholder}
                     value={inputVal}
-                    onChange={e => setInputVal(e.target.value)}
+                    onChange={e => { setInputVal(e.target.value); setFieldError(""); }}
                     onKeyDown={handleKeyDown}
                   />
                 </div>
-                {displayQ.hint && <p className="hint">{displayQ.hint}</p>}
+                {displayQ.hint && !fieldError && <p className="hint">{displayQ.hint}</p>}
+                {fieldError && <p style={{ fontSize: 12.5, color: "#ef4444", fontWeight: 600, margin: "6px 0 0", lineHeight: 1.4 }}>{fieldError}</p>}
                 {displayQ.type === "password" && (
                   <PasswordRequirements
                     password={inputVal}

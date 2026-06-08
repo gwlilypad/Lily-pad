@@ -1295,6 +1295,11 @@ export default function FindPage() {
     }
   }, [sheetState]);
 
+  // Force sheet collapsed + locked for non-admin/staff (coming soon mode)
+  useEffect(() => {
+    if (comingSoon) setSheetState("collapsed");
+  }, [comingSoon]);
+
   function onAcctPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     e.currentTarget.setPointerCapture(e.pointerId);
     const startOff = acctOpenRef.current ? 0 : -(pageH() - ACCT_PEEK);
@@ -2474,7 +2479,7 @@ export default function FindPage() {
           }}>
           <div style={{
             width: 40, height: 5,
-            background: comingSoon ? "rgba(255,255,255,0.18)" : dragging ? "rgba(255,255,255,0.70)" : "rgba(255,255,255,0.35)",
+            background: comingSoon ? "rgba(255,255,255,0.22)" : dragging ? "rgba(255,255,255,0.70)" : "rgba(255,255,255,0.35)",
             borderRadius: 100,
             transition: "width 0.2s, background 0.2s",
           }} />
@@ -2517,7 +2522,7 @@ export default function FindPage() {
         )}
 
         {/* ── Half/Full-state: viewport pads list ── */}
-        {((sheetState === "half" || sheetState === "full") || (dragging && dragOffset > 20)) && selectedSpot === null && (() => {
+        {!comingSoon && ((sheetState === "half" || sheetState === "full") || (dragging && dragOffset > 20)) && selectedSpot === null && (() => {
           const sortOrigin: [number, number] = searchPin
             ? [searchPin.lat, searchPin.lng]
             : userPos ?? mapCenter;
@@ -2845,7 +2850,7 @@ export default function FindPage() {
         })()}
 
         {/* ── Pad detail dashboard — shown when a spot is selected ── */}
-        {selectedSpot !== null && (() => {
+        {!comingSoon && selectedSpot !== null && (() => {
           const spot = spots.find(s => s.id === selectedSpot)!;
           const hostName = spot.host_name || "Host";
           const hostInitials = hostName.split(" ").filter(Boolean).map((w: string) => w[0]).join("") || "H";

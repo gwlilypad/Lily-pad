@@ -122,9 +122,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) setLoading(false);
-    return { error: error ? error.message : null };
+    try {
+      const res = await fetch("/api/auth/signin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        setLoading(false);
+        if (data.staff_redirect) return { error: "Please use the staff portal to sign in." };
+        return { error: data.error || "Invalid email or password." };
+      }
+      // Establish the Supabase client session from the server-returned tokens
+      if (data.access_token && data.refresh_token) {
+        await supabase.auth.setSession({
+          access_token: data.access_token,
+          refresh_token: data.refresh_token,
+        });
+      }
+      return { error: null };
+    } catch (e: any) {
+      setLoading(false);
+      return { error: e.message || "Sign in failed. Please try again." };
+    }
   };
 
   const signUp = async (email: string, password: string, fullName: string, userRole = "driver") => {

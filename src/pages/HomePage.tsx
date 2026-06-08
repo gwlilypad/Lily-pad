@@ -112,7 +112,7 @@ export default function HomePage() {
 
   function handleFindAPad() {
     setState(s => ({ ...s, accountType: "renter" }));
-    if (user) { goTo("find"); } else { navigate("/signin"); }
+    if (user) { goTo("find"); } else { navigate("/signup"); }
   }
 
   function handleListMyPad() {

@@ -100,38 +100,47 @@ type StaffAccount = {
 
 
 function StatCard({
-  label, value, sub, breakdown, onClick,
+  label, value, sub, breakdown, onClick, dark,
 }: {
   label: string;
   value: string;
   sub?: string;
   breakdown?: { label: string; value: string; dot?: string }[];
   onClick?: () => void;
+  dark?: boolean;
 }) {
+  const bg = dark ? "#242C3E" : "#fff";
+  const border = dark ? "1px solid rgba(255,255,255,0.07)" : "1px solid rgba(14,31,64,0.07)";
+  const shadow = dark ? "0 4px 24px rgba(0,0,0,0.28)" : "0 2px 12px rgba(14,31,64,0.08)";
+  const labelColor = dark ? "rgba(255,255,255,0.38)" : "rgba(14,31,64,0.45)";
+  const valueColor = dark ? "#fff" : NAVY;
+  const dividerColor = dark ? "rgba(255,255,255,0.08)" : "rgba(14,31,64,0.08)";
+  const rowLabelColor = dark ? "rgba(255,255,255,0.45)" : "rgba(14,31,64,0.55)";
+  const rowValueColor = dark ? "#fff" : NAVY;
   return (
     <div onClick={onClick} style={{
-      background: "#fff",
+      background: bg,
       borderRadius: 18,
       padding: "16px 18px",
-      boxShadow: "0 2px 12px rgba(14,31,64,0.08)",
-      border: "1px solid rgba(14,31,64,0.07)",
+      boxShadow: shadow,
+      border,
       display: "flex",
       flexDirection: "column",
       gap: 4,
       cursor: onClick ? "pointer" : "default",
     }}>
-      <p style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(14,31,64,0.45)", letterSpacing: "0.10em", textTransform: "uppercase", margin: 0 }}>{label}</p>
-      <p style={{ fontSize: 26, fontWeight: 800, color: NAVY, margin: 0, letterSpacing: "-0.03em", lineHeight: 1.1 }}>{value}</p>
+      <p style={{ fontSize: 10.5, fontWeight: 700, color: labelColor, letterSpacing: "0.10em", textTransform: "uppercase", margin: 0 }}>{label}</p>
+      <p style={{ fontSize: 26, fontWeight: 800, color: valueColor, margin: 0, letterSpacing: "-0.03em", lineHeight: 1.1 }}>{value}</p>
       {sub && <p style={{ fontSize: 11, color: GREEN, fontWeight: 600, margin: 0 }}>{sub}</p>}
       {breakdown && (
-        <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(14,31,64,0.08)", display: "flex", flexDirection: "column", gap: 5 }}>
+        <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${dividerColor}`, display: "flex", flexDirection: "column", gap: 5 }}>
           {breakdown.map((b, i) => (
             <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
                 <span style={{ width: 6, height: 6, borderRadius: "50%", background: b.dot || GREEN, flexShrink: 0 }} />
-                <span style={{ fontSize: 10.5, color: "rgba(14,31,64,0.55)", fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{b.label}</span>
+                <span style={{ fontSize: 10.5, color: rowLabelColor, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{b.label}</span>
               </div>
-              <span style={{ fontSize: 12, fontWeight: 700, color: NAVY, flexShrink: 0 }}>{b.value}</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: rowValueColor, flexShrink: 0 }}>{b.value}</span>
             </div>
           ))}
         </div>
@@ -625,20 +634,20 @@ function UserGrowthChart({ users }: { users: MockUser[] }) {
   const growth = total - counts[0];
 
   return (
-    <div style={{ background: "#fff", borderRadius: 18, padding: "16px 16px 10px", boxShadow: "0 2px 12px rgba(14,31,64,0.08)", border: "1px solid rgba(14,31,64,0.07)" }}>
+    <div style={{ background: "#242C3E", borderRadius: 18, padding: "16px 16px 10px", boxShadow: "0 4px 24px rgba(0,0,0,0.28)", border: "1px solid rgba(255,255,255,0.07)" }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 10 }}>
         <div>
-          <p style={{ fontSize: 10, fontWeight: 700, color: "rgba(14,31,64,0.38)", letterSpacing: "0.13em", textTransform: "uppercase", margin: 0 }}>User Growth</p>
-          <p style={{ fontSize: 24, fontWeight: 800, color: NAVY, margin: "1px 0 0", letterSpacing: "-0.03em" }}>{total.toLocaleString()}</p>
+          <p style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.38)", letterSpacing: "0.13em", textTransform: "uppercase", margin: 0 }}>User Growth</p>
+          <p style={{ fontSize: 24, fontWeight: 800, color: "#fff", margin: "1px 0 0", letterSpacing: "-0.03em" }}>{total.toLocaleString()}</p>
         </div>
         {growth > 0 && (
-          <span style={{ fontSize: 11, fontWeight: 700, color: GREEN, background: "rgba(141,214,63,0.12)", padding: "4px 10px", borderRadius: 100, marginTop: 2 }}>↑ {growth} this period</span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: GREEN, background: "rgba(141,214,63,0.14)", padding: "4px 10px", borderRadius: 100, marginTop: 2 }}>↑ {growth} this period</span>
         )}
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ overflow: "visible", display: "block" }}>
         <defs>
           <linearGradient id="ugGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={GREEN} stopOpacity="0.20" />
+            <stop offset="0%" stopColor={GREEN} stopOpacity="0.30" />
             <stop offset="100%" stopColor={GREEN} stopOpacity="0.00" />
           </linearGradient>
         </defs>
@@ -647,14 +656,14 @@ function UserGrowthChart({ users }: { users: MockUser[] }) {
         {pts.map((p, i) => (
           <circle key={i} cx={p.x} cy={p.y}
             r={i === pts.length - 1 ? 4 : 2.5}
-            fill={i === pts.length - 1 ? GREEN : "#fff"}
+            fill={i === pts.length - 1 ? GREEN : "#242C3E"}
             stroke={GREEN} strokeWidth="2"
           />
         ))}
       </svg>
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 5 }}>
         {months.map((m, i) => (
-          <span key={i} style={{ fontSize: 9, fontWeight: 600, color: "rgba(14,31,64,0.32)", letterSpacing: "0.03em" }}>{m.label}</span>
+          <span key={i} style={{ fontSize: 9, fontWeight: 600, color: "rgba(255,255,255,0.28)", letterSpacing: "0.03em" }}>{m.label}</span>
         ))}
       </div>
     </div>
@@ -1963,13 +1972,13 @@ export default function AdminPage() {
         </>
       ) : view === "dashboard" ? (
         /* ── DASHBOARD ── */
-        <div style={{ flex: 1, overflowY: "auto", background: "#f5f7fa", borderRadius: "28px 28px 0 0", padding: "24px 20px 32px", display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ flex: 1, overflowY: "auto", background: "#1B2030", borderRadius: "28px 28px 0 0", padding: "24px 20px 32px", display: "flex", flexDirection: "column", gap: 16 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div>
-              <p style={{ fontSize: 11, fontWeight: 700, color: role === "staff" ? "rgba(14,31,64,0.45)" : GREEN, letterSpacing: "0.14em", textTransform: "uppercase", margin: 0 }}>{role === "staff" ? "Staff" : "Admin"}</p>
-              <p style={{ fontSize: 18, fontWeight: 800, color: NAVY, margin: "2px 0 0", letterSpacing: "-0.02em" }}>{(email.split("@")[0]) || (role === "staff" ? "Staff" : "Admin")}</p>
+              <p style={{ fontSize: 11, fontWeight: 700, color: GREEN, letterSpacing: "0.14em", textTransform: "uppercase", margin: 0 }}>{role === "staff" ? "Staff" : "Admin"}</p>
+              <p style={{ fontSize: 18, fontWeight: 800, color: "#fff", margin: "2px 0 0", letterSpacing: "-0.02em" }}>{(email.split("@")[0]) || (role === "staff" ? "Staff" : "Admin")}</p>
             </div>
-            <button onClick={handleSignOut} style={{ background: "#fff", border: "1.5px solid rgba(14,31,64,0.15)", borderRadius: 100, padding: "8px 16px", fontSize: 12, fontWeight: 700, color: NAVY, cursor: "pointer", fontFamily: '"DM Sans", sans-serif' }}>Sign out</button>
+            <button onClick={handleSignOut} style={{ background: "#fff", border: "none", borderRadius: 100, padding: "8px 16px", fontSize: 12, fontWeight: 700, color: NAVY, cursor: "pointer", fontFamily: '"DM Sans", sans-serif' }}>Sign out</button>
           </div>
 
           {/* User growth chart */}
@@ -1977,6 +1986,7 @@ export default function AdminPage() {
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <StatCard
+              dark
               label="Total Pads"
               value={adminStats ? String(adminStats.totalSpots) : "—"}
               breakdown={adminStats ? [
@@ -1985,6 +1995,7 @@ export default function AdminPage() {
               ] : []}
             />
             <StatCard
+              dark
               label="Users"
               value={adminStats ? String(adminStats.totalUsers) : "—"}
               sub={adminStats ? `↑ ${adminStats.newUsersThisWeek} this week` : "Loading…"}
@@ -1993,7 +2004,7 @@ export default function AdminPage() {
 
           {/* ── Invite Staff — admin only ── */}
           {role === "admin" && (
-            <div style={{ background: "#fff", borderRadius: 18, boxShadow: "0 2px 12px rgba(14,31,64,0.08)", border: "1px solid rgba(14,31,64,0.07)", overflow: "hidden" }}>
+            <div style={{ background: "#242C3E", borderRadius: 18, boxShadow: "0 4px 24px rgba(0,0,0,0.28)", border: "1px solid rgba(255,255,255,0.07)", overflow: "hidden" }}>
               {/* Header row — always visible, click to expand */}
               <div
                 onClick={() => { setInviteCardOpen(o => !o); setInviteCardError(""); setInviteCardSuccess(null); }}
@@ -2003,24 +2014,24 @@ export default function AdminPage() {
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontSize: 14, fontWeight: 700, color: NAVY, margin: 0 }}>Invite Staff</p>
-                  <p style={{ fontSize: 11.5, color: "rgba(14,31,64,0.50)", margin: "2px 0 0" }}>Add a team member · sends invitation email</p>
+                  <p style={{ fontSize: 14, fontWeight: 700, color: "#fff", margin: 0 }}>Invite Staff</p>
+                  <p style={{ fontSize: 11.5, color: "rgba(255,255,255,0.42)", margin: "2px 0 0" }}>Add a team member · sends invitation email</p>
                 </div>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(14,31,64,0.35)" strokeWidth="2.5" style={{ transform: inviteCardOpen ? "rotate(90deg)" : "none", transition: "transform 0.2s" }}><path d="m9 18 6-6-6-6"/></svg>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.30)" strokeWidth="2.5" style={{ transform: inviteCardOpen ? "rotate(90deg)" : "none", transition: "transform 0.2s" }}><path d="m9 18 6-6-6-6"/></svg>
               </div>
 
               {/* Expandable form */}
               {inviteCardOpen && (
-                <div style={{ padding: "0 18px 18px", display: "flex", flexDirection: "column", gap: 10, borderTop: "1px solid rgba(14,31,64,0.07)" }}>
+                <div style={{ padding: "0 18px 18px", display: "flex", flexDirection: "column", gap: 10, borderTop: "1px solid rgba(255,255,255,0.07)" }}>
                   {inviteCardSuccess ? (
                     <>
-                      <div style={{ marginTop: 12, background: "rgba(141,214,63,0.08)", border: "1px solid rgba(141,214,63,0.25)", borderRadius: 12, padding: "12px 14px", display: "flex", alignItems: "flex-start", gap: 10 }}>
+                      <div style={{ marginTop: 12, background: "rgba(141,214,63,0.10)", border: "1px solid rgba(141,214,63,0.25)", borderRadius: 12, padding: "12px 14px", display: "flex", alignItems: "flex-start", gap: 10 }}>
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0, marginTop: 1 }}><path d="M20 6L9 17l-5-5"/></svg>
-                        <p style={{ fontSize: 13, color: NAVY, margin: 0, lineHeight: 1.5 }}>{inviteCardSuccess}</p>
+                        <p style={{ fontSize: 13, color: "#fff", margin: 0, lineHeight: 1.5 }}>{inviteCardSuccess}</p>
                       </div>
                       <button
                         onClick={() => { setInviteCardSuccess(null); setInviteCardEmail(""); setInviteCardError(""); }}
-                        style={{ width: "100%", padding: "11px", borderRadius: 100, border: "1.5px solid rgba(14,31,64,0.15)", background: "transparent", color: NAVY, fontWeight: 700, fontSize: 13, fontFamily: '"DM Sans",sans-serif', cursor: "pointer" }}
+                        style={{ width: "100%", padding: "11px", borderRadius: 100, border: "1.5px solid rgba(255,255,255,0.18)", background: "transparent", color: "#fff", fontWeight: 700, fontSize: 13, fontFamily: '"DM Sans",sans-serif', cursor: "pointer" }}
                       >
                         Invite another
                       </button>
@@ -2028,12 +2039,12 @@ export default function AdminPage() {
                   ) : (
                     <>
                       {/* Role toggle */}
-                      <div style={{ marginTop: 12, display: "flex", gap: 4, background: "rgba(14,31,64,0.05)", borderRadius: 100, padding: 4 }}>
+                      <div style={{ marginTop: 12, display: "flex", gap: 4, background: "rgba(255,255,255,0.07)", borderRadius: 100, padding: 4 }}>
                         {(["staff", "admin"] as const).map(r => (
                           <button
                             key={r}
                             onClick={() => setInviteCardRole(r)}
-                            style={{ flex: 1, padding: "8px", borderRadius: 100, border: "none", background: inviteCardRole === r ? (r === "admin" ? GREEN : NAVY) : "transparent", color: inviteCardRole === r ? (r === "admin" ? NAVY : "#fff") : "rgba(14,31,64,0.45)", fontWeight: 700, fontSize: 12, fontFamily: '"DM Sans",sans-serif', cursor: "pointer", transition: "all 0.15s", textTransform: "capitalize" }}
+                            style={{ flex: 1, padding: "8px", borderRadius: 100, border: "none", background: inviteCardRole === r ? (r === "admin" ? GREEN : "#fff") : "transparent", color: inviteCardRole === r ? (r === "admin" ? NAVY : NAVY) : "rgba(255,255,255,0.45)", fontWeight: 700, fontSize: 12, fontFamily: '"DM Sans",sans-serif', cursor: "pointer", transition: "all 0.15s", textTransform: "capitalize" }}
                           >
                             {r}
                           </button>
@@ -2048,7 +2059,7 @@ export default function AdminPage() {
                         onFocus={() => setInviteCardEmailFocus(true)}
                         onBlur={() => setInviteCardEmailFocus(false)}
                         onKeyDown={e => { if (e.key === "Enter") handleSendInvite(); }}
-                        style={{ ...lightInputStyle, borderColor: inviteCardError ? "#ef4444" : inviteCardEmailFocus ? GREEN : "rgba(14,31,64,0.15)" }}
+                        style={{ background: "rgba(255,255,255,0.07)", border: `1.5px solid ${inviteCardError ? "#ef4444" : inviteCardEmailFocus ? GREEN : "rgba(255,255,255,0.14)"}`, borderRadius: 12, padding: "12px 14px", fontSize: 14, color: "#fff", fontFamily: '"DM Sans",sans-serif', outline: "none", width: "100%", boxSizing: "border-box" }}
                       />
                       {inviteCardError && <p style={{ color: "#ef4444", fontSize: 11.5, fontWeight: 600, margin: 0 }}>{inviteCardError}</p>}
                       <button
@@ -2068,11 +2079,11 @@ export default function AdminPage() {
           {/* Revenue & Payouts — admin only */}
           {role === "admin" && (
             <div>
-              <p style={{ fontSize: 11, fontWeight: 700, color: "rgba(14,31,64,0.45)", letterSpacing: "0.10em", textTransform: "uppercase", margin: "0 0 10px" }}>Revenue & Payouts</p>
-              <div style={{ background: "#fff", borderRadius: 18, padding: "28px 20px", boxShadow: "0 2px 12px rgba(14,31,64,0.08)", border: "1px solid rgba(14,31,64,0.07)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 120, textAlign: "center" }}>
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="rgba(14,31,64,0.25)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-                <p style={{ fontSize: 14, fontWeight: 700, color: "rgba(14,31,64,0.50)", margin: 0 }}>Payment Analytics Coming Soon</p>
-                <p style={{ fontSize: 12, color: "rgba(14,31,64,0.35)", margin: 0, maxWidth: 260 }}>Revenue and payout data will appear here once payment processing is configured</p>
+              <p style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.30)", letterSpacing: "0.10em", textTransform: "uppercase", margin: "0 0 10px" }}>Revenue & Payouts</p>
+              <div style={{ background: "#242C3E", borderRadius: 18, padding: "28px 20px", boxShadow: "0 4px 24px rgba(0,0,0,0.28)", border: "1px solid rgba(255,255,255,0.07)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 120, textAlign: "center" }}>
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.20)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                <p style={{ fontSize: 14, fontWeight: 700, color: "rgba(255,255,255,0.45)", margin: 0 }}>Payment Analytics Coming Soon</p>
+                <p style={{ fontSize: 12, color: "rgba(255,255,255,0.28)", margin: 0, maxWidth: 260 }}>Revenue and payout data will appear here once payment processing is configured</p>
               </div>
             </div>
           )}

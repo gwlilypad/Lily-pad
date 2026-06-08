@@ -15,7 +15,7 @@ const SLIDES = [
   },
   {
     title: "What happens next",
-    body: "Complete your account to join the neighborhood. Have questions? Email us at ",
+    body: "Complete your account to join the marketplace. Have questions? Email us at ",
     email: "support@lilypadparking.com",
   },
 ];

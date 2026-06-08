@@ -80,15 +80,16 @@ async function uploadAnnotated(dataUrl: string, userId: string): Promise<string>
 
 interface Props {
   photoUrl: string;
+  rawPhotoUrl?: string;
   spotId: string;
   userId: string;
   numPads: number;
   onClose: () => void;
-  onSaved: (newUrl: string) => void;
+  onSaved: (newUrl: string, rawUrl: string) => void;
 }
 
-export default function SpotDrawModal({ photoUrl, spotId, userId, numPads, onClose, onSaved }: Props) {
-  const [basePhoto, setBasePhoto] = useState(photoUrl);
+export default function SpotDrawModal({ photoUrl, rawPhotoUrl, spotId, userId, numPads, onClose, onSaved }: Props) {
+  const [basePhoto, setBasePhoto] = useState(rawPhotoUrl || photoUrl);
   const [naturalW, setNaturalW]   = useState(0);
   const [naturalH, setNaturalH]   = useState(0);
   const [boxes, setBoxes]         = useState<Box[]>([]);
@@ -290,14 +291,21 @@ export default function SpotDrawModal({ photoUrl, spotId, userId, numPads, onClo
   async function handleSave() {
     setSaving(true); setSaveErr("");
     try {
+      // If basePhoto is a local data URL (new photo picked), upload original first
+      let rawUrl: string;
+      if (basePhoto.startsWith("data:")) {
+        rawUrl = await uploadAnnotated(basePhoto, userId);
+      } else {
+        rawUrl = basePhoto; // already a remote URL — keep it as the raw base
+      }
       const annotated = await annotatePhoto(basePhoto, boxes);
       const newUrl    = await uploadAnnotated(annotated, userId);
       await fetch(`/api/spots/${spotId}`, {
         method:"PATCH",
         headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({ photo_url: newUrl, photo_urls: [newUrl] }),
+        body:JSON.stringify({ photo_url: newUrl, raw_photo_url: rawUrl, photo_urls: [newUrl] }),
       });
-      onSaved(newUrl);
+      onSaved(newUrl, rawUrl);
     } catch (err: any) {
       setSaveErr(err?.message || "Save failed — try again.");
     }

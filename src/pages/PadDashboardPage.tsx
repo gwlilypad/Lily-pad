@@ -47,6 +47,8 @@ interface Pad {
   description: string;
   services: string[];
   photoUrl: string;
+  rawPhotoUrl: string;   // original unannotated photo for redraw base
+  photoUrls: string[];   // all uploaded photos (gallery)
   auto_approve: boolean;
   // Display only
   status: "active" | "paused" | "pending" | "archived";
@@ -64,19 +66,21 @@ const MOCK_PADS: Pad[] = [
   {
     id: 1,
     address: "142 Maple Street", city: "Austin, TX", type: "Driveway", spotCount: 1,
-    nickname: "Front driveway", price: 4, auto_approve: true,
+    nickname: "Front driveway", name: "Front driveway", price: 4, auto_approve: true,
     description: "Easy-access driveway right off the main road. Great for downtown commuters.",
     services: ["Lighting at night", "24/7 access"],
     photoUrl: "https://images.unsplash.com/photo-1590674899484-d5640e854abe?w=600&q=70",
+    rawPhotoUrl: "", photoUrls: ["https://images.unsplash.com/photo-1590674899484-d5640e854abe?w=600&q=70"],
     status: "active", since: "Mar 2025", bookings: 14,
   },
   {
     id: 2,
     address: "880 Oak Lane", city: "Austin, TX", type: "Driveway", spotCount: 2,
-    nickname: "Side gravel pad", price: 3, auto_approve: true,
+    nickname: "Side gravel pad", name: "Side gravel pad", price: 3, auto_approve: true,
     description: "Two-car gravel pad next to the house. Quiet residential street.",
     services: ["Wide spot", "Surface paved"],
     photoUrl: "https://images.unsplash.com/photo-1448630360428-65456885c650?w=600&q=70",
+    rawPhotoUrl: "", photoUrls: ["https://images.unsplash.com/photo-1448630360428-65456885c650?w=600&q=70"],
     status: "active", since: "Jan 2025", bookings: 22,
   },
 ];
@@ -198,6 +202,8 @@ export default function PadDashboardPage() {
               description: String(s.description || ""),
               services: Array.isArray(s.services) ? s.services as string[] : [],
               photoUrl: String(s.photo_url || ""),
+              rawPhotoUrl: String(s.raw_photo_url || ""),
+              photoUrls: Array.isArray(s.photo_urls) ? (s.photo_urls as string[]) : (s.photo_url ? [String(s.photo_url)] : []),
               auto_approve: (s.spot_data as any)?.auto_approve !== false,
               status: s.status === "active" ? "active" : s.status === "paused" ? "paused" : s.status === "archived" ? "archived" : "pending",
               pausedUntil: null,
@@ -247,6 +253,18 @@ export default function PadDashboardPage() {
 
   // Spot draw modal
   const [drawModalOpen, setDrawModalOpen] = useState(false);
+
+  // Reset gallery index when switching pads
+  useEffect(() => { setPhotoIndex(0); }, [openPadId]);
+
+  // Photo gallery (per-pad hero)
+  const [photoIndex, setPhotoIndex] = useState(0);
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+
+  // Photo lightbox
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [lbTouchStartX, setLbTouchStartX] = useState<number | null>(null);
 
   // Archive confirm
   const [archiveConfirmId, setArchiveConfirmId] = useState<number | null>(null);
@@ -694,47 +712,80 @@ export default function PadDashboardPage() {
         ) : (
           /* ── DETAIL / EDIT VIEW (dark profile) ── */
           <>
-            {/* Photo hero */}
+            {/* Photo hero — swipeable gallery */}
             <input ref={photoInputRef} type="file" accept="image/*" onChange={onPhotoPick} style={{ display: "none" }} />
-            <div style={{ position: "relative", borderRadius: 20, overflow: "hidden", marginBottom: 16, boxShadow: "0 4px 20px rgba(0,0,0,0.40)" }}>
-              <div style={{ height: 210, background: openPad.photoUrl ? `url(${openPad.photoUrl}) center/cover` : `linear-gradient(135deg, #142A52 0%, #1e3d72 100%)` }} />
-              <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, transparent 35%, rgba(8,15,35,0.88) 100%)" }} />
-              <div style={{ position: "absolute", top: 12, left: 12 }}>
-                <StatusPill pad={openPad} />
-              </div>
-              <div style={{ position: "absolute", bottom: 14, left: 16, right: 16, minWidth: 0 }}>
-                <div style={{ fontSize: 19, fontWeight: 800, color: "#fff", letterSpacing: -0.4, textShadow: "0 1px 5px rgba(0,0,0,0.6)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {openPad.name}
+            {(() => {
+              const photos = openPad.photoUrls.length > 0 ? openPad.photoUrls : (openPad.photoUrl ? [openPad.photoUrl] : []);
+              const safeIdx = Math.min(photoIndex, Math.max(0, photos.length - 1));
+              const currentPhoto = photos[safeIdx] || "";
+              return (
+                <div
+                  style={{ position: "relative", borderRadius: 20, overflow: "hidden", marginBottom: 16, boxShadow: "0 4px 20px rgba(0,0,0,0.40)", cursor: currentPhoto ? "zoom-in" : "default" }}
+                  onTouchStart={e => setTouchStartX(e.touches[0].clientX)}
+                  onTouchEnd={e => {
+                    if (touchStartX === null) return;
+                    const dx = e.changedTouches[0].clientX - touchStartX;
+                    if (Math.abs(dx) > 40) {
+                      if (dx < 0) setPhotoIndex(i => Math.min(i + 1, photos.length - 1));
+                      else setPhotoIndex(i => Math.max(i - 1, 0));
+                    }
+                    setTouchStartX(null);
+                  }}
+                  onClick={() => { if (currentPhoto) { setLightboxIndex(safeIdx); setLightboxOpen(true); } }}
+                >
+                  <div style={{ height: 210, background: currentPhoto ? `url(${currentPhoto}) center/cover` : `linear-gradient(135deg, #142A52 0%, #1e3d72 100%)`, transition: "background-image 0.2s" }} />
+                  <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, transparent 35%, rgba(8,15,35,0.88) 100%)" }} />
+                  <div style={{ position: "absolute", top: 12, left: 12 }}>
+                    <StatusPill pad={openPad} />
+                  </div>
+                  <div style={{ position: "absolute", bottom: 14, left: 16, right: 16, minWidth: 0 }}>
+                    <div style={{ fontSize: 19, fontWeight: 800, color: "#fff", letterSpacing: -0.4, textShadow: "0 1px 5px rgba(0,0,0,0.6)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {openPad.name}
+                    </div>
+                    <div style={{ fontSize: 11.5, color: "rgba(255,255,255,0.68)", marginTop: 2, textShadow: "0 1px 3px rgba(0,0,0,0.5)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {openPad.address}, {openPad.city}
+                    </div>
+                    {/* Dot indicators */}
+                    {photos.length > 1 && (
+                      <div style={{ display: "flex", gap: 5, marginTop: 8 }} onClick={e => e.stopPropagation()}>
+                        {photos.map((_, i) => (
+                          <button key={i} onClick={() => setPhotoIndex(i)} style={{
+                            width: i === safeIdx ? 16 : 6, height: 6, borderRadius: 3,
+                            background: i === safeIdx ? "#8DD63F" : "rgba(255,255,255,0.45)",
+                            border: "none", padding: 0, cursor: "pointer",
+                            transition: "all 0.2s",
+                          }} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ position: "absolute", top: 12, right: 12, display: "flex", gap: 6 }} onClick={e => e.stopPropagation()}>
+                    {openPad.photoUrl && openPad.spotId && (
+                      <button onClick={() => setDrawModalOpen(true)} style={{
+                        background: "rgba(141,214,63,0.20)", backdropFilter: "blur(8px)",
+                        border: "1px solid rgba(141,214,63,0.45)", borderRadius: 100,
+                        padding: "7px 12px", fontSize: 11, fontWeight: 700, color: "#8DD63F",
+                        cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+                        display: "flex", alignItems: "center", gap: 5,
+                      }}>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+                        Redraw
+                      </button>
+                    )}
+                    <button onClick={() => photoInputRef.current?.click()} style={{
+                      background: "rgba(0,0,0,0.48)", backdropFilter: "blur(8px)",
+                      border: "1px solid rgba(255,255,255,0.18)", borderRadius: 100,
+                      padding: "7px 12px", fontSize: 11, fontWeight: 700, color: "#fff",
+                      cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+                      display: "flex", alignItems: "center", gap: 5,
+                    }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                      Photo
+                    </button>
+                  </div>
                 </div>
-                <div style={{ fontSize: 11.5, color: "rgba(255,255,255,0.68)", marginTop: 2, textShadow: "0 1px 3px rgba(0,0,0,0.5)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {openPad.address}, {openPad.city}
-                </div>
-              </div>
-              <div style={{ position: "absolute", top: 12, right: 12, display: "flex", gap: 6 }}>
-                {openPad.photoUrl && openPad.spotId && (
-                  <button onClick={() => setDrawModalOpen(true)} style={{
-                    background: "rgba(141,214,63,0.20)", backdropFilter: "blur(8px)",
-                    border: "1px solid rgba(141,214,63,0.45)", borderRadius: 100,
-                    padding: "7px 12px", fontSize: 11, fontWeight: 700, color: "#8DD63F",
-                    cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
-                    display: "flex", alignItems: "center", gap: 5,
-                  }}>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
-                    Redraw
-                  </button>
-                )}
-                <button onClick={() => photoInputRef.current?.click()} style={{
-                  background: "rgba(0,0,0,0.48)", backdropFilter: "blur(8px)",
-                  border: "1px solid rgba(255,255,255,0.18)", borderRadius: 100,
-                  padding: "7px 12px", fontSize: 11, fontWeight: 700, color: "#fff",
-                  cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
-                  display: "flex", alignItems: "center", gap: 5,
-                }}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-                  Photo
-                </button>
-              </div>
-            </div>
+              );
+            })()}
 
             {/* Quick stats */}
             <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
@@ -1202,16 +1253,86 @@ export default function PadDashboardPage() {
       );
     })()}
 
+    {/* ── Photo lightbox ── */}
+    {lightboxOpen && openPad && (() => {
+      const photos = openPad.photoUrls.length > 0 ? openPad.photoUrls : (openPad.photoUrl ? [openPad.photoUrl] : []);
+      const safeIdx = Math.min(lightboxIndex, Math.max(0, photos.length - 1));
+      return (
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 9500, background: "rgba(0,0,0,0.95)", display: "flex", flexDirection: "column", fontFamily: "'DM Sans',sans-serif" }}
+          onTouchStart={e => setLbTouchStartX(e.touches[0].clientX)}
+          onTouchEnd={e => {
+            if (lbTouchStartX === null) return;
+            const dx = e.changedTouches[0].clientX - lbTouchStartX;
+            if (Math.abs(dx) > 40) {
+              if (dx < 0) setLightboxIndex(i => Math.min(i + 1, photos.length - 1));
+              else setLightboxIndex(i => Math.max(i - 1, 0));
+            }
+            setLbTouchStartX(null);
+          }}
+        >
+          {/* Header */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", flexShrink: 0 }}>
+            <button
+              onClick={() => setLightboxOpen(false)}
+              style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.18)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", fontWeight: 600 }}>
+              {photos.length > 1 ? `${safeIdx + 1} / ${photos.length}` : openPad.name}
+            </div>
+            <div style={{ width: 36 }} />
+          </div>
+          {/* Full-screen photo */}
+          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 16px", minHeight: 0 }}>
+            <img
+              src={photos[safeIdx]}
+              alt="Pad photo"
+              style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", borderRadius: 12, userSelect: "none" }}
+              draggable={false}
+            />
+          </div>
+          {/* Dot indicators + arrows */}
+          {photos.length > 1 && (
+            <div style={{ flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 16, padding: "16px 16px 32px" }}>
+              <button
+                onClick={() => setLightboxIndex(i => Math.max(i - 1, 0))}
+                disabled={safeIdx === 0}
+                style={{ width: 32, height: 32, borderRadius: "50%", background: safeIdx === 0 ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.18)", border: "1px solid rgba(255,255,255,0.18)", display: "flex", alignItems: "center", justifyContent: "center", cursor: safeIdx === 0 ? "default" : "pointer", padding: 0 }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><path d="M15 18l-6-6 6-6"/></svg>
+              </button>
+              <div style={{ display: "flex", gap: 6 }}>
+                {photos.map((_, i) => (
+                  <button key={i} onClick={() => setLightboxIndex(i)} style={{
+                    width: i === safeIdx ? 18 : 7, height: 7, borderRadius: 3.5,
+                    background: i === safeIdx ? "#8DD63F" : "rgba(255,255,255,0.35)",
+                    border: "none", padding: 0, cursor: "pointer", transition: "all 0.2s",
+                  }} />
+                ))}
+              </div>
+              <button
+                onClick={() => setLightboxIndex(i => Math.min(i + 1, photos.length - 1))}
+                disabled={safeIdx === photos.length - 1}
+                style={{ width: 32, height: 32, borderRadius: "50%", background: safeIdx === photos.length - 1 ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.18)", border: "1px solid rgba(255,255,255,0.18)", display: "flex", alignItems: "center", justifyContent: "center", cursor: safeIdx === photos.length - 1 ? "default" : "pointer", padding: 0 }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><path d="M9 18l6-6-6-6"/></svg>
+              </button>
+            </div>
+          )}
+        </div>
+      );
+    })()}
+
     {/* ── Spot draw modal ── */}
     {drawModalOpen && openPad && openPad.spotId && user && (
       <SpotDrawModal
         photoUrl={openPad.photoUrl}
+        rawPhotoUrl={openPad.rawPhotoUrl || undefined}
         spotId={openPad.spotId}
         userId={user.id}
         numPads={openPad.spotCount}
         onClose={() => setDrawModalOpen(false)}
-        onSaved={(newUrl) => {
-          updatePad(openPad.id, { photoUrl: newUrl });
+        onSaved={(newUrl, rawUrl) => {
+          updatePad(openPad.id, { photoUrl: newUrl, rawPhotoUrl: rawUrl, photoUrls: [newUrl] });
           setDrawModalOpen(false);
         }}
       />

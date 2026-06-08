@@ -29,7 +29,6 @@ import SignInPage from "@/pages/SignInPage";
 import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
 import EmailVerifyPage from "@/pages/EmailVerifyPage";
 import PWAInstallBanner from "@/components/PWAInstallBanner";
-import EarlyAccessPage from "@/pages/EarlyAccessPage";
 
 const PAGE_ROUTES: Record<PageId, string> = {
   home: "/",
@@ -61,6 +60,7 @@ function AppInner() {
   const navigate = useNavigate();
   const location = useLocation();
   const { role, loading: authLoading, isBetaTester } = useAuth();
+  const isAdminOrStaff = role === "admin" || role === "staff";
   const [fading, setFading] = useState(false);
   const [state, setState] = useState<AppState>(loadInitialState);
   // Read early access flag injected by server into window.__EARLY_ACCESS__.
@@ -115,39 +115,20 @@ function AppInner() {
     }, 180);
   }, [navigate]);
 
-  // ── Early access gate ─────────────────────────────────────────────────────
-  // Admin/staff bypass: /admin and /signin paths are always accessible, and
-  // users with admin or staff role see the full app even in early access mode.
-  // adminPreview flag also bypasses so admins can simulate customer pages.
-  // Beta testers bypass early access and see the full customer app.
-  const isAdminPath    = location.pathname.startsWith("/admin");
-  const isSignInPath   = location.pathname.startsWith("/signin") || location.pathname.startsWith("/forgot");
-  const isAdminOrStaff = role === "admin" || role === "staff";
+  // ── Path helpers ──────────────────────────────────────────────────────────
+  const isAdminPath = location.pathname.startsWith("/admin");
 
-  // Beta testers get the customer app but cannot access admin
-  console.log("[App] gate check — isBetaTester:", isBetaTester, "isAdminPath:", isAdminPath, "authLoading:", authLoading);
+  // Beta testers cannot access admin — redirect to /find (Coming Soon screen)
   if (isBetaTester && isAdminPath) {
-    console.log("[App] beta tester on admin → redirecting to /find");
     navigate("/find", { replace: true });
     return null;
   }
 
-  // While we don't yet know the early-access state, show a blank navy screen
-  // so the main app never flashes through before the gate evaluates.
+  // While we don't yet know the early-access state, show a blank navy screen.
   if (!configLoaded) {
     return (
-      <AppContext.Provider value={{ goTo, state, setState }}>
+      <AppContext.Provider value={{ goTo, state, setState, earlyAccess, isAdminOrStaff }}>
         <div className="screen" style={{ background: "#0E1F40" }} />
-      </AppContext.Provider>
-    );
-  }
-
-  if (earlyAccess && !isAdminPath && !isSignInPath && !state.adminPreview && !isBetaTester && (authLoading || !isAdminOrStaff)) {
-    return (
-      <AppContext.Provider value={{ goTo, state, setState }}>
-        <div className="screen">
-          <EarlyAccessPage />
-        </div>
       </AppContext.Provider>
     );
   }
@@ -223,7 +204,7 @@ function AppInner() {
   ) : null;
 
   return (
-    <AppContext.Provider value={{ goTo, state, setState }}>
+    <AppContext.Provider value={{ goTo, state, setState, earlyAccess, isAdminOrStaff }}>
       <div className={`screen${fading ? " fade-out" : ""}`}>
         <Routes>
           <Route path="/" element={<HomePage />} />

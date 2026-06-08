@@ -49,7 +49,7 @@ interface Pad {
   photoUrl: string;
   auto_approve: boolean;
   // Display only
-  status: "active" | "paused" | "pending";
+  status: "active" | "paused" | "pending" | "archived";
   pausedUntil?: number | null; // unix ms; null/undefined = indefinite
   since: string;
   bookings: number;
@@ -64,7 +64,7 @@ const MOCK_PADS: Pad[] = [
   {
     id: 1,
     address: "142 Maple Street", city: "Austin, TX", type: "Driveway", spotCount: 1,
-    nickname: "Front driveway", price: 4, auto_approve: false,
+    nickname: "Front driveway", price: 4, auto_approve: true,
     description: "Easy-access driveway right off the main road. Great for downtown commuters.",
     services: ["Lighting at night", "24/7 access"],
     photoUrl: "https://images.unsplash.com/photo-1590674899484-d5640e854abe?w=600&q=70",
@@ -73,7 +73,7 @@ const MOCK_PADS: Pad[] = [
   {
     id: 2,
     address: "880 Oak Lane", city: "Austin, TX", type: "Driveway", spotCount: 2,
-    nickname: "Side gravel pad", price: 3, auto_approve: false,
+    nickname: "Side gravel pad", price: 3, auto_approve: true,
     description: "Two-car gravel pad next to the house. Quiet residential street.",
     services: ["Wide spot", "Surface paved"],
     photoUrl: "https://images.unsplash.com/photo-1448630360428-65456885c650?w=600&q=70",
@@ -82,13 +82,22 @@ const MOCK_PADS: Pad[] = [
 ];
 
 function StatusPill({ pad }: { pad: Pad }) {
+  if (pad.status === "archived") {
+    return (
+      <div style={{
+        background: "rgba(100,100,120,0.18)", border: "1px solid rgba(150,150,170,0.30)",
+        borderRadius: 20, padding: "4px 10px", fontSize: 10, fontWeight: 800,
+        color: "rgba(200,200,220,0.7)", letterSpacing: 0.5, textTransform: "uppercase",
+      }}>
+        Archived
+      </div>
+    );
+  }
   if (pad.status === "pending") {
     return (
       <div style={{
-        background: "rgba(251,191,36,0.15)",
-        border: "1px solid rgba(251,191,36,0.35)",
-        borderRadius: 20, padding: "4px 10px",
-        fontSize: 10, fontWeight: 800,
+        background: "rgba(251,191,36,0.15)", border: "1px solid rgba(251,191,36,0.35)",
+        borderRadius: 20, padding: "4px 10px", fontSize: 10, fontWeight: 800,
         color: "#f59e0b", letterSpacing: 0.5, textTransform: "uppercase",
       }}>
         ● Pending review
@@ -101,10 +110,8 @@ function StatusPill({ pad }: { pad: Pad }) {
     <div style={{
       background: active ? "rgba(141,214,63,0.18)" : "rgba(255,200,0,0.18)",
       border: `1px solid ${active ? "rgba(141,214,63,0.40)" : "rgba(255,200,0,0.35)"}`,
-      borderRadius: 20, padding: "4px 10px",
-      fontSize: 10, fontWeight: 800,
-      color: active ? "#5a9e1a" : "#a07800",
-      letterSpacing: 0.5, textTransform: "uppercase",
+      borderRadius: 20, padding: "4px 10px", fontSize: 10, fontWeight: 800,
+      color: active ? "#5a9e1a" : "#a07800", letterSpacing: 0.5, textTransform: "uppercase",
     }}>
       {active ? "● Active" : tonightLabel}
     </div>
@@ -191,8 +198,8 @@ export default function PadDashboardPage() {
               description: String(s.description || ""),
               services: Array.isArray(s.services) ? s.services as string[] : [],
               photoUrl: String(s.photo_url || ""),
-              auto_approve: !!((s.spot_data as Record<string, unknown>)?.auto_approve),
-              status: s.status === "active" ? "active" : s.status === "paused" ? "paused" : "pending",
+              auto_approve: (s.spot_data as any)?.auto_approve !== false,
+              status: s.status === "active" ? "active" : s.status === "paused" ? "paused" : s.status === "archived" ? "archived" : "pending",
               pausedUntil: null,
               since: s.created_at ? new Date(String(s.created_at)).toLocaleDateString(undefined, { month: "short", year: "numeric" }) : "—",
               bookings: 0,
@@ -240,6 +247,13 @@ export default function PadDashboardPage() {
 
   // Spot draw modal
   const [drawModalOpen, setDrawModalOpen] = useState(false);
+
+  // Archive confirm
+  const [archiveConfirmId, setArchiveConfirmId] = useState<number | null>(null);
+  const [archiving, setArchiving] = useState(false);
+
+  // List tab: "active" | "archived"
+  const [listTab, setListTab] = useState<"active" | "archived">("active");
 
   async function saveEdit() {
     if (!openPad || !editDraft) return;
@@ -381,11 +395,32 @@ export default function PadDashboardPage() {
   const openPad = openPadId == null ? null : pads.find(p => p.id === openPadId) || null;
   const pendingPad = pendingPauseId == null ? null : pads.find(p => p.id === pendingPauseId) || null;
 
-  // Sort: active → pending → paused
-  const sortedPads = [...pads].sort((a, b) => {
+  // Sort: active → pending → paused (archived excluded from active tab)
+  const activePads   = pads.filter(p => p.status !== "archived");
+  const archivedPads = pads.filter(p => p.status === "archived");
+  const sortedPads = [...activePads].sort((a, b) => {
     const order: Record<string, number> = { active: 0, pending: 1, paused: 2 };
     return (order[a.status] ?? 1) - (order[b.status] ?? 1);
   });
+
+  async function archivePad(id: number) {
+    const pad = pads.find(p => p.id === id);
+    if (!pad?.spotId) return;
+    setArchiving(true);
+    try {
+      await fetch(`/api/spots/${pad.spotId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "archived" }),
+      });
+      updatePad(id, { status: "archived" });
+      setOpenPadId(null);
+      setEditMode(false);
+      setEditDraft(null);
+    } catch {}
+    setArchiving(false);
+    setArchiveConfirmId(null);
+  }
 
   function updatePad(id: number, patch: Partial<Pad>) {
     setPads(prev => prev.map(p => p.id === id ? { ...p, ...patch } : p));
@@ -543,11 +578,11 @@ export default function PadDashboardPage() {
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <div style={{ width: 3, height: 16, borderRadius: 2, background: GREEN }} />
                   <span style={{ fontSize: 12, fontWeight: 800, color: NAVY, letterSpacing: 0.3, textTransform: "uppercase" }}>Your Pads</span>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(14,31,64,0.45)", background: "rgba(14,31,64,0.08)", borderRadius: 100, padding: "2px 7px" }}>{pads.length}</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(14,31,64,0.45)", background: "rgba(14,31,64,0.08)", borderRadius: 100, padding: "2px 7px" }}>{activePads.length}</span>
                 </div>
                 <div style={{ display: "flex", gap: 14 }}>
                   {[
-                    { l: "Active", v: `${pads.filter(p => p.status === "active").length}/${pads.length}` },
+                    { l: "Active", v: `${pads.filter(p => p.status === "active").length}/${activePads.length}` },
                     { l: "Bookings", v: String(listerBookings.length) },
                   ].map(s => (
                     <div key={s.l} style={{ textAlign: "right" }}>
@@ -558,29 +593,54 @@ export default function PadDashboardPage() {
                 </div>
               </div>
 
+              {/* Tabs */}
+              <div style={{ display: "flex", gap: 4, marginBottom: 14, background: "rgba(14,31,64,0.06)", borderRadius: 12, padding: 4 }}>
+                {(["active", "archived"] as const).map(tab => (
+                  <button key={tab} onClick={() => setListTab(tab)} style={{
+                    flex: 1, padding: "8px 0", borderRadius: 9,
+                    background: listTab === tab ? "#fff" : "transparent",
+                    border: "none",
+                    color: listTab === tab ? NAVY : "rgba(14,31,64,0.40)",
+                    fontSize: 12, fontWeight: 800, cursor: "pointer",
+                    fontFamily: "'DM Sans',sans-serif", letterSpacing: 0.2,
+                    boxShadow: listTab === tab ? "0 1px 4px rgba(14,31,64,0.12)" : "none",
+                    transition: "all 0.15s",
+                    textTransform: "capitalize",
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+                  }}>
+                    {tab === "active" ? "Active" : "Archived"}
+                    {tab === "archived" && archivedPads.length > 0 && (
+                      <span style={{ fontSize: 9, fontWeight: 800, background: "rgba(14,31,64,0.12)", borderRadius: 100, padding: "1px 5px", color: "rgba(14,31,64,0.55)" }}>
+                        {archivedPads.length}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+
               {/* Pad cards */}
-              {sortedPads.length === 0 ? (
+              {(listTab === "active" ? sortedPads : archivedPads).length === 0 ? (
                 <div style={{ background: "rgba(14,31,64,0.04)", borderRadius: 16, padding: "28px 20px", textAlign: "center", border: "1px dashed rgba(14,31,64,0.18)", color: "rgba(14,31,64,0.35)", fontSize: 13 }}>
-                  No pads listed yet.
+                  {listTab === "active" ? "No pads listed yet." : "No archived pads."}
                 </div>
               ) : (
-                sortedPads.map(pad => (
+                (listTab === "active" ? sortedPads : archivedPads).map(pad => (
                   <div key={pad.id} onClick={() => setOpenPadId(pad.id)} style={{
                     background: "#fff", borderRadius: 18, border: "1px solid rgba(14,31,64,0.10)",
                     overflow: "hidden", marginBottom: 12,
                     boxShadow: "0 2px 12px rgba(14,31,64,0.10)", cursor: "pointer",
-                    opacity: pad.status === "paused" ? 0.72 : 1,
+                    opacity: pad.status === "paused" || pad.status === "archived" ? 0.72 : 1,
                   }}>
                     <div style={{
                       height: 120,
                       background: `url(${pad.photoUrl}) center/cover, linear-gradient(135deg,rgba(141,214,63,0.18),rgba(14,31,64,0.12))`,
                       position: "relative",
-                      filter: pad.status === "paused" ? "grayscale(0.4)" : "none",
+                      filter: pad.status === "paused" || pad.status === "archived" ? "grayscale(0.55)" : "none",
                     }}>
                       <div style={{ position: "absolute", top: 10, right: 10 }}>
                         <StatusPill pad={pad} />
                       </div>
-                      {pad.status !== "pending" && (
+                      {pad.status !== "pending" && pad.status !== "archived" && (
                         <div style={{ position: "absolute", top: 10, left: 10, display: "flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.92)", borderRadius: 100, padding: "5px 8px 5px 10px", boxShadow: "0 2px 6px rgba(0,0,0,0.22)" }}>
                           <span style={{ fontSize: 10, fontWeight: 700, color: NAVY, letterSpacing: 0.3 }}>
                             {pad.status === "paused" ? "Closed" : "Open"}
@@ -887,6 +947,28 @@ export default function PadDashboardPage() {
                 </button>
               </>
             )}
+
+            {/* Archive */}
+            {!editMode && openPad.status !== "archived" && (
+              <div style={{ marginTop: 32, paddingTop: 20, borderTop: "1px solid rgba(255,255,255,0.07)" }}>
+                <button
+                  onClick={() => setArchiveConfirmId(openPad.id)}
+                  style={{
+                    width: "100%", padding: "13px 0", borderRadius: 14,
+                    background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.22)",
+                    color: "rgba(239,68,68,0.75)", fontSize: 13.5, fontWeight: 700,
+                    cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>
+                  Archive this pad
+                </button>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.28)", textAlign: "center", marginTop: 8, lineHeight: 1.5 }}>
+                  Hides from customers &amp; map. Stays in your account.
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -1063,6 +1145,62 @@ export default function PadDashboardPage() {
       )}
 
     </div>
+
+    {/* ── Archive confirmation sheet ── */}
+    {archiveConfirmId !== null && (() => {
+      const pad = pads.find(p => p.id === archiveConfirmId);
+      return (
+        <div style={{ position: "fixed", inset: 0, zIndex: 9000, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+          <div onClick={() => setArchiveConfirmId(null)} style={{ position: "absolute", inset: 0, background: "rgba(14,31,64,0.55)", backdropFilter: "blur(4px)" }} />
+          <div style={{
+            position: "relative", background: "#fff", borderRadius: "22px 22px 0 0",
+            padding: "24px 20px 40px", width: "100%", maxWidth: 430, zIndex: 1,
+          }}>
+            <div style={{ textAlign: "center", marginBottom: 20 }}>
+              <div style={{
+                width: 48, height: 48, borderRadius: "50%",
+                background: "rgba(239,68,68,0.10)", display: "flex", alignItems: "center",
+                justifyContent: "center", margin: "0 auto 14px",
+              }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="rgba(239,68,68,0.8)" strokeWidth="2" strokeLinecap="round">
+                  <path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/>
+                </svg>
+              </div>
+              <div style={{ fontSize: 17, fontWeight: 800, color: NAVY, marginBottom: 8 }}>
+                Archive "{pad?.nickname || pad?.address}"?
+              </div>
+              <div style={{ fontSize: 13, color: "rgba(14,31,64,0.55)", lineHeight: 1.6 }}>
+                This pad will be hidden from customers and the map immediately. You can view it in your Archived tab. This action cannot be undone from the app.
+              </div>
+            </div>
+            <button
+              onClick={() => archivePad(archiveConfirmId)}
+              disabled={archiving}
+              style={{
+                width: "100%", padding: "14px 0", borderRadius: 14,
+                background: archiving ? "rgba(239,68,68,0.35)" : "rgba(239,68,68,0.85)",
+                border: "none", color: "#fff", fontSize: 15, fontWeight: 800,
+                cursor: archiving ? "default" : "pointer",
+                fontFamily: "'DM Sans',sans-serif", marginBottom: 10,
+              }}
+            >
+              {archiving ? "Archiving…" : "Yes, archive this pad"}
+            </button>
+            <button
+              onClick={() => setArchiveConfirmId(null)}
+              style={{
+                width: "100%", padding: "12px 0", borderRadius: 100,
+                background: "transparent", border: "none",
+                color: "rgba(14,31,64,0.55)", fontSize: 13, fontWeight: 700,
+                cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      );
+    })()}
 
     {/* ── Spot draw modal ── */}
     {drawModalOpen && openPad && openPad.spotId && user && (

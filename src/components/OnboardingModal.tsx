@@ -120,7 +120,7 @@ export default function OnboardingModal() {
     <div
       style={{
         position: "absolute", inset: 0, zIndex: 200,
-        background: "rgba(0,0,0,0.78)",
+        background: "rgba(8,15,35,0.96)",
         display: "flex", flexDirection: "column",
         alignItems: "center", justifyContent: "center",
         fontFamily: "'DM Sans', sans-serif",

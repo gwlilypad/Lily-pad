@@ -28,7 +28,7 @@ function AdminSlide({ open }: { open: boolean }) {
   );
 }
 
-const SPLIT = 52;
+const SPLIT = 58;
 const CONNECT_THRESHOLD = 0.72;
 
 export default function HomePage() {
@@ -167,19 +167,21 @@ export default function HomePage() {
             WebkitUserSelect: "none",
           }}
         >
-          <img src={lilypadLogo} alt="Lily Pad" style={{ width: "80%", height: "auto", display: "block", pointerEvents: "none" }} />
+          <img src={lilypadLogo} alt="Lily Pad" style={{ width: "100%", maxHeight: "22vh", objectFit: "contain", display: "block", pointerEvents: "none" }} />
         </div>
 
-        {/* Centre content: headline + button — anchored fixed distance above FOR DRIVERS */}
+        {/* Spacer pushes content down */}
+        <div style={{ flex: 1 }} />
+
+        {/* Centre content: headline + button + sign in */}
         <div style={{
-          position: "absolute",
-          bottom: 78,
-          left: 24, right: 24,
+          width: "100%", padding: "0 24px 14px",
           display: "flex", flexDirection: "column",
           alignItems: "center",
+          boxSizing: "border-box",
         }}>
           <h1 style={{
-            textAlign: "center", margin: "0 0 16px",
+            textAlign: "center", margin: "0 0 14px",
             fontSize: 20, fontWeight: 800, color: "#fff",
             lineHeight: 1.2, letterSpacing: "-0.03em", width: "100%",
           }}>
@@ -203,7 +205,7 @@ export default function HomePage() {
             <div
               onClick={() => navigate("/signin")}
               style={{
-                marginTop: 14, cursor: "pointer",
+                marginTop: 12, cursor: "pointer",
                 fontSize: 13, fontWeight: 600,
                 color: "rgba(255,255,255,0.60)",
                 letterSpacing: 0.1,
@@ -217,10 +219,10 @@ export default function HomePage() {
           )}
         </div>
 
-        {/* FOR DRIVERS — same distance from dividing line as FOR HOSTS is on the other side */}
+        {/* FOR DRIVERS label */}
         <p style={{
-          position: "absolute", bottom: 55, left: 0, right: 0,
-          margin: 0, fontSize: 10, fontWeight: 700,
+          flex: "0 0 auto",
+          margin: "0 0 12px", fontSize: 10, fontWeight: 700,
           letterSpacing: "0.22em", color: "rgba(255,255,255,0.30)",
           textTransform: "uppercase", textAlign: "center",
         }}>

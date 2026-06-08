@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/context/AuthContext";
+import OnboardingModal from "@/components/OnboardingModal";
 
 export default function PadTypePage() {
   const navigate = useNavigate();
@@ -8,6 +9,7 @@ export default function PadTypePage() {
   const { user } = useAuth();
   return (
     <div className="page active">
+      <OnboardingModal />
       <div className="s-header" style={{ padding: "44px 28px 28px" }}>
         <p className="s-step">Get started</p>
         <h1 className="s-title">What type of pad do you have?</h1>

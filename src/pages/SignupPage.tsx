@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
+import OnboardingModal from "@/components/OnboardingModal";
 import { useAuth } from "@/context/AuthContext";
 import SharedHeader from "@/components/SharedHeader";
 import NavBar from "@/components/NavBar";
@@ -184,6 +185,7 @@ export default function SignupPage() {
 
   return (
     <div className="page active">
+      <OnboardingModal />
       <SharedHeader
         step="Step 1 of 6"
         title="Create your account."

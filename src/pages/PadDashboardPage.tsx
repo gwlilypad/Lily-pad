@@ -477,7 +477,7 @@ export default function PadDashboardPage() {
     <div className="page active" style={{ background: NAVY, display: "flex", flexDirection: "column", fontFamily: "'DM Sans',sans-serif" }}>
 
       {/* Header */}
-      <div style={{ flexShrink: 0, padding: "52px 20px 22px", background: NAVY }}>
+      <div style={{ flexShrink: 0, padding: "52px 20px 16px", background: NAVY }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <button
             onClick={() => openPad ? (setOpenPadId(null), setEditMode(false), setEditDraft(null)) : navigate(-1)}
@@ -500,8 +500,20 @@ export default function PadDashboardPage() {
         </div>
       </div>
 
+      {/* Hero text — only shown on list view */}
+      {!openPad && (
+        <div style={{ flexShrink: 0, padding: "8px 20px 28px", background: NAVY }}>
+          <div style={{ fontSize: 14, color: "rgba(255,255,255,0.52)", lineHeight: 1.55 }}>
+            This is where you manage and monitor all of your Lily Pad listings.
+          </div>
+        </div>
+      )}
+
       {/* Body */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "20px 16px 40px" }}>
+      <div style={!openPad
+        ? { flex: 1, overflowY: "auto", background: "#fff", borderRadius: "28px 28px 0 0", padding: "24px 16px 40px" }
+        : { flex: 1, overflowY: "auto", padding: "20px 16px 40px" }
+      }>
 
         {loadingPads ? (
           <div style={{ textAlign: "center", padding: "80px 0" }}>
@@ -517,8 +529,8 @@ export default function PadDashboardPage() {
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <div style={{ width: 3, height: 16, borderRadius: 2, background: GREEN }} />
-                  <span style={{ fontSize: 12, fontWeight: 800, color: "#fff", letterSpacing: 0.3, textTransform: "uppercase" }}>Your Pads</span>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.45)", background: "rgba(255,255,255,0.10)", borderRadius: 100, padding: "2px 7px" }}>{pads.length}</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: NAVY, letterSpacing: 0.3, textTransform: "uppercase" }}>Your Pads</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(14,31,64,0.45)", background: "rgba(14,31,64,0.08)", borderRadius: 100, padding: "2px 7px" }}>{pads.length}</span>
                 </div>
                 <div style={{ display: "flex", gap: 14 }}>
                   {[
@@ -526,24 +538,24 @@ export default function PadDashboardPage() {
                     { l: "Bookings", v: String(listerBookings.length) },
                   ].map(s => (
                     <div key={s.l} style={{ textAlign: "right" }}>
-                      <div style={{ fontSize: 13, fontWeight: 800, color: "#fff", letterSpacing: -0.3, lineHeight: 1 }}>{s.v}</div>
-                      <div style={{ fontSize: 9.5, color: "rgba(255,255,255,0.38)", fontWeight: 600, marginTop: 1 }}>{s.l}</div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: NAVY, letterSpacing: -0.3, lineHeight: 1 }}>{s.v}</div>
+                      <div style={{ fontSize: 9.5, color: "rgba(14,31,64,0.38)", fontWeight: 600, marginTop: 1 }}>{s.l}</div>
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* Pad cards — white on dark, they pop */}
+              {/* Pad cards */}
               {sortedPads.length === 0 ? (
-                <div style={{ background: "rgba(255,255,255,0.05)", borderRadius: 16, padding: "28px 20px", textAlign: "center", border: "1px dashed rgba(255,255,255,0.14)", color: "rgba(255,255,255,0.35)", fontSize: 13 }}>
+                <div style={{ background: "rgba(14,31,64,0.04)", borderRadius: 16, padding: "28px 20px", textAlign: "center", border: "1px dashed rgba(14,31,64,0.18)", color: "rgba(14,31,64,0.35)", fontSize: 13 }}>
                   No pads listed yet.
                 </div>
               ) : (
                 sortedPads.map(pad => (
                   <div key={pad.id} onClick={() => setOpenPadId(pad.id)} style={{
-                    background: "#fff", borderRadius: 18, border: "1px solid rgba(255,255,255,0.10)",
+                    background: "#fff", borderRadius: 18, border: "1px solid rgba(14,31,64,0.10)",
                     overflow: "hidden", marginBottom: 12,
-                    boxShadow: "0 4px 20px rgba(0,0,0,0.28)", cursor: "pointer",
+                    boxShadow: "0 2px 12px rgba(14,31,64,0.10)", cursor: "pointer",
                     opacity: pad.status === "paused" ? 0.72 : 1,
                   }}>
                     <div style={{

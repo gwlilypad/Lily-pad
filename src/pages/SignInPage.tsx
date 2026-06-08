@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 
@@ -20,7 +20,7 @@ const lightInput: React.CSSProperties = {
 };
 
 export default function SignInPage() {
-  const { signIn, user } = useAuth();
+  const { signIn } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [email, setEmail] = useState("");
@@ -28,15 +28,6 @@ export default function SignInPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPass, setShowPass] = useState(false);
-  const [awaitingUser, setAwaitingUser] = useState(false);
-
-  // Navigate only once the auth user state has actually propagated
-  useEffect(() => {
-    if (awaitingUser && user) {
-      const redirect = searchParams.get("redirect");
-      navigate(redirect || "/find", { replace: true });
-    }
-  }, [awaitingUser, user]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -44,12 +35,12 @@ export default function SignInPage() {
     setLoading(true);
     setError("");
     const { error: err } = await signIn(email.trim(), password);
+    setLoading(false);
     if (err) {
-      setLoading(false);
       setError(err.includes("Invalid") ? "Incorrect email or password." : err);
     } else {
-      // Keep spinner showing — wait for user state to confirm before navigating
-      setAwaitingUser(true);
+      const redirect = searchParams.get("redirect");
+      navigate(redirect || "/find", { replace: true });
     }
   }
 

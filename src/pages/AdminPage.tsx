@@ -110,27 +110,28 @@ function StatCard({
 }) {
   return (
     <div onClick={onClick} style={{
-      background: "#142A52",
+      background: "#fff",
       borderRadius: 18,
       padding: "16px 18px",
-      boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 14px rgba(0,0,0,0.30)",
+      boxShadow: "0 2px 12px rgba(14,31,64,0.08)",
+      border: "1px solid rgba(14,31,64,0.07)",
       display: "flex",
       flexDirection: "column",
       gap: 4,
       cursor: onClick ? "pointer" : "default",
     }}>
-      <p style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.10em", textTransform: "uppercase", margin: 0 }}>{label}</p>
-      <p style={{ fontSize: 26, fontWeight: 800, color: "#fff", margin: 0, letterSpacing: "-0.03em", lineHeight: 1.1 }}>{value}</p>
+      <p style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(14,31,64,0.45)", letterSpacing: "0.10em", textTransform: "uppercase", margin: 0 }}>{label}</p>
+      <p style={{ fontSize: 26, fontWeight: 800, color: NAVY, margin: 0, letterSpacing: "-0.03em", lineHeight: 1.1 }}>{value}</p>
       {sub && <p style={{ fontSize: 11, color: GREEN, fontWeight: 600, margin: 0 }}>{sub}</p>}
       {breakdown && (
-        <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.06)", display: "flex", flexDirection: "column", gap: 5 }}>
+        <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(14,31,64,0.08)", display: "flex", flexDirection: "column", gap: 5 }}>
           {breakdown.map((b, i) => (
             <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
                 <span style={{ width: 6, height: 6, borderRadius: "50%", background: b.dot || GREEN, flexShrink: 0 }} />
-                <span style={{ fontSize: 10.5, color: "rgba(255,255,255,0.70)", fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{b.label}</span>
+                <span style={{ fontSize: 10.5, color: "rgba(14,31,64,0.55)", fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{b.label}</span>
               </div>
-              <span style={{ fontSize: 12, fontWeight: 700, color: "#fff", flexShrink: 0 }}>{b.value}</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: NAVY, flexShrink: 0 }}>{b.value}</span>
             </div>
           ))}
         </div>
@@ -162,8 +163,8 @@ function EditableField({ label, value, onChange }: { label: string; value: strin
   useEffect(() => { setDraft(value); }, [value]);
 
   return (
-    <div style={{ display: "flex", alignItems: "center", padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,0.06)", gap: 10 }}>
-      <span style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.52)", letterSpacing: "0.04em", width: 88, flexShrink: 0, textTransform: "uppercase" }}>{label}</span>
+    <div style={{ display: "flex", alignItems: "center", padding: "12px 0", borderBottom: "1px solid rgba(14,31,64,0.07)", gap: 10 }}>
+      <span style={{ fontSize: 11, fontWeight: 600, color: "rgba(14,31,64,0.45)", letterSpacing: "0.04em", width: 88, flexShrink: 0, textTransform: "uppercase" }}>{label}</span>
       {editing ? (
         <>
           <input
@@ -171,14 +172,14 @@ function EditableField({ label, value, onChange }: { label: string; value: strin
             onChange={e => setDraft(e.target.value)}
             autoFocus
             onKeyDown={e => { if (e.key === "Enter") { onChange(draft); setEditing(false); } if (e.key === "Escape") { setDraft(value); setEditing(false); } }}
-            style={{ flex: 1, padding: "6px 10px", borderRadius: 8, border: `1.5px solid ${NAVY}`, background: "#142A52", fontSize: 13.5, color: "#fff", fontFamily: '"DM Sans",sans-serif', outline: "none", minWidth: 0 }}
+            style={{ flex: 1, padding: "6px 10px", borderRadius: 8, border: `1.5px solid ${NAVY}`, background: "#f0f3f8", fontSize: 13.5, color: NAVY, fontFamily: '"DM Sans",sans-serif', outline: "none", minWidth: 0 }}
           />
           <button onClick={() => { onChange(draft); setEditing(false); }} style={{ background: GREEN, color: NAVY, border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 11, fontWeight: 800, cursor: "pointer", fontFamily: '"DM Sans",sans-serif', flexShrink: 0 }}>Save</button>
         </>
       ) : (
         <>
-          <span style={{ flex: 1, fontSize: 13.5, color: "#fff", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value || <span style={{ color: "rgba(255,255,255,0.30)" }}>— not set —</span>}</span>
-          <button onClick={() => setEditing(true)} style={{ background: "rgba(255,255,255,0.08)", color: "#fff", border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: '"DM Sans",sans-serif', flexShrink: 0 }}>Edit</button>
+          <span style={{ flex: 1, fontSize: 13.5, color: NAVY, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value || <span style={{ color: "rgba(14,31,64,0.28)" }}>— not set —</span>}</span>
+          <button onClick={() => setEditing(true)} style={{ background: "rgba(14,31,64,0.07)", color: NAVY, border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: '"DM Sans",sans-serif', flexShrink: 0 }}>Edit</button>
         </>
       )}
     </div>
@@ -188,7 +189,7 @@ function EditableField({ label, value, onChange }: { label: string; value: strin
 // ── Section header ──────────────────────────────────────────────────────────
 function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
-    <p style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.12em", textTransform: "uppercase", margin: "0 0 8px" }}>{children}</p>
+    <p style={{ fontSize: 11, fontWeight: 700, color: "rgba(14,31,64,0.45)", letterSpacing: "0.12em", textTransform: "uppercase", margin: "0 0 8px" }}>{children}</p>
   );
 }
 
@@ -527,7 +528,7 @@ function PadPhotoCard({
   }
 
   return (
-    <div style={{ background: "#142A52", borderRadius: 14, overflow: "hidden", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 10px rgba(0,0,0,0.28)" }}>
+    <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 12px rgba(14,31,64,0.09)", border: "1px solid rgba(14,31,64,0.08)" }}>
       <input ref={fileRef} type="file" accept="image/*" onChange={handleFile} style={{ display: "none" }} />
       <div style={{ position: "relative", width: "100%", aspectRatio: "10/7", background: "#000" }}>
         <img src={pad.photoUrl} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
@@ -549,25 +550,25 @@ function PadPhotoCard({
                 onChange={e => setDraftName(e.target.value)}
                 autoFocus
                 onKeyDown={e => { if (e.key === "Enter") { onRename(draftName.trim() || pad.name); setRenaming(false); } if (e.key === "Escape") { setDraftName(pad.name); setRenaming(false); } }}
-                style={{ flex: 1, padding: "5px 8px", borderRadius: 8, border: `1.5px solid ${NAVY}`, background: "#142A52", fontSize: 13, color: "#fff", fontFamily: '"DM Sans",sans-serif', outline: "none", minWidth: 0 }}
+                style={{ flex: 1, padding: "5px 8px", borderRadius: 8, border: `1.5px solid ${NAVY}`, background: "#f0f3f8", fontSize: 13, color: NAVY, fontFamily: '"DM Sans",sans-serif', outline: "none", minWidth: 0 }}
               />
               <button onClick={() => { onRename(draftName.trim() || pad.name); setRenaming(false); }} style={{ background: GREEN, color: NAVY, border: "none", borderRadius: 8, padding: "5px 10px", fontSize: 11, fontWeight: 800, cursor: "pointer", fontFamily: '"DM Sans",sans-serif' }}>Save</button>
             </>
           ) : (
             <>
-              <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{pad.name}</span>
-              <button onClick={() => setRenaming(true)} style={{ background: "transparent", color: "rgba(255,255,255,0.62)", border: "none", padding: 4, cursor: "pointer" }} title="Rename pad">
+              <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{pad.name}</span>
+              <button onClick={() => setRenaming(true)} style={{ background: "transparent", color: "rgba(14,31,64,0.40)", border: "none", padding: 4, cursor: "pointer" }} title="Rename pad">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
               </button>
             </>
           )}
         </div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          <button onClick={onEdit} style={{ background: "rgba(255,255,255,0.08)", color: "#fff", border: "none", borderRadius: 8, padding: "6px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: '"DM Sans",sans-serif', display: "flex", alignItems: "center", gap: 4 }}>
+          <button onClick={onEdit} style={{ background: "rgba(14,31,64,0.07)", color: NAVY, border: "none", borderRadius: 8, padding: "6px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: '"DM Sans",sans-serif', display: "flex", alignItems: "center", gap: 4 }}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
             Redraw spot
           </button>
-          <button onClick={pickFile} style={{ background: "rgba(255,255,255,0.08)", color: "#fff", border: "none", borderRadius: 8, padding: "6px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: '"DM Sans",sans-serif', display: "flex", alignItems: "center", gap: 4 }}>
+          <button onClick={pickFile} style={{ background: "rgba(14,31,64,0.07)", color: NAVY, border: "none", borderRadius: 8, padding: "6px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: '"DM Sans",sans-serif', display: "flex", alignItems: "center", gap: 4 }}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
             Replace photo
           </button>
@@ -585,16 +586,16 @@ function PadPhotoCard({
 function GrowthChart() {
   return (
     <div style={{
-      background: "#142A52", borderRadius: 18, padding: "28px 20px",
-      boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 14px rgba(0,0,0,0.30)",
+      background: "#fff", borderRadius: 18, padding: "28px 20px",
+      boxShadow: "0 2px 12px rgba(14,31,64,0.08)", border: "1px solid rgba(14,31,64,0.07)",
       display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
       gap: 8, minHeight: 160, textAlign: "center",
     }}>
-      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.22)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="rgba(14,31,64,0.18)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
       </svg>
-      <p style={{ fontSize: 14, fontWeight: 700, color: "rgba(255,255,255,0.55)", margin: 0 }}>Financial Analytics</p>
-      <p style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", margin: 0, maxWidth: 240 }}>Revenue trends will appear here once real bookings are processed</p>
+      <p style={{ fontSize: 14, fontWeight: 700, color: "rgba(14,31,64,0.45)", margin: 0 }}>Financial Analytics</p>
+      <p style={{ fontSize: 12, color: "rgba(14,31,64,0.30)", margin: 0, maxWidth: 240 }}>Revenue trends will appear here once real bookings are processed</p>
     </div>
   );
 }
@@ -1512,7 +1513,7 @@ export default function AdminPage() {
   const hostCount = users.filter(u => u.type === "host" || u.type === "both").length;
 
   return (
-    <div className="page active" style={{ display: "flex", flexDirection: "column", background: "#08152F" }}>
+    <div className="page active" style={{ display: "flex", flexDirection: "column", background: NAVY }}>
 
       {/* ── Header ── */}
       <div style={{
@@ -1897,13 +1898,13 @@ export default function AdminPage() {
         </>
       ) : view === "dashboard" ? (
         /* ── DASHBOARD ── */
-        <div style={{ flex: 1, overflowY: "auto", padding: "24px 20px 32px", display: "flex", flexDirection: "column", gap: 20 }}>
+        <div style={{ flex: 1, overflowY: "auto", background: "#f5f7fa", borderRadius: "28px 28px 0 0", padding: "24px 20px 32px", display: "flex", flexDirection: "column", gap: 16 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div>
-              <p style={{ fontSize: 11, fontWeight: 700, color: role === "staff" ? "rgba(255,255,255,0.55)" : GREEN, letterSpacing: "0.14em", textTransform: "uppercase", margin: 0 }}>{role === "staff" ? "Staff" : "Admin"}</p>
-              <p style={{ fontSize: 18, fontWeight: 800, color: "#fff", margin: "2px 0 0", letterSpacing: "-0.02em" }}>{(email.split("@")[0]) || (role === "staff" ? "Staff" : "Admin")}</p>
+              <p style={{ fontSize: 11, fontWeight: 700, color: role === "staff" ? "rgba(14,31,64,0.45)" : GREEN, letterSpacing: "0.14em", textTransform: "uppercase", margin: 0 }}>{role === "staff" ? "Staff" : "Admin"}</p>
+              <p style={{ fontSize: 18, fontWeight: 800, color: NAVY, margin: "2px 0 0", letterSpacing: "-0.02em" }}>{(email.split("@")[0]) || (role === "staff" ? "Staff" : "Admin")}</p>
             </div>
-            <button onClick={handleSignOut} style={{ background: "rgba(255,255,255,0.08)", border: "none", borderRadius: 100, padding: "8px 16px", fontSize: 12, fontWeight: 600, color: "#fff", cursor: "pointer", fontFamily: '"DM Sans", sans-serif' }}>Sign Out</button>
+            <button onClick={handleSignOut} style={{ background: "#fff", border: "1.5px solid rgba(14,31,64,0.15)", borderRadius: 100, padding: "8px 16px", fontSize: 12, fontWeight: 700, color: NAVY, cursor: "pointer", fontFamily: '"DM Sans", sans-serif' }}>Sign out</button>
           </div>
 
           {/* Financial growth chart — admin only */}
@@ -1927,51 +1928,51 @@ export default function AdminPage() {
 
           {/* User management entry */}
           <div onClick={() => setView("users")} style={{
-            background: "#142A52", borderRadius: 18, padding: "16px 18px",
-            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 14px rgba(0,0,0,0.30)",
+            background: "#fff", borderRadius: 18, padding: "16px 18px",
+            boxShadow: "0 2px 12px rgba(14,31,64,0.08)",
             display: "flex", alignItems: "center", gap: 14, cursor: "pointer",
-            border: `1px solid rgba(141,214,63,0.18)`,
+            border: "1px solid rgba(14,31,64,0.07)",
           }}>
-            <div style={{ width: 42, height: 42, borderRadius: 12, background: `rgba(141,214,63,0.14)`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <div style={{ width: 42, height: 42, borderRadius: 100, background: `rgba(141,214,63,0.14)`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth="2" strokeLinecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ fontSize: 14, fontWeight: 700, color: "#fff", margin: 0 }}>User Management</p>
-              <p style={{ fontSize: 11.5, color: "rgba(255,255,255,0.62)", margin: "2px 0 0" }}>{users.length} accounts · Master controls</p>
+              <p style={{ fontSize: 14, fontWeight: 700, color: NAVY, margin: 0 }}>User Management</p>
+              <p style={{ fontSize: 11.5, color: "rgba(14,31,64,0.50)", margin: "2px 0 0" }}>{users.length} accounts · Master controls</p>
             </div>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.50)" strokeWidth="2.5"><path d="m9 18 6-6-6-6"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(14,31,64,0.35)" strokeWidth="2.5"><path d="m9 18 6-6-6-6"/></svg>
           </div>
 
           {/* ── Invite Staff — admin only ── */}
           {role === "admin" && (
-            <div style={{ background: "#142A52", borderRadius: 18, boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 14px rgba(0,0,0,0.30)", border: `1px solid rgba(141,214,63,0.18)`, overflow: "hidden" }}>
+            <div style={{ background: "#fff", borderRadius: 18, boxShadow: "0 2px 12px rgba(14,31,64,0.08)", border: "1px solid rgba(14,31,64,0.07)", overflow: "hidden" }}>
               {/* Header row — always visible, click to expand */}
               <div
                 onClick={() => { setInviteCardOpen(o => !o); setInviteCardError(""); setInviteCardSuccess(null); }}
                 style={{ padding: "16px 18px", display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }}
               >
-                <div style={{ width: 42, height: 42, borderRadius: 12, background: "rgba(141,214,63,0.14)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <div style={{ width: 42, height: 42, borderRadius: 100, background: "rgba(141,214,63,0.14)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontSize: 14, fontWeight: 700, color: "#fff", margin: 0 }}>Invite Staff</p>
-                  <p style={{ fontSize: 11.5, color: "rgba(255,255,255,0.62)", margin: "2px 0 0" }}>Add a team member · sends invitation email</p>
+                  <p style={{ fontSize: 14, fontWeight: 700, color: NAVY, margin: 0 }}>Invite Staff</p>
+                  <p style={{ fontSize: 11.5, color: "rgba(14,31,64,0.50)", margin: "2px 0 0" }}>Add a team member · sends invitation email</p>
                 </div>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.50)" strokeWidth="2.5" style={{ transform: inviteCardOpen ? "rotate(90deg)" : "none", transition: "transform 0.2s" }}><path d="m9 18 6-6-6-6"/></svg>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(14,31,64,0.35)" strokeWidth="2.5" style={{ transform: inviteCardOpen ? "rotate(90deg)" : "none", transition: "transform 0.2s" }}><path d="m9 18 6-6-6-6"/></svg>
               </div>
 
               {/* Expandable form */}
               {inviteCardOpen && (
-                <div style={{ padding: "0 18px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={{ padding: "0 18px 18px", display: "flex", flexDirection: "column", gap: 10, borderTop: "1px solid rgba(14,31,64,0.07)" }}>
                   {inviteCardSuccess ? (
                     <>
-                      <div style={{ background: "rgba(141,214,63,0.10)", border: "1px solid rgba(141,214,63,0.30)", borderRadius: 12, padding: "12px 14px", display: "flex", alignItems: "flex-start", gap: 10 }}>
+                      <div style={{ marginTop: 12, background: "rgba(141,214,63,0.08)", border: "1px solid rgba(141,214,63,0.25)", borderRadius: 12, padding: "12px 14px", display: "flex", alignItems: "flex-start", gap: 10 }}>
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0, marginTop: 1 }}><path d="M20 6L9 17l-5-5"/></svg>
-                        <p style={{ fontSize: 13, color: "rgba(255,255,255,0.85)", margin: 0, lineHeight: 1.5 }}>{inviteCardSuccess}</p>
+                        <p style={{ fontSize: 13, color: NAVY, margin: 0, lineHeight: 1.5 }}>{inviteCardSuccess}</p>
                       </div>
                       <button
                         onClick={() => { setInviteCardSuccess(null); setInviteCardEmail(""); setInviteCardError(""); }}
-                        style={{ width: "100%", padding: "11px", borderRadius: 100, border: "1.5px solid rgba(255,255,255,0.15)", background: "transparent", color: "rgba(255,255,255,0.70)", fontWeight: 700, fontSize: 13, fontFamily: '"DM Sans",sans-serif', cursor: "pointer" }}
+                        style={{ width: "100%", padding: "11px", borderRadius: 100, border: "1.5px solid rgba(14,31,64,0.15)", background: "transparent", color: NAVY, fontWeight: 700, fontSize: 13, fontFamily: '"DM Sans",sans-serif', cursor: "pointer" }}
                       >
                         Invite another
                       </button>
@@ -1979,12 +1980,12 @@ export default function AdminPage() {
                   ) : (
                     <>
                       {/* Role toggle */}
-                      <div style={{ display: "flex", gap: 6, background: "rgba(255,255,255,0.05)", borderRadius: 10, padding: 4 }}>
+                      <div style={{ marginTop: 12, display: "flex", gap: 4, background: "rgba(14,31,64,0.05)", borderRadius: 100, padding: 4 }}>
                         {(["staff", "admin"] as const).map(r => (
                           <button
                             key={r}
                             onClick={() => setInviteCardRole(r)}
-                            style={{ flex: 1, padding: "8px", borderRadius: 8, border: "none", background: inviteCardRole === r ? (r === "admin" ? GREEN : "rgba(255,255,255,0.14)") : "transparent", color: inviteCardRole === r ? (r === "admin" ? NAVY : "#fff") : "rgba(255,255,255,0.45)", fontWeight: 700, fontSize: 12, fontFamily: '"DM Sans",sans-serif', cursor: "pointer", transition: "all 0.15s", textTransform: "capitalize" }}
+                            style={{ flex: 1, padding: "8px", borderRadius: 100, border: "none", background: inviteCardRole === r ? (r === "admin" ? GREEN : NAVY) : "transparent", color: inviteCardRole === r ? (r === "admin" ? NAVY : "#fff") : "rgba(14,31,64,0.45)", fontWeight: 700, fontSize: 12, fontFamily: '"DM Sans",sans-serif', cursor: "pointer", transition: "all 0.15s", textTransform: "capitalize" }}
                           >
                             {r}
                           </button>
@@ -1999,7 +2000,7 @@ export default function AdminPage() {
                         onFocus={() => setInviteCardEmailFocus(true)}
                         onBlur={() => setInviteCardEmailFocus(false)}
                         onKeyDown={e => { if (e.key === "Enter") handleSendInvite(); }}
-                        style={{ width: "100%", padding: "12px 14px", borderRadius: 12, boxSizing: "border-box", background: "rgba(255,255,255,0.05)", color: "#fff", fontSize: 14, fontFamily: '"DM Sans",sans-serif', outline: "none", border: `1.5px solid ${inviteCardError ? "#ef4444" : inviteCardEmailFocus ? GREEN : "rgba(255,255,255,0.12)"}`, transition: "border-color 0.15s" }}
+                        style={{ ...lightInputStyle, borderColor: inviteCardError ? "#ef4444" : inviteCardEmailFocus ? GREEN : "rgba(14,31,64,0.15)" }}
                       />
                       {inviteCardError && <p style={{ color: "#ef4444", fontSize: 11.5, fontWeight: 600, margin: 0 }}>{inviteCardError}</p>}
                       <button
@@ -2019,11 +2020,11 @@ export default function AdminPage() {
           {/* Revenue & Payouts — admin only */}
           {role === "admin" && (
             <div>
-              <p style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.10em", textTransform: "uppercase", margin: "0 0 10px" }}>Revenue & Payouts</p>
-              <div style={{ background: "#142A52", borderRadius: 18, padding: "28px 20px", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 14px rgba(0,0,0,0.30)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 120, textAlign: "center" }}>
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.22)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-                <p style={{ fontSize: 14, fontWeight: 700, color: "rgba(255,255,255,0.55)", margin: 0 }}>Payment Analytics Coming Soon</p>
-                <p style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", margin: 0, maxWidth: 260 }}>Revenue and payout data will appear here once payment processing is configured</p>
+              <p style={{ fontSize: 11, fontWeight: 700, color: "rgba(14,31,64,0.45)", letterSpacing: "0.10em", textTransform: "uppercase", margin: "0 0 10px" }}>Revenue & Payouts</p>
+              <div style={{ background: "#fff", borderRadius: 18, padding: "28px 20px", boxShadow: "0 2px 12px rgba(14,31,64,0.08)", border: "1px solid rgba(14,31,64,0.07)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 120, textAlign: "center" }}>
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="rgba(14,31,64,0.25)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                <p style={{ fontSize: 14, fontWeight: 700, color: "rgba(14,31,64,0.50)", margin: 0 }}>Payment Analytics Coming Soon</p>
+                <p style={{ fontSize: 12, color: "rgba(14,31,64,0.35)", margin: 0, maxWidth: 260 }}>Revenue and payout data will appear here once payment processing is configured</p>
               </div>
             </div>
           )}
@@ -2090,28 +2091,28 @@ export default function AdminPage() {
           if (serviceTab === "email" && selectedEmail) {
             const e = selectedEmail;
             return (
-              <div style={{ flex: 1, overflowY: "auto", padding: "24px 20px 32px", display: "flex", flexDirection: "column", gap: 14 }}>
+              <div style={{ flex: 1, overflowY: "auto", background: "#f5f7fa", borderRadius: "28px 28px 0 0", padding: "24px 20px 32px", display: "flex", flexDirection: "column", gap: 14 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <button onClick={() => setSelectedEmailId(null)} style={{ background: "rgba(255,255,255,0.08)", border: "none", borderRadius: "50%", width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#fff", flexShrink: 0 }}>
+                  <button onClick={() => setSelectedEmailId(null)} style={{ background: "#fff", border: "1px solid rgba(14,31,64,0.12)", borderRadius: "50%", width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: NAVY, flexShrink: 0 }}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M15 18l-6-6 6-6"/></svg>
                   </button>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.12em", textTransform: "uppercase", margin: 0 }}>Email · Read-only</p>
-                    <p style={{ fontSize: 18, fontWeight: 800, color: "#fff", margin: "2px 0 0", letterSpacing: "-0.02em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.subject}</p>
+                    <p style={{ fontSize: 11, fontWeight: 700, color: "rgba(14,31,64,0.45)", letterSpacing: "0.12em", textTransform: "uppercase", margin: 0 }}>Email · Read-only</p>
+                    <p style={{ fontSize: 18, fontWeight: 800, color: NAVY, margin: "2px 0 0", letterSpacing: "-0.02em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.subject}</p>
                   </div>
-                  <button onClick={() => markEmailRead(e.id, !e.read)} style={{ background: e.read ? "rgba(255,255,255,0.08)" : "rgba(141,214,63,0.18)", color: e.read ? "rgba(255,255,255,0.65)" : GREEN, border: `1px solid ${e.read ? "rgba(255,255,255,0.10)" : "rgba(141,214,63,0.30)"}`, borderRadius: 100, padding: "8px 14px", fontSize: 12, fontWeight: 800, cursor: "pointer", fontFamily: '"DM Sans",sans-serif', flexShrink: 0 }}>{e.read ? "Mark unread" : "Mark read"}</button>
+                  <button onClick={() => markEmailRead(e.id, !e.read)} style={{ background: e.read ? "rgba(14,31,64,0.06)" : "rgba(141,214,63,0.18)", color: e.read ? "rgba(14,31,64,0.55)" : GREEN, border: `1px solid ${e.read ? "rgba(14,31,64,0.10)" : "rgba(141,214,63,0.30)"}`, borderRadius: 100, padding: "8px 14px", fontSize: 12, fontWeight: 800, cursor: "pointer", fontFamily: '"DM Sans",sans-serif', flexShrink: 0 }}>{e.read ? "Mark unread" : "Mark read"}</button>
                 </div>
-                <div style={{ background: "#142A52", borderRadius: 14, padding: "12px 14px", display: "flex", gap: 14, flexWrap: "wrap", fontSize: 12, alignItems: "center" }}>
-                  <div><span style={{ color: "rgba(255,255,255,0.45)" }}>From </span><span style={{ color: "#fff", fontWeight: 700 }}>{e.fromName}</span></div>
-                  <div><span style={{ color: "rgba(255,255,255,0.45)" }}>Email </span><span style={{ color: "#fff", fontWeight: 700 }}>{e.fromAddress}</span></div>
+                <div style={{ background: "#fff", borderRadius: 14, padding: "12px 14px", display: "flex", gap: 14, flexWrap: "wrap", fontSize: 12, alignItems: "center", border: "1px solid rgba(14,31,64,0.08)", boxShadow: "0 2px 8px rgba(14,31,64,0.06)" }}>
+                  <div><span style={{ color: "rgba(14,31,64,0.45)" }}>From </span><span style={{ color: NAVY, fontWeight: 700 }}>{e.fromName}</span></div>
+                  <div><span style={{ color: "rgba(14,31,64,0.45)" }}>Email </span><span style={{ color: NAVY, fontWeight: 700 }}>{e.fromAddress}</span></div>
                   <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase", padding: "3px 8px", borderRadius: 6, color: emailAudPillFg(e.accountType), background: emailAudPillBg(e.accountType) }}>{emailAudienceLabel(e.accountType)}</span>
-                  <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase", padding: "3px 8px", borderRadius: 6, color: "rgba(255,255,255,0.78)", background: "rgba(255,255,255,0.08)" }}>{emailCategoryLabel(e.category)}</span>
-                  <div><span style={{ color: "rgba(255,255,255,0.45)" }}>Received </span><span style={{ color: "#fff", fontWeight: 700 }}>{formatEmailTime(e.receivedAt)}</span></div>
+                  <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase", padding: "3px 8px", borderRadius: 6, color: "rgba(14,31,64,0.60)", background: "rgba(14,31,64,0.07)" }}>{emailCategoryLabel(e.category)}</span>
+                  <div><span style={{ color: "rgba(14,31,64,0.45)" }}>Received </span><span style={{ color: NAVY, fontWeight: 700 }}>{formatEmailTime(e.receivedAt)}</span></div>
                 </div>
-                <div style={{ background: "#142A52", borderRadius: 18, padding: "16px 18px", color: "#fff", fontSize: 13.5, lineHeight: 1.55, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                <div style={{ background: "#fff", borderRadius: 18, padding: "16px 18px", color: NAVY, fontSize: 13.5, lineHeight: 1.55, whiteSpace: "pre-wrap", wordBreak: "break-word", border: "1px solid rgba(14,31,64,0.08)", boxShadow: "0 2px 8px rgba(14,31,64,0.06)" }}>
                   {e.body}
                 </div>
-                <p style={{ fontSize: 11.5, color: "rgba(255,255,255,0.45)", margin: 0, fontStyle: "italic", padding: "0 4px" }}>This view is read-only. Replies happen outside the app.</p>
+                <p style={{ fontSize: 11.5, color: "rgba(14,31,64,0.40)", margin: 0, fontStyle: "italic", padding: "0 4px" }}>This view is read-only. Replies happen outside the app.</p>
               </div>
             );
           }
@@ -2397,23 +2398,23 @@ export default function AdminPage() {
           }
 
           return (
-            <div style={{ flex: 1, overflowY: "auto", padding: "24px 20px 32px", display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ flex: 1, overflowY: "auto", background: "#f5f7fa", borderRadius: "28px 28px 0 0", padding: "24px 20px 32px", display: "flex", flexDirection: "column", gap: 16 }}>
               <div>
-                <p style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.12em", textTransform: "uppercase", margin: 0 }}>Customer Service</p>
-                <p style={{ fontSize: 22, fontWeight: 800, color: "#fff", margin: "2px 0 0", letterSpacing: "-0.02em" }}>Customer interaction</p>
+                <p style={{ fontSize: 11, fontWeight: 700, color: "rgba(14,31,64,0.45)", letterSpacing: "0.12em", textTransform: "uppercase", margin: 0 }}>Customer Service</p>
+                <p style={{ fontSize: 22, fontWeight: 800, color: NAVY, margin: "2px 0 0", letterSpacing: "-0.02em" }}>Customer interaction</p>
               </div>
 
               {/* ── Sub-tab toggle: Email / Tickets ── */}
-              <div style={{ display: "flex", gap: 4, background: "#142A52", borderRadius: 100, padding: 4 }}>
+              <div style={{ display: "flex", gap: 4, background: "rgba(14,31,64,0.06)", borderRadius: 100, padding: 4 }}>
                 {([
                   { key: "email" as ServiceTab, label: "Email", count: totalEmails, accent: unreadEmails },
                   { key: "tickets" as ServiceTab, label: "Tickets", count: changeRequestTickets.length, accent: openCRCount },
                 ]).map(t => {
                   const active = serviceTab === t.key;
                   return (
-                    <button key={t.key} onClick={() => { setServiceTab(t.key); setSelectedTicketId(null); setSelectedEmailId(null); setResolveOpen(false); setPendingReply(null); resetResolutionAuthFields(); }} style={{ flex: 1, padding: "9px 8px", borderRadius: 100, border: "none", background: active ? GREEN : "transparent", color: active ? NAVY : "rgba(255,255,255,0.65)", fontWeight: 800, fontSize: 11.5, cursor: "pointer", fontFamily: '"DM Sans",sans-serif', display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                    <button key={t.key} onClick={() => { setServiceTab(t.key); setSelectedTicketId(null); setSelectedEmailId(null); setResolveOpen(false); setPendingReply(null); resetResolutionAuthFields(); }} style={{ flex: 1, padding: "9px 8px", borderRadius: 100, border: "none", background: active ? GREEN : "transparent", color: active ? NAVY : "rgba(14,31,64,0.50)", fontWeight: 800, fontSize: 11.5, cursor: "pointer", fontFamily: '"DM Sans",sans-serif', display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
                       <span>{t.label}</span>
-                      <span style={{ fontSize: 10, fontWeight: 800, padding: "2px 6px", borderRadius: 100, background: active ? "rgba(14,31,64,0.16)" : "rgba(255,255,255,0.10)", color: active ? NAVY : "rgba(255,255,255,0.78)" }}>{t.count}</span>
+                      <span style={{ fontSize: 10, fontWeight: 800, padding: "2px 6px", borderRadius: 100, background: active ? "rgba(14,31,64,0.16)" : "rgba(14,31,64,0.10)", color: active ? NAVY : "rgba(14,31,64,0.55)" }}>{t.count}</span>
                       {t.accent > 0 && !active && (
                         <span style={{ width: 6, height: 6, borderRadius: "50%", background: GREEN, boxShadow: "0 0 0 3px rgba(141,214,63,0.25)", flexShrink: 0 }} />
                       )}
@@ -2477,14 +2478,14 @@ export default function AdminPage() {
                         </div>
 
                         {/* Host profile card */}
-                        <div style={{ background: "#142A52", borderRadius: 16, padding: "14px 16px", border: "1px solid rgba(255,255,255,0.08)", display: "flex", flexDirection: "column", gap: 10 }}>
-                          <div style={{ fontSize: 10, fontWeight: 800, color: "rgba(255,255,255,0.40)", letterSpacing: "0.10em", textTransform: "uppercase" }}>Host profile</div>
+                        <div style={{ background: "#fff", borderRadius: 16, padding: "14px 16px", border: "1px solid rgba(14,31,64,0.08)", boxShadow: "0 2px 10px rgba(14,31,64,0.06)", display: "flex", flexDirection: "column", gap: 10 }}>
+                          <div style={{ fontSize: 10, fontWeight: 800, color: "rgba(14,31,64,0.40)", letterSpacing: "0.10em", textTransform: "uppercase" }}>Host profile</div>
                           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                             <div style={{ width: 44, height: 44, borderRadius: "50%", background: "rgba(141,214,63,0.18)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 17, fontWeight: 800, color: GREEN }}>
                               {(cr.hostName || selectedCR.userName || "H").charAt(0).toUpperCase()}
                             </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 14, fontWeight: 800, color: "#fff" }}>{cr.hostName || selectedCR.userName || "—"}</div>
+                              <div style={{ fontSize: 14, fontWeight: 800, color: NAVY }}>{cr.hostName || selectedCR.userName || "—"}</div>
                               {(cr.hostEmail || selectedCR.userEmail) && (
                                 <a href={`mailto:${cr.hostEmail || selectedCR.userEmail}`} style={{ fontSize: 12, color: GREEN, fontWeight: 600, textDecoration: "none", display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
                                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
@@ -2492,7 +2493,7 @@ export default function AdminPage() {
                                 </a>
                               )}
                               {cr.hostPhone && (
-                                <a href={`tel:${cr.hostPhone}`} style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", fontWeight: 600, textDecoration: "none", display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
+                                <a href={`tel:${cr.hostPhone}`} style={{ fontSize: 12, color: "rgba(14,31,64,0.55)", fontWeight: 600, textDecoration: "none", display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
                                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.62 3.48 2 2 0 0 1 3.62 1.27h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.91a16 16 0 0 0 6.16 6.16l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
                                   {cr.hostPhone}
                                 </a>
@@ -2502,30 +2503,30 @@ export default function AdminPage() {
                         </div>
 
                         {/* Request detail */}
-                        <div style={{ background: "#142A52", borderRadius: 16, padding: "14px 16px", border: "1px solid rgba(255,255,255,0.08)", display: "flex", flexDirection: "column", gap: 10 }}>
-                          <div style={{ fontSize: 10, fontWeight: 800, color: "rgba(255,255,255,0.40)", letterSpacing: "0.10em", textTransform: "uppercase" }}>Change request details</div>
+                        <div style={{ background: "#fff", borderRadius: 16, padding: "14px 16px", border: "1px solid rgba(14,31,64,0.08)", boxShadow: "0 2px 10px rgba(14,31,64,0.06)", display: "flex", flexDirection: "column", gap: 10 }}>
+                          <div style={{ fontSize: 10, fontWeight: 800, color: "rgba(14,31,64,0.40)", letterSpacing: "0.10em", textTransform: "uppercase" }}>Change request details</div>
                           {cr.field && (
                             <div>
-                              <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.38)", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 3 }}>Field</div>
-                              <div style={{ fontSize: 13.5, fontWeight: 700, color: "#fff" }}>{cr.field}</div>
+                              <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(14,31,64,0.38)", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 3 }}>Field</div>
+                              <div style={{ fontSize: 13.5, fontWeight: 700, color: NAVY }}>{cr.field}</div>
                             </div>
                           )}
                           {cr.padName && (
                             <div>
-                              <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.38)", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 3 }}>Pad</div>
-                              <div style={{ fontSize: 13.5, fontWeight: 600, color: "rgba(255,255,255,0.85)" }}>{cr.padName}</div>
+                              <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(14,31,64,0.38)", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 3 }}>Pad</div>
+                              <div style={{ fontSize: 13.5, fontWeight: 600, color: "rgba(14,31,64,0.75)" }}>{cr.padName}</div>
                             </div>
                           )}
                           {cr.current && (
                             <div>
-                              <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.38)", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 3 }}>Current value</div>
-                              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.65)" }}>{cr.current}</div>
+                              <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(14,31,64,0.38)", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 3 }}>Current value</div>
+                              <div style={{ fontSize: 13, color: "rgba(14,31,64,0.55)" }}>{cr.current}</div>
                             </div>
                           )}
                           {cr.requested && (
                             <div>
-                              <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.38)", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 3 }}>Requested change</div>
-                              <div style={{ fontSize: 13.5, fontWeight: 600, color: "#fff", background: "rgba(141,214,63,0.08)", border: "1px solid rgba(141,214,63,0.18)", borderRadius: 10, padding: "10px 12px", lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{cr.requested}</div>
+                              <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(14,31,64,0.38)", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 3 }}>Requested change</div>
+                              <div style={{ fontSize: 13.5, fontWeight: 600, color: NAVY, background: "rgba(141,214,63,0.08)", border: "1px solid rgba(141,214,63,0.25)", borderRadius: 10, padding: "10px 12px", lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{cr.requested}</div>
                             </div>
                           )}
                         </div>
@@ -2553,22 +2554,22 @@ export default function AdminPage() {
                   return (
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                       <div style={{ display: "flex", gap: 8 }}>
-                        <div style={{ flex: 1, background: "#142A52", borderRadius: 14, padding: "12px 14px", textAlign: "center" }}>
-                          <div style={{ fontSize: 22, fontWeight: 800, color: "#fff", letterSpacing: "-0.02em" }}>{changeRequestTickets.length}</div>
-                          <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.10em", textTransform: "uppercase", marginTop: 2 }}>Total</div>
+                        <div style={{ flex: 1, background: "#fff", borderRadius: 14, padding: "12px 14px", textAlign: "center", border: "1px solid rgba(14,31,64,0.07)", boxShadow: "0 2px 8px rgba(14,31,64,0.06)" }}>
+                          <div style={{ fontSize: 22, fontWeight: 800, color: NAVY, letterSpacing: "-0.02em" }}>{changeRequestTickets.length}</div>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(14,31,64,0.45)", letterSpacing: "0.10em", textTransform: "uppercase", marginTop: 2 }}>Total</div>
                         </div>
-                        <div style={{ flex: 1, background: "#142A52", borderRadius: 14, padding: "12px 14px", textAlign: "center" }}>
-                          <div style={{ fontSize: 22, fontWeight: 800, color: openCRCount > 0 ? GREEN : "#fff", letterSpacing: "-0.02em" }}>{openCRCount}</div>
-                          <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.10em", textTransform: "uppercase", marginTop: 2 }}>Open</div>
+                        <div style={{ flex: 1, background: "#fff", borderRadius: 14, padding: "12px 14px", textAlign: "center", border: "1px solid rgba(14,31,64,0.07)", boxShadow: "0 2px 8px rgba(14,31,64,0.06)" }}>
+                          <div style={{ fontSize: 22, fontWeight: 800, color: openCRCount > 0 ? GREEN : NAVY, letterSpacing: "-0.02em" }}>{openCRCount}</div>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(14,31,64,0.45)", letterSpacing: "0.10em", textTransform: "uppercase", marginTop: 2 }}>Open</div>
                         </div>
-                        <div style={{ flex: 1, background: "#142A52", borderRadius: 14, padding: "12px 14px", textAlign: "center" }}>
-                          <div style={{ fontSize: 22, fontWeight: 800, color: "#9DBEFF", letterSpacing: "-0.02em" }}>{changeRequestTickets.filter(t => t.status === "resolved").length}</div>
-                          <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.10em", textTransform: "uppercase", marginTop: 2 }}>Resolved</div>
+                        <div style={{ flex: 1, background: "#fff", borderRadius: 14, padding: "12px 14px", textAlign: "center", border: "1px solid rgba(14,31,64,0.07)", boxShadow: "0 2px 8px rgba(14,31,64,0.06)" }}>
+                          <div style={{ fontSize: 22, fontWeight: 800, color: "#5B8BDF", letterSpacing: "-0.02em" }}>{changeRequestTickets.filter(t => t.status === "resolved").length}</div>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(14,31,64,0.45)", letterSpacing: "0.10em", textTransform: "uppercase", marginTop: 2 }}>Resolved</div>
                         </div>
                       </div>
 
                       {crSorted.length === 0 ? (
-                        <div style={{ background: "#142A52", borderRadius: 18, padding: "36px 22px", textAlign: "center", color: "rgba(255,255,255,0.40)", fontSize: 13 }}>
+                        <div style={{ background: "#fff", borderRadius: 18, padding: "36px 22px", textAlign: "center", color: "rgba(14,31,64,0.40)", fontSize: 13, border: "1px solid rgba(14,31,64,0.07)" }}>
                           No change request tickets yet. When a host requests a locked-field update, it appears here.
                         </div>
                       ) : (
@@ -2577,13 +2578,13 @@ export default function AdminPage() {
                           const isOpen = t.status === "open";
                           const isInProgress = t.status === "in_progress";
                           const isResolved = t.status === "resolved";
-                          const statusColor = isResolved ? "#9DBEFF" : isInProgress ? "#F59E0B" : GREEN;
+                          const statusColor = isResolved ? "#5B8BDF" : isInProgress ? "#F59E0B" : GREEN;
                           const statusLabel = isResolved ? "Resolved" : isInProgress ? "In progress" : "New";
                           return (
                             <div
                               key={t.id}
                               onClick={() => setSelectedTicketId(t.id)}
-                              style={{ background: "#142A52", borderRadius: 14, padding: "12px 14px", cursor: "pointer", border: isOpen ? `1px solid rgba(141,214,63,0.28)` : "1px solid rgba(255,255,255,0.04)", display: "flex", flexDirection: "column", gap: 8 }}
+                              style={{ background: "#fff", borderRadius: 14, padding: "12px 14px", cursor: "pointer", border: isOpen ? `1px solid rgba(141,214,63,0.35)` : "1px solid rgba(14,31,64,0.07)", boxShadow: "0 2px 8px rgba(14,31,64,0.06)", display: "flex", flexDirection: "column", gap: 8 }}
                             >
                               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -2617,35 +2618,35 @@ export default function AdminPage() {
                 <>
                   {/* ── Email overall summary ── */}
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                    <button onClick={() => setEmailUnreadOnly(false)} style={{ background: "#142A52", borderRadius: 14, padding: 12, textAlign: "center", border: !emailUnreadOnly ? "1px solid rgba(255,255,255,0.18)" : "1px solid transparent", cursor: "pointer", color: "inherit", fontFamily: '"DM Sans",sans-serif' }}>
-                      <p style={{ fontSize: 22, fontWeight: 800, color: "#fff", margin: 0, letterSpacing: "-0.02em" }}>{totalEmails}</p>
-                      <p style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.50)", letterSpacing: "0.10em", textTransform: "uppercase", margin: "2px 0 0" }}>Total inbox</p>
+                    <button onClick={() => setEmailUnreadOnly(false)} style={{ background: "#fff", borderRadius: 14, padding: 12, textAlign: "center", border: !emailUnreadOnly ? `1px solid ${NAVY}` : "1px solid rgba(14,31,64,0.08)", boxShadow: "0 2px 8px rgba(14,31,64,0.06)", cursor: "pointer", color: "inherit", fontFamily: '"DM Sans",sans-serif' }}>
+                      <p style={{ fontSize: 22, fontWeight: 800, color: NAVY, margin: 0, letterSpacing: "-0.02em" }}>{totalEmails}</p>
+                      <p style={{ fontSize: 10, fontWeight: 700, color: "rgba(14,31,64,0.50)", letterSpacing: "0.10em", textTransform: "uppercase", margin: "2px 0 0" }}>Total inbox</p>
                     </button>
-                    <button onClick={() => setEmailUnreadOnly(true)} style={{ background: "#142A52", borderRadius: 14, padding: 12, textAlign: "center", border: emailUnreadOnly ? `1px solid ${GREEN}` : "1px solid transparent", cursor: "pointer", color: "inherit", fontFamily: '"DM Sans",sans-serif' }}>
+                    <button onClick={() => setEmailUnreadOnly(true)} style={{ background: "#fff", borderRadius: 14, padding: 12, textAlign: "center", border: emailUnreadOnly ? `1px solid ${GREEN}` : "1px solid rgba(14,31,64,0.08)", boxShadow: "0 2px 8px rgba(14,31,64,0.06)", cursor: "pointer", color: "inherit", fontFamily: '"DM Sans",sans-serif' }}>
                       <p style={{ fontSize: 22, fontWeight: 800, color: GREEN, margin: 0, letterSpacing: "-0.02em" }}>{unreadEmails}</p>
-                      <p style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.50)", letterSpacing: "0.10em", textTransform: "uppercase", margin: "2px 0 0" }}>Unread</p>
+                      <p style={{ fontSize: 10, fontWeight: 700, color: "rgba(14,31,64,0.50)", letterSpacing: "0.10em", textTransform: "uppercase", margin: "2px 0 0" }}>Unread</p>
                     </button>
                   </div>
 
                   {/* ── Email filters ── */}
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    <div style={{ display: "flex", gap: 4, background: "#142A52", borderRadius: 100, padding: 4 }}>
+                    <div style={{ display: "flex", gap: 4, background: "rgba(14,31,64,0.06)", borderRadius: 100, padding: 4 }}>
                       {([
                         { key: "all" as EmailAudienceFilter, label: "All accounts" },
                         { key: "renter" as EmailAudienceFilter, label: "Renters" },
                         { key: "padRenter" as EmailAudienceFilter, label: "Listers" },
                         { key: "guest" as EmailAudienceFilter, label: "Guests" },
                       ]).map(f => (
-                        <button key={f.key} onClick={() => setEmailAudienceFilter(f.key)} style={{ flex: 1, padding: "7px 6px", borderRadius: 100, border: "none", background: emailAudienceFilter === f.key ? "rgba(255,255,255,0.10)" : "transparent", color: emailAudienceFilter === f.key ? "#fff" : "rgba(255,255,255,0.55)", fontWeight: 700, fontSize: 11, cursor: "pointer", fontFamily: '"DM Sans",sans-serif' }}>{f.label}</button>
+                        <button key={f.key} onClick={() => setEmailAudienceFilter(f.key)} style={{ flex: 1, padding: "7px 6px", borderRadius: 100, border: "none", background: emailAudienceFilter === f.key ? "#fff" : "transparent", color: emailAudienceFilter === f.key ? NAVY : "rgba(14,31,64,0.50)", fontWeight: 700, fontSize: 11, cursor: "pointer", fontFamily: '"DM Sans",sans-serif' }}>{f.label}</button>
                       ))}
                     </div>
                     <div style={{ display: "flex", gap: 6 }}>
-                      <div style={{ flex: 1, display: "flex", gap: 4, background: "#142A52", borderRadius: 100, padding: 4, overflowX: "auto" }}>
+                      <div style={{ flex: 1, display: "flex", gap: 4, background: "rgba(14,31,64,0.06)", borderRadius: 100, padding: 4, overflowX: "auto" }}>
                         {(["all", "billing", "account", "support", "feedback", "other"] as EmailCategoryFilter[]).map(c => (
-                          <button key={c} onClick={() => setEmailCategoryFilter(c)} style={{ padding: "7px 12px", borderRadius: 100, border: "none", background: emailCategoryFilter === c ? GREEN : "transparent", color: emailCategoryFilter === c ? NAVY : "rgba(255,255,255,0.62)", fontWeight: 700, fontSize: 11, cursor: "pointer", fontFamily: '"DM Sans",sans-serif', whiteSpace: "nowrap" }}>{c === "all" ? "All topics" : emailCategoryLabel(c as EmailCategory)}</button>
+                          <button key={c} onClick={() => setEmailCategoryFilter(c)} style={{ padding: "7px 12px", borderRadius: 100, border: "none", background: emailCategoryFilter === c ? GREEN : "transparent", color: emailCategoryFilter === c ? NAVY : "rgba(14,31,64,0.55)", fontWeight: 700, fontSize: 11, cursor: "pointer", fontFamily: '"DM Sans",sans-serif', whiteSpace: "nowrap" }}>{c === "all" ? "All topics" : emailCategoryLabel(c as EmailCategory)}</button>
                         ))}
                       </div>
-                      <button onClick={() => setEmailSortDir(d => d === "recent" ? "oldest" : "recent")} style={{ background: "#142A52", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 100, padding: "7px 14px", color: "rgba(255,255,255,0.65)", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: '"DM Sans",sans-serif', display: "flex", alignItems: "center", gap: 6 }}>
+                      <button onClick={() => setEmailSortDir(d => d === "recent" ? "oldest" : "recent")} style={{ background: "#fff", border: "1px solid rgba(14,31,64,0.12)", borderRadius: 100, padding: "7px 14px", color: "rgba(14,31,64,0.65)", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: '"DM Sans",sans-serif', display: "flex", alignItems: "center", gap: 6 }}>
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                           {emailSortDir === "recent" ? <path d="M12 5v14m-6-6 6 6 6-6"/> : <path d="M12 19V5m-6 6 6-6 6 6"/>}
                         </svg>
@@ -2655,33 +2656,33 @@ export default function AdminPage() {
                   </div>
 
                   {filteredEmails.length === 0 ? (
-                    <div style={{ background: "#142A52", borderRadius: 18, padding: "32px 22px", textAlign: "center", color: "rgba(255,255,255,0.45)", fontSize: 13 }}>
+                    <div style={{ background: "#fff", borderRadius: 18, padding: "32px 22px", textAlign: "center", color: "rgba(14,31,64,0.40)", fontSize: 13, border: "1px solid rgba(14,31,64,0.07)" }}>
                       {totalEmails === 0 ? "Inbox is empty." : "No emails match these filters."}
                     </div>
                   ) : (
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                       {filteredEmails.map(e => (
-                        <div key={e.id} onClick={() => { setSelectedEmailId(e.id); markEmailRead(e.id, true); }} style={{ background: "#142A52", borderRadius: 14, padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", border: !e.read ? `1px solid rgba(141,214,63,0.28)` : "1px solid transparent", position: "relative" }}>
+                        <div key={e.id} onClick={() => { setSelectedEmailId(e.id); markEmailRead(e.id, true); }} style={{ background: "#fff", borderRadius: 14, padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", border: !e.read ? `1px solid rgba(141,214,63,0.40)` : "1px solid rgba(14,31,64,0.07)", boxShadow: "0 2px 8px rgba(14,31,64,0.06)", position: "relative" }}>
                           {!e.read && (
                             <span style={{ position: "absolute", top: 10, right: 10, width: 8, height: 8, borderRadius: "50%", background: GREEN, boxShadow: "0 0 0 3px rgba(141,214,63,0.20)" }} />
                           )}
-                          <div style={{ width: 38, height: 38, borderRadius: 10, background: "rgba(120,170,255,0.18)", color: "#9DBEFF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          <div style={{ width: 38, height: 38, borderRadius: 10, background: "rgba(91,139,223,0.12)", color: "#5B8BDF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
                           </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                              <span style={{ fontSize: 13, fontWeight: e.read ? 700 : 800, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.subject}</span>
+                              <span style={{ fontSize: 13, fontWeight: e.read ? 700 : 800, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.subject}</span>
                               <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase", padding: "2px 6px", borderRadius: 5, color: emailAudPillFg(e.accountType), background: emailAudPillBg(e.accountType) }}>{emailAudienceLabel(e.accountType)}</span>
-                              <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase", padding: "2px 6px", borderRadius: 5, color: "rgba(255,255,255,0.78)", background: "rgba(255,255,255,0.08)" }}>{emailCategoryLabel(e.category)}</span>
+                              <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase", padding: "2px 6px", borderRadius: 5, color: "rgba(14,31,64,0.60)", background: "rgba(14,31,64,0.07)" }}>{emailCategoryLabel(e.category)}</span>
                             </div>
-                            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.50)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            <div style={{ fontSize: 11, color: "rgba(14,31,64,0.50)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                               {e.fromName} · {e.fromAddress}
                             </div>
-                            <div style={{ fontSize: 11.5, color: "rgba(255,255,255,0.62)", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            <div style={{ fontSize: 11.5, color: "rgba(14,31,64,0.60)", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                               {e.preview}
                             </div>
                           </div>
-                          <div style={{ fontSize: 10.5, color: "rgba(255,255,255,0.40)", flexShrink: 0 }}>{formatEmailTime(e.receivedAt)}</div>
+                          <div style={{ fontSize: 10.5, color: "rgba(14,31,64,0.40)", flexShrink: 0 }}>{formatEmailTime(e.receivedAt)}</div>
                         </div>
                       ))}
                     </div>
@@ -2702,35 +2703,35 @@ export default function AdminPage() {
           const activeCount = staffList.filter(s => s.status === "active").length;
           const adminCount = staffList.filter(s => s.role === "admin").length;
           return (
-            <div style={{ flex: 1, overflowY: "auto", padding: "24px 20px 32px", display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ flex: 1, overflowY: "auto", background: "#f5f7fa", borderRadius: "28px 28px 0 0", padding: "24px 20px 32px", display: "flex", flexDirection: "column", gap: 16 }}>
               <div>
-                <p style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.12em", textTransform: "uppercase", margin: 0 }}>Admin · Staff</p>
-                <p style={{ fontSize: 22, fontWeight: 800, color: "#fff", margin: "2px 0 0", letterSpacing: "-0.02em" }}>Team accounts</p>
+                <p style={{ fontSize: 11, fontWeight: 700, color: "rgba(14,31,64,0.45)", letterSpacing: "0.12em", textTransform: "uppercase", margin: 0 }}>Admin · Staff</p>
+                <p style={{ fontSize: 22, fontWeight: 800, color: NAVY, margin: "2px 0 0", letterSpacing: "-0.02em" }}>Team accounts</p>
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-                <div style={{ background: "#142A52", borderRadius: 14, padding: "12px", textAlign: "center" }}>
-                  <p style={{ fontSize: 22, fontWeight: 800, color: "#fff", margin: 0, letterSpacing: "-0.02em" }}>{staffList.length}</p>
-                  <p style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,0.50)", letterSpacing: "0.10em", textTransform: "uppercase", margin: "2px 0 0" }}>Total</p>
+                <div style={{ background: "#fff", borderRadius: 14, padding: "12px", textAlign: "center", border: "1px solid rgba(14,31,64,0.07)", boxShadow: "0 2px 8px rgba(14,31,64,0.06)" }}>
+                  <p style={{ fontSize: 22, fontWeight: 800, color: NAVY, margin: 0, letterSpacing: "-0.02em" }}>{staffList.length}</p>
+                  <p style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(14,31,64,0.45)", letterSpacing: "0.10em", textTransform: "uppercase", margin: "2px 0 0" }}>Total</p>
                 </div>
-                <div style={{ background: "#142A52", borderRadius: 14, padding: "12px", textAlign: "center" }}>
+                <div style={{ background: "#fff", borderRadius: 14, padding: "12px", textAlign: "center", border: "1px solid rgba(14,31,64,0.07)", boxShadow: "0 2px 8px rgba(14,31,64,0.06)" }}>
                   <p style={{ fontSize: 22, fontWeight: 800, color: GREEN, margin: 0, letterSpacing: "-0.02em" }}>{activeCount}</p>
-                  <p style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,0.50)", letterSpacing: "0.10em", textTransform: "uppercase", margin: "2px 0 0" }}>Active</p>
+                  <p style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(14,31,64,0.45)", letterSpacing: "0.10em", textTransform: "uppercase", margin: "2px 0 0" }}>Active</p>
                 </div>
-                <div style={{ background: "#142A52", borderRadius: 14, padding: "12px", textAlign: "center" }}>
-                  <p style={{ fontSize: 22, fontWeight: 800, color: "#fff", margin: 0, letterSpacing: "-0.02em" }}>{adminCount}</p>
-                  <p style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,0.50)", letterSpacing: "0.10em", textTransform: "uppercase", margin: "2px 0 0" }}>Admins</p>
+                <div style={{ background: "#fff", borderRadius: 14, padding: "12px", textAlign: "center", border: "1px solid rgba(14,31,64,0.07)", boxShadow: "0 2px 8px rgba(14,31,64,0.06)" }}>
+                  <p style={{ fontSize: 22, fontWeight: 800, color: NAVY, margin: 0, letterSpacing: "-0.02em" }}>{adminCount}</p>
+                  <p style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(14,31,64,0.45)", letterSpacing: "0.10em", textTransform: "uppercase", margin: "2px 0 0" }}>Admins</p>
                 </div>
               </div>
 
               {/* ── Email Activation — self-serve OTP flow ── */}
-              <div style={{ background: "#142A52", borderRadius: 18, padding: "16px 18px", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 10px rgba(0,0,0,0.22)", display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ background: "#fff", borderRadius: 18, padding: "16px 18px", boxShadow: "0 2px 12px rgba(14,31,64,0.08)", border: "1px solid rgba(14,31,64,0.07)", display: "flex", flexDirection: "column", gap: 12 }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <div>
-                    <p style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.12em", textTransform: "uppercase", margin: 0 }}>Team invitation</p>
-                    <p style={{ fontSize: 14, fontWeight: 700, color: "#fff", margin: "2px 0 0" }}>{inviteStep === "success" ? "Invite sent!" : "Add team member"}</p>
+                    <p style={{ fontSize: 11, fontWeight: 700, color: "rgba(14,31,64,0.45)", letterSpacing: "0.12em", textTransform: "uppercase", margin: 0 }}>Team invitation</p>
+                    <p style={{ fontSize: 14, fontWeight: 700, color: NAVY, margin: "2px 0 0" }}>{inviteStep === "success" ? "Invite sent!" : "Add team member"}</p>
                   </div>
-                  <div style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(141,214,63,0.14)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 100, background: "rgba(141,214,63,0.14)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
                   </div>
                 </div>
@@ -2873,34 +2874,35 @@ export default function AdminPage() {
                   const qa = staffRating(tickets, displayName, [emailPrefix]);
                   return (
                     <div key={s.id} style={{
-                      background: "#142A52", borderRadius: 16, padding: "14px 16px",
-                      boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 10px rgba(0,0,0,0.22)",
+                      background: "#fff", borderRadius: 16, padding: "14px 16px",
+                      boxShadow: "0 2px 12px rgba(14,31,64,0.08)",
+                      border: "1px solid rgba(14,31,64,0.07)",
                       display: "flex", flexDirection: "column", gap: 12,
                       opacity: suspended ? 0.65 : 1,
                     }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                         <div style={{
                           width: 40, height: 40, borderRadius: "50%",
-                          background: isAdmin ? "rgba(141,214,63,0.18)" : "rgba(255,255,255,0.10)",
-                          color: isAdmin ? "#B6E97A" : "#fff",
+                          background: isAdmin ? "rgba(141,214,63,0.18)" : "rgba(14,31,64,0.07)",
+                          color: isAdmin ? GREEN : NAVY,
                           display: "flex", alignItems: "center", justifyContent: "center",
                           fontWeight: 800, fontSize: 14, flexShrink: 0,
                         }}>{(s.firstName[0] + s.lastName[0]).toUpperCase()}</div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                            <span style={{ fontSize: 14, fontWeight: 800, color: "#fff", letterSpacing: "-0.01em" }}>{displayName}</span>
+                            <span style={{ fontSize: 14, fontWeight: 800, color: NAVY, letterSpacing: "-0.01em" }}>{displayName}</span>
                             <span style={{
                               fontSize: 9.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
-                              padding: "2px 7px", borderRadius: 6,
-                              color: isAdmin ? "#B6E97A" : "#fff",
-                              background: isAdmin ? "rgba(141,214,63,0.16)" : "rgba(255,255,255,0.10)",
+                              padding: "2px 7px", borderRadius: 100,
+                              color: isAdmin ? GREEN : "rgba(14,31,64,0.55)",
+                              background: isAdmin ? "rgba(141,214,63,0.14)" : "rgba(14,31,64,0.07)",
                             }}>{s.role}</span>
                             {suspended && (
-                              <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", padding: "2px 7px", borderRadius: 6, color: "#ff8585", background: "rgba(239,68,68,0.16)" }}>Suspended</span>
+                              <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", padding: "2px 7px", borderRadius: 100, color: "#ef4444", background: "rgba(239,68,68,0.10)" }}>Suspended</span>
                             )}
                           </div>
-                          <p style={{ fontSize: 11.5, color: "rgba(255,255,255,0.62)", margin: "2px 0 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.email}</p>
-                          <p style={{ fontSize: 10.5, color: "rgba(255,255,255,0.42)", margin: "1px 0 0" }}>Last sign-in · {s.lastSignIn}</p>
+                          <p style={{ fontSize: 11.5, color: "rgba(14,31,64,0.50)", margin: "2px 0 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.email}</p>
+                          <p style={{ fontSize: 10.5, color: "rgba(14,31,64,0.35)", margin: "1px 0 0" }}>Last sign-in · {s.lastSignIn}</p>
                         </div>
                         <button
                           onClick={() => {
@@ -2912,9 +2914,10 @@ export default function AdminPage() {
                             });
                           }}
                           style={{
-                            background: suspended ? "rgba(141,214,63,0.18)" : "rgba(239,68,68,0.12)",
-                            color: suspended ? "#B6E97A" : "#ff8585",
-                            border: "none", borderRadius: 100, padding: "8px 14px",
+                            background: suspended ? "rgba(141,214,63,0.12)" : "rgba(239,68,68,0.08)",
+                            color: suspended ? GREEN : "#ef4444",
+                            border: `1px solid ${suspended ? "rgba(141,214,63,0.25)" : "rgba(239,68,68,0.18)"}`,
+                            borderRadius: 100, padding: "7px 14px",
                             fontSize: 11, fontWeight: 800, cursor: "pointer",
                             fontFamily: '"DM Sans",sans-serif', flexShrink: 0,
                           }}
@@ -2924,15 +2927,15 @@ export default function AdminPage() {
                       </div>
 
                       {/* Performance scorecard — review summary for this staff member. */}
-                      <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+                      <div style={{ borderTop: "1px solid rgba(14,31,64,0.08)", paddingTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                          <p style={{ fontSize: 10, fontWeight: 800, color: "rgba(255,255,255,0.55)", letterSpacing: "0.10em", textTransform: "uppercase", margin: 0 }}>Performance review</p>
+                          <p style={{ fontSize: 10, fontWeight: 800, color: "rgba(14,31,64,0.45)", letterSpacing: "0.10em", textTransform: "uppercase", margin: 0 }}>Performance review</p>
                           {qa ? (
-                            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.50)", fontWeight: 700 }}>
+                            <span style={{ fontSize: 10, color: "rgba(14,31,64,0.40)", fontWeight: 700 }}>
                               {qa.count} reply{qa.count === 1 ? "" : "s"} · {qa.ticketCount} chat{qa.ticketCount === 1 ? "" : "s"}
                             </span>
                           ) : (
-                            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.40)", fontWeight: 700 }}>No graded replies yet</span>
+                            <span style={{ fontSize: 10, color: "rgba(14,31,64,0.35)", fontWeight: 700 }}>No graded replies yet</span>
                           )}
                         </div>
                         {qa ? (
@@ -2970,19 +2973,19 @@ export default function AdminPage() {
         })()
       ) : view === "users" ? (
         /* ── USER LIST ── */
-        <div style={{ flex: 1, overflowY: "auto", padding: "20px 20px 32px", display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ flex: 1, overflowY: "auto", background: "#f5f7fa", borderRadius: "28px 28px 0 0", padding: "20px 20px 32px", display: "flex", flexDirection: "column", gap: 14 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <button onClick={() => setView("dashboard")} style={{ background: "rgba(255,255,255,0.08)", border: "none", borderRadius: "50%", width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#fff", flexShrink: 0 }}>
+            <button onClick={() => setView("dashboard")} style={{ background: "#fff", border: "1px solid rgba(14,31,64,0.12)", borderRadius: "50%", width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: NAVY, flexShrink: 0 }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M15 18l-6-6 6-6"/></svg>
             </button>
             <div>
-              <p style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.12em", textTransform: "uppercase", margin: 0 }}>Admin · Users</p>
-              <p style={{ fontSize: 18, fontWeight: 800, color: "#fff", margin: "1px 0 0", letterSpacing: "-0.02em" }}>All Accounts</p>
+              <p style={{ fontSize: 11, fontWeight: 700, color: "rgba(14,31,64,0.45)", letterSpacing: "0.12em", textTransform: "uppercase", margin: 0 }}>Admin · Users</p>
+              <p style={{ fontSize: 18, fontWeight: 800, color: NAVY, margin: "1px 0 0", letterSpacing: "-0.02em" }}>All Accounts</p>
             </div>
           </div>
 
           {/* Section toggle: ACCOUNTS | PAD QUEUE | PENDING */}
-          <div style={{ background: "#142A52", borderRadius: 12, padding: 4, display: "flex", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)" }}>
+          <div style={{ background: "rgba(14,31,64,0.06)", borderRadius: 100, padding: 4, display: "flex" }}>
             {([
               { id: "accounts" as const, label: "Accounts" },
               { id: "padqueue" as const, label: "Pad Queue", badge: pendingSpots.length },
@@ -2991,12 +2994,13 @@ export default function AdminPage() {
               const active = usersSection === t.id;
               return (
                 <button key={t.id} onClick={() => setUsersSection(t.id)} style={{
-                  flex: 1, padding: "10px 8px", borderRadius: 8,
+                  flex: 1, padding: "9px 8px", borderRadius: 100,
                   background: active ? NAVY : "transparent",
-                  color: active ? "#fff" : "rgba(255,255,255,0.55)",
-                  border: "none", fontSize: 12.5, fontWeight: 700, cursor: "pointer",
+                  color: active ? "#fff" : "rgba(14,31,64,0.50)",
+                  border: "none", fontSize: 12, fontWeight: 700, cursor: "pointer",
                   fontFamily: '"DM Sans",sans-serif', display: "flex",
-                  alignItems: "center", justifyContent: "center", gap: 7,
+                  alignItems: "center", justifyContent: "center", gap: 6,
+                  transition: "all 0.15s",
                 }}>
                   {t.label}
                   {(t as any).badge !== undefined && (t as any).badge > 0 && (
@@ -3009,7 +3013,7 @@ export default function AdminPage() {
 
           {usersSection === "accounts" && (<>
           {/* Renter / Host segmented toggle */}
-          <div style={{ background: "#142A52", borderRadius: 12, padding: 4, display: "flex", gap: 0, boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 1px 6px rgba(0,0,0,0.22)" }}>
+          <div style={{ background: "rgba(14,31,64,0.06)", borderRadius: 100, padding: 4, display: "flex", gap: 0 }}>
             {([
               { id: "renters" as const, label: "Renters", count: renterCount, icon: (
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 17h14M5 17a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2M7 17v2M17 17v2M5 10l1.5-4.5A2 2 0 0 1 8.4 4h7.2a2 2 0 0 1 1.9 1.5L19 10"/></svg>
@@ -3021,12 +3025,13 @@ export default function AdminPage() {
               const active = adminView === t.id;
               return (
                 <button key={t.id} onClick={() => setAdminView(t.id)} style={{
-                  flex: 1, padding: "10px 8px", borderRadius: 8,
+                  flex: 1, padding: "9px 8px", borderRadius: 100,
                   background: active ? NAVY : "transparent",
-                  color: active ? "#fff" : "rgba(255,255,255,0.55)",
+                  color: active ? "#fff" : "rgba(14,31,64,0.50)",
                   border: "none",
-                  fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: '"DM Sans",sans-serif',
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 7, letterSpacing: 0.3,
+                  fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: '"DM Sans",sans-serif',
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 6, letterSpacing: 0.3,
+                  transition: "all 0.15s",
                 }}>
                   {t.icon}
                   <span>{t.label}</span>
@@ -3037,10 +3042,10 @@ export default function AdminPage() {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 4px", marginTop: -4 }}>
-            <span style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,0.50)", letterSpacing: 0.8, textTransform: "uppercase" }}>
+            <span style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(14,31,64,0.40)", letterSpacing: 0.8, textTransform: "uppercase" }}>
               Sorted by {adminView === "hosts" ? "earnings" : "spend"} · highest first
             </span>
-            <span style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,0.50)" }}>
+            <span style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(14,31,64,0.40)" }}>
               {filteredUsers.length} shown
             </span>
           </div>
@@ -3049,24 +3054,25 @@ export default function AdminPage() {
           <input
             type="text" placeholder="Search by name or email"
             value={search} onChange={e => setSearch(e.target.value)}
-            style={{ ...inputStyle, padding: "11px 14px", fontSize: 13.5 }}
+            style={{ ...lightInputStyle, padding: "11px 14px", fontSize: 13.5 }}
           />
 
           {/* User list */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {filteredUsers.length === 0 && (
-              <p style={{ textAlign: "center", color: "rgba(255,255,255,0.42)", padding: "24px 0", fontSize: 13 }}>No users match.</p>
+              <p style={{ textAlign: "center", color: "rgba(14,31,64,0.40)", padding: "24px 0", fontSize: 13 }}>No users match.</p>
             )}
             {filteredUsers.map(u => (
               <div key={u.id} onClick={() => { setSelectedUserId(u.id); setView("userDetail"); }} style={{
-                background: "#142A52", borderRadius: 14, padding: "12px 14px",
-                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 1px 6px rgba(0,0,0,0.22)",
+                background: "#fff", borderRadius: 14, padding: "12px 14px",
+                boxShadow: "0 2px 10px rgba(14,31,64,0.07)",
+                border: "1px solid rgba(14,31,64,0.07)",
                 display: "flex", alignItems: "center", gap: 12, cursor: "pointer",
               }}>
                 <Avatar user={u} size={42} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{u.firstName} {u.lastName}</span>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>{u.firstName} {u.lastName}</span>
                     {u.verified && (
                       <svg width="13" height="13" viewBox="0 0 24 24" fill={GREEN}><path d="M12 2l2.4 4.9 5.4.8-3.9 3.8.9 5.4L12 14.4l-4.8 2.5.9-5.4-3.9-3.8 5.4-.8z"/></svg>
                     )}
@@ -3074,10 +3080,10 @@ export default function AdminPage() {
                       <span style={{ fontSize: 9, fontWeight: 800, color: "#ef4444", background: "rgba(239,68,68,0.10)", padding: "2px 6px", borderRadius: 4, letterSpacing: "0.06em", textTransform: "uppercase" }}>Suspended</span>
                     )}
                   </div>
-                  <p style={{ fontSize: 11.5, color: "rgba(255,255,255,0.62)", margin: "1px 0 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.email}</p>
+                  <p style={{ fontSize: 11.5, color: "rgba(14,31,64,0.50)", margin: "1px 0 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.email}</p>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3, flexShrink: 0 }}>
-                  <span style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", fontWeight: 600 }}>{u.bookingsThisMonth} booking{u.bookingsThisMonth !== 1 ? "s" : ""}</span>
+                  <span style={{ fontSize: 11, color: "rgba(14,31,64,0.45)", fontWeight: 600 }}>{u.bookingsThisMonth} booking{u.bookingsThisMonth !== 1 ? "s" : ""}</span>
                   {u.type === "both" && <TypeBadge type="both" />}
                 </div>
               </div>
@@ -3107,7 +3113,7 @@ export default function AdminPage() {
                 <div
                   key={s.id}
                   onClick={() => setSelectedSpot(s)}
-                  style={{ background: "#142A52", borderRadius: 16, overflow: "hidden", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 14px rgba(0,0,0,0.30)", cursor: "pointer", position: "relative" }}
+                  style={{ background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 2px 12px rgba(14,31,64,0.10)", border: "1px solid rgba(14,31,64,0.08)", cursor: "pointer", position: "relative" }}
                 >
                   {s.photo_url && (
                     <div style={{ position: "relative" }}>
@@ -3125,22 +3131,22 @@ export default function AdminPage() {
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#fff" }}>{s.host_name || "Unknown Host"}</p>
-                        <p style={{ margin: 0, fontSize: 11, color: "rgba(255,255,255,0.50)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.host_email}</p>
+                        <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: NAVY }}>{s.host_name || "Unknown Host"}</p>
+                        <p style={{ margin: 0, fontSize: 11, color: "rgba(14,31,64,0.50)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.host_email}</p>
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                        <span style={{ background: "rgba(246,200,0,0.15)", color: "#F6C800", fontSize: 10, fontWeight: 800, padding: "3px 8px", borderRadius: 100, letterSpacing: "0.06em", textTransform: "uppercase" }}>Pending</span>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="2.5"><path d="M9 18l6-6-6-6"/></svg>
+                        <span style={{ background: "rgba(246,200,0,0.15)", color: "#CC9900", fontSize: 10, fontWeight: 800, padding: "3px 8px", borderRadius: 100, letterSpacing: "0.06em", textTransform: "uppercase" }}>Pending</span>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(14,31,64,0.30)" strokeWidth="2.5"><path d="M9 18l6-6-6-6"/></svg>
                       </div>
                     </div>
-                    <p style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 700, color: "#fff", lineHeight: 1.35 }}>{s.spot_name || s.address}</p>
-                    {s.spot_name && <p style={{ margin: "0 0 8px", fontSize: 11.5, color: "rgba(255,255,255,0.50)" }}>{s.address}</p>}
+                    <p style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 700, color: NAVY, lineHeight: 1.35 }}>{s.spot_name || s.address}</p>
+                    {s.spot_name && <p style={{ margin: "0 0 8px", fontSize: 11.5, color: "rgba(14,31,64,0.50)" }}>{s.address}</p>}
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.55)", background: "rgba(255,255,255,0.07)", borderRadius: 6, padding: "3px 8px" }}>{s.pad_type}</span>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.55)", background: "rgba(255,255,255,0.07)", borderRadius: 6, padding: "3px 8px" }}>{s.num_pads} pad{s.num_pads !== 1 ? "s" : ""}</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(14,31,64,0.55)", background: "rgba(14,31,64,0.06)", borderRadius: 6, padding: "3px 8px" }}>{s.pad_type}</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(14,31,64,0.55)", background: "rgba(14,31,64,0.06)", borderRadius: 6, padding: "3px 8px" }}>{s.num_pads} pad{s.num_pads !== 1 ? "s" : ""}</span>
                       <span style={{ fontSize: 11, fontWeight: 800, color: GREEN }}>${s.price_per_hr}/hr</span>
                     </div>
-                    <p style={{ margin: "10px 0 0", fontSize: 11.5, color: "rgba(255,255,255,0.40)", fontWeight: 600 }}>Tap to review all photos & details →</p>
+                    <p style={{ margin: "10px 0 0", fontSize: 11.5, color: "rgba(14,31,64,0.40)", fontWeight: 600 }}>Tap to review all photos & details →</p>
                   </div>
                 </div>
               ))}
@@ -3190,7 +3196,7 @@ export default function AdminPage() {
                 const expanded = expandedSignupId === s.id;
                 const approved = s.status === "approved";
                 return (
-                  <div key={s.id} style={{ background: "#142A52", borderRadius: 16, overflow: "hidden", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 14px rgba(0,0,0,0.28)" }}>
+                  <div key={s.id} style={{ background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 2px 12px rgba(14,31,64,0.08)", border: "1px solid rgba(14,31,64,0.08)" }}>
                     {/* Row header — always visible */}
                     <div
                       onClick={() => setExpandedSignupId(expanded ? null : s.id)}
@@ -3273,23 +3279,23 @@ export default function AdminPage() {
         </div>
       ) : selectedUser ? (
         /* ── USER DETAIL DASHBOARD ── */
-        <div style={{ flex: 1, overflowY: "auto", padding: "20px 20px 32px", display: "flex", flexDirection: "column", gap: 18 }}>
+        <div style={{ flex: 1, overflowY: "auto", background: "#f5f7fa", borderRadius: "28px 28px 0 0", padding: "20px 20px 32px", display: "flex", flexDirection: "column", gap: 18 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <button onClick={() => { setView("users"); setSelectedUserId(null); }} style={{ background: "rgba(255,255,255,0.08)", border: "none", borderRadius: "50%", width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#fff", flexShrink: 0 }}>
+            <button onClick={() => { setView("users"); setSelectedUserId(null); }} style={{ background: "#fff", border: "1px solid rgba(14,31,64,0.12)", borderRadius: "50%", width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: NAVY, flexShrink: 0 }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M15 18l-6-6 6-6"/></svg>
             </button>
-            <p style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.12em", textTransform: "uppercase", margin: 0 }}>Admin · User Detail</p>
+            <p style={{ fontSize: 11, fontWeight: 700, color: "rgba(14,31,64,0.45)", letterSpacing: "0.12em", textTransform: "uppercase", margin: 0 }}>Admin · User Detail</p>
           </div>
 
           {/* Profile header */}
-          <div style={{ background: "#142A52", borderRadius: 18, padding: "18px", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 14px rgba(0,0,0,0.30)", display: "flex", alignItems: "center", gap: 14 }}>
+          <div style={{ background: "#fff", borderRadius: 18, padding: "18px", boxShadow: "0 2px 12px rgba(14,31,64,0.08)", border: "1px solid rgba(14,31,64,0.07)", display: "flex", alignItems: "center", gap: 14 }}>
             <Avatar user={selectedUser} size={64} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 18, fontWeight: 800, color: "#fff", letterSpacing: "-0.02em" }}>{selectedUser.firstName} {selectedUser.lastName}</span>
+                <span style={{ fontSize: 18, fontWeight: 800, color: NAVY, letterSpacing: "-0.02em" }}>{selectedUser.firstName} {selectedUser.lastName}</span>
                 <TypeBadge type={selectedUser.type} />
               </div>
-              <p style={{ fontSize: 12, color: "rgba(255,255,255,0.62)", margin: "2px 0 0" }}>ID #{selectedUser.id} · Joined {selectedUser.joined}</p>
+              <p style={{ fontSize: 12, color: "rgba(14,31,64,0.50)", margin: "2px 0 0" }}>ID #{selectedUser.id} · Joined {selectedUser.joined}</p>
               <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
                 <a
                   href={`tel:${selectedUser.phone.replace(/[^0-9+]/g, "")}`}
@@ -3337,16 +3343,16 @@ export default function AdminPage() {
 
           {/* Stats row */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 10 }}>
-            <div style={{ background: "#142A52", borderRadius: 14, padding: "12px 14px", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 1px 6px rgba(0,0,0,0.22)" }}>
-              <p style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: "0.10em", textTransform: "uppercase", margin: 0 }}>Bookings (all time)</p>
-              <p style={{ fontSize: 22, fontWeight: 800, color: "#fff", margin: "2px 0 0", letterSpacing: "-0.02em" }}>{selectedUser.bookingsThisMonth}</p>
+            <div style={{ background: "#fff", borderRadius: 14, padding: "12px 14px", boxShadow: "0 2px 10px rgba(14,31,64,0.07)", border: "1px solid rgba(14,31,64,0.07)" }}>
+              <p style={{ fontSize: 10, fontWeight: 700, color: "rgba(14,31,64,0.45)", letterSpacing: "0.10em", textTransform: "uppercase", margin: 0 }}>Bookings (all time)</p>
+              <p style={{ fontSize: 22, fontWeight: 800, color: NAVY, margin: "2px 0 0", letterSpacing: "-0.02em" }}>{selectedUser.bookingsThisMonth}</p>
             </div>
           </div>
 
           {/* Personal info — editable */}
           <div>
             <SectionHeader>Personal Info</SectionHeader>
-            <div style={{ background: "#142A52", borderRadius: 14, padding: "4px 14px", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 1px 6px rgba(0,0,0,0.22)" }}>
+            <div style={{ background: "#fff", borderRadius: 14, padding: "4px 14px", boxShadow: "0 2px 10px rgba(14,31,64,0.07)", border: "1px solid rgba(14,31,64,0.07)" }}>
               <EditableField label="First name" value={selectedUser.firstName} onChange={v => updateUser(selectedUser.id, { firstName: v })} />
               <EditableField label="Last name" value={selectedUser.lastName} onChange={v => updateUser(selectedUser.id, { lastName: v })} />
               <EditableField label="Email" value={selectedUser.email} onChange={v => updateUser(selectedUser.id, { email: v })} />
@@ -3365,7 +3371,7 @@ export default function AdminPage() {
             <div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                 <SectionHeader>Pads & Spot Boxes</SectionHeader>
-                <span style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.55)" }}>{selectedUser.pads.length} pad{selectedUser.pads.length !== 1 ? "s" : ""}</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: "rgba(14,31,64,0.45)" }}>{selectedUser.pads.length} pad{selectedUser.pads.length !== 1 ? "s" : ""}</span>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 {selectedUser.pads.map((pad, i) => (
@@ -3389,13 +3395,13 @@ export default function AdminPage() {
           {/* Internal note — admin only */}
           {role === "admin" && <div>
             <SectionHeader>Internal Note</SectionHeader>
-            <div style={{ background: "#142A52", borderRadius: 14, padding: "12px 14px", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 1px 6px rgba(0,0,0,0.22)" }}>
+            <div style={{ background: "#fff", borderRadius: 14, padding: "12px 14px", boxShadow: "0 2px 10px rgba(14,31,64,0.07)", border: "1px solid rgba(14,31,64,0.07)" }}>
               <textarea
                 value={selectedUser.internalNote || ""}
                 onChange={e => updateUser(selectedUser.id, { internalNote: e.target.value })}
                 placeholder="Visible only to admins — risk flags, support context, etc."
                 rows={3}
-                style={{ width: "100%", border: "none", outline: "none", resize: "vertical", background: "transparent", color: "#fff", fontFamily: '"DM Sans",sans-serif', fontSize: 13, lineHeight: 1.5, boxSizing: "border-box", minHeight: 60 }}
+                style={{ width: "100%", border: "none", outline: "none", resize: "vertical", background: "transparent", color: NAVY, fontFamily: '"DM Sans",sans-serif', fontSize: 13, lineHeight: 1.5, boxSizing: "border-box", minHeight: 60 }}
               />
             </div>
           </div>}
@@ -3403,7 +3409,7 @@ export default function AdminPage() {
           {/* Master actions — admin only */}
           {role === "admin" && <div>
             <SectionHeader>Master Actions</SectionHeader>
-            <div style={{ background: "#142A52", borderRadius: 14, padding: "4px 14px", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 1px 6px rgba(0,0,0,0.22)" }}>
+            <div style={{ background: "#fff", borderRadius: 14, padding: "4px 14px", boxShadow: "0 2px 10px rgba(14,31,64,0.07)", border: "1px solid rgba(14,31,64,0.07)" }}>
               {(() => {
                 const actions: { label: string; icon: React.ReactNode; onClick: () => void }[] = [
                   {
@@ -3742,8 +3748,8 @@ export default function AdminPage() {
       {/* ── Bottom nav (only when signed in) ── */}
       {loggedIn && (
         <div style={{
-          background: "#142A52",
-          borderTop: "0.5px solid rgba(255,255,255,0.08)",
+          background: "#fff",
+          borderTop: "0.5px solid rgba(14,31,64,0.10)",
           padding: "14px 16px 24px",
           display: "flex",
           justifyContent: "space-around",
@@ -3787,7 +3793,7 @@ export default function AdminPage() {
               style={{
                 background: "none", border: "none", cursor: "pointer",
                 display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
-                color: item.active ? GREEN : "rgba(255,255,255,0.55)",
+                color: item.active ? GREEN : "rgba(14,31,64,0.40)",
                 fontSize: 10, fontWeight: item.active ? 800 : 600,
                 letterSpacing: "0.10em", fontFamily: '"DM Sans", sans-serif',
               }}

@@ -28,7 +28,7 @@ function AdminSlide({ open }: { open: boolean }) {
   );
 }
 
-const SPLIT = 72;
+const SPLIT = 78;
 const CONNECT_THRESHOLD = 0.72;
 
 export default function HomePage() {
@@ -135,7 +135,7 @@ export default function HomePage() {
         position: "absolute", top: 0, left: 0, right: 0, height: `${SPLIT}%`,
         background: "#0E1F40",
         display: "flex", flexDirection: "column", alignItems: "center",
-        padding: "0 24px", boxSizing: "border-box", zIndex: 5,
+        padding: 0, boxSizing: "border-box", zIndex: 5,
       }}>
 
         {/* ── LOGO (draggable right → admin) ── */}
@@ -167,11 +167,11 @@ export default function HomePage() {
             WebkitUserSelect: "none",
           }}
         >
-          <img src={lilypadLogo} alt="Lily Pad" style={{ width: 331, height: "auto", display: "block", pointerEvents: "none" }} />
+          <img src={lilypadLogo} alt="Lily Pad" style={{ width: "100%", height: "auto", display: "block", pointerEvents: "none" }} />
         </div>
 
         {/* Bottom content: headline + button */}
-        <div style={{ width: "100%", paddingBottom: "8vh", display: "flex", flexDirection: "column", alignItems: "center" }}>
+        <div style={{ width: "100%", padding: "0 24px 8vh", display: "flex", flexDirection: "column", alignItems: "center", boxSizing: "border-box" }}>
           <h1 style={{
             textAlign: "center", margin: "0 0 20px",
             fontSize: 27, fontWeight: 800, color: "#fff",
@@ -210,24 +210,21 @@ export default function HomePage() {
         position: "absolute", bottom: 0, left: 0, right: 0, height: `${100 - SPLIT}%`,
         background: "#F0F2F7",
         display: "flex", flexDirection: "column", alignItems: "center",
-        padding: "18px 24px calc(env(safe-area-inset-bottom) + 16px)",
+        padding: "14px 24px calc(env(safe-area-inset-bottom) + 10px)",
         boxSizing: "border-box", zIndex: 5,
       }}>
 
-        {/* FOR HOSTS — in flow, pinned near the dividing line */}
+        {/* FOR HOSTS — top of white section, near the line */}
         <p style={{
-          margin: 0, fontSize: 10, fontWeight: 700,
+          margin: "0 0 10px", fontSize: 10, fontWeight: 700,
           letterSpacing: "0.22em", color: "rgba(14,31,64,0.33)",
           textTransform: "uppercase", textAlign: "center",
         }}>
           For Hosts
         </p>
 
-        {/* spacer pushes content block to bottom */}
-        <div style={{ flex: 1 }} />
-
         <h2 style={{
-          margin: "0 0 14px", fontSize: 26, fontWeight: 800,
+          margin: "0 0 10px", fontSize: 24, fontWeight: 800,
           color: "#0E1F40", letterSpacing: "-0.03em",
           textAlign: "center", lineHeight: 1.18,
         }}>
@@ -239,16 +236,16 @@ export default function HomePage() {
           style={{
             width: "80%", background: "transparent",
             border: "2.5px solid #0E1F40", borderRadius: 50,
-            padding: "14px", fontSize: 15, fontWeight: 800,
+            padding: "12px", fontSize: 15, fontWeight: 800,
             color: "#0E1F40", cursor: "pointer",
-            letterSpacing: "-0.01em", marginBottom: 14,
+            letterSpacing: "-0.01em", marginBottom: 10,
           }}
         >
           Start Earning
         </button>
 
         <p style={{
-          margin: "0 0 6px", fontSize: 12, fontWeight: 600,
+          margin: "0 0 5px", fontSize: 11, fontWeight: 600,
           color: "rgba(14,31,64,0.36)", textAlign: "center",
           letterSpacing: "0.10em", textTransform: "uppercase",
         }}>
@@ -258,7 +255,7 @@ export default function HomePage() {
         <div
           onClick={() => setModalOpen(true)}
           style={{
-            fontSize: 12.5, color: "rgba(14,31,64,0.42)", cursor: "pointer",
+            fontSize: 12, color: "rgba(14,31,64,0.42)", cursor: "pointer",
             textDecoration: "underline", textDecorationColor: "rgba(14,31,64,0.22)",
             textAlign: "center",
           }}

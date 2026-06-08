@@ -996,7 +996,9 @@ try {
 
 export default function FindPage() {
   const { goTo, state, setState: setAppState } = useApp();
-  const { user, profile, signOut: authSignOut } = useAuth();
+  const { user, profile, role, signOut: authSignOut } = useAuth();
+  // Non-admin/staff users see a Coming Soon screen instead of the live map
+  const comingSoon = role !== "admin" && role !== "staff" && !state.adminPreview;
   const [spots, setSpots] = useState<SpotRecord[]>([]);
 
   useEffect(() => {
@@ -2011,8 +2013,50 @@ export default function FindPage() {
   return (
     <div ref={pageRef} className="page active" style={{ position: "relative", fontFamily: "'DM Sans', sans-serif" }}>
 
+      {/* ── COMING SOON SCREEN (non-admin/staff users) ── */}
+      {comingSoon && (
+        <div style={{
+          position: "absolute", inset: 0, zIndex: 10,
+          background: "#0E1F40",
+          display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center",
+          padding: "0 32px",
+          fontFamily: "'DM Sans', sans-serif",
+        }}>
+          <div style={{
+            width: 72, height: 72, borderRadius: "50%",
+            background: "rgba(141,214,63,0.14)",
+            border: "1.5px solid rgba(141,214,63,0.30)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            marginBottom: 22,
+          }}>
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#8DD63F" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="10" r="6" />
+              <path d="M12 16v5M8 21h8" />
+            </svg>
+          </div>
+          <div style={{
+            background: "rgba(141,214,63,0.12)",
+            border: "1px solid rgba(141,214,63,0.28)",
+            borderRadius: 100, padding: "5px 14px",
+            fontSize: 10, fontWeight: 800, letterSpacing: "0.14em",
+            color: "#8DD63F", textTransform: "uppercase", marginBottom: 16,
+          }}>Coming Soon</div>
+          <p style={{
+            fontSize: 26, fontWeight: 800, color: "#fff",
+            margin: "0 0 12px", letterSpacing: "-0.02em", textAlign: "center",
+          }}>Parking is on its way.</p>
+          <p style={{
+            fontSize: 14, color: "rgba(255,255,255,0.50)",
+            margin: 0, lineHeight: 1.6, textAlign: "center", maxWidth: 280,
+          }}>
+            Real Houston driveways are being added. Use your account below to manage your listing or settings.
+          </p>
+        </div>
+      )}
+
       {/* ── 3D GLOBE (no location / no city yet) ── */}
-      {globeMode && (
+      {globeMode && !comingSoon && (
         <div style={{
           position: "absolute", inset: 0, zIndex: 5,
           opacity: globeFading ? 0 : 1,
@@ -2045,7 +2089,7 @@ export default function FindPage() {
       )}
 
       {/* ── FULL-SCREEN MAP ── */}
-      {(!globeMode || mapMounted) && <div style={{
+      {!comingSoon && (!globeMode || mapMounted) && <div style={{
           position: "absolute", inset: 0, zIndex: 1,
           opacity: mapMounted ? mapOpacity : 1,
           transition: "opacity 0.7s ease",
@@ -2147,7 +2191,7 @@ export default function FindPage() {
       )}
 
       {/* ── UNIFIED SEARCH PILL — centered on globe, top-anchored on map ── */}
-      {(globeMode || sheetState !== "full") && <div style={{
+      {!comingSoon && (globeMode || sheetState !== "full") && <div style={{
         position: "absolute",
         ...(globeMode
           ? { top: "50%", left: 24, right: 24, transform: "translateY(-50%)" }
@@ -2311,7 +2355,7 @@ export default function FindPage() {
 
 
       {/* ── LOCATION BUTTON — floating above the sheet ── */}
-      {!globeMode && (
+      {!comingSoon && !globeMode && (
         <div style={{ position: "absolute", right: 16, bottom: `calc(${liveSheetH} + 12px)`, zIndex: 25, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8, transition: dragging ? "none" : "bottom 0.42s cubic-bezier(0.22,1,0.36,1)" }}>
           {/* Denied toast */}
           {locDenied && (
@@ -2376,7 +2420,7 @@ export default function FindPage() {
       )}
 
       {/* ── FROSTED BOTTOM SHEET ── */}
-      <div
+      {!comingSoon && <div
         onWheel={e => e.stopPropagation()}
         onTouchStart={e => { if (!dragging) e.stopPropagation(); }}
         onTouchMove={e => { if (!dragging) e.stopPropagation(); }}
@@ -3208,10 +3252,10 @@ export default function FindPage() {
             </div>
           );
         })()}
-      </div>
+      </div>}
 
       {/* ── BOOKING CONFIRMATION OVERLAY ── */}
-      {bookingConf && (() => {
+      {!comingSoon && bookingConf && (() => {
         const fmtD = (ts: number) => new Date(ts).toLocaleDateString(undefined, { weekday:"short", month:"short", day:"numeric" });
         const fmtT = (ts: number) => new Date(ts).toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit" });
         const durMs = bookingConf.endTs - bookingConf.startTs;

@@ -36,6 +36,21 @@ const inputStyle: React.CSSProperties = {
   transition: "border-color 0.18s",
 };
 
+const lightInputStyle: React.CSSProperties = {
+  width: "100%",
+  padding: "11px 14px",
+  borderRadius: 12,
+  border: "1.5px solid rgba(14,31,64,0.15)",
+  background: "rgba(14,31,64,0.04)",
+  fontSize: 14,
+  color: "#0E1F40",
+  fontFamily: '"DM Sans", sans-serif',
+  fontWeight: 400,
+  outline: "none",
+  boxSizing: "border-box",
+  transition: "border-color 0.18s",
+};
+
 // ── User / Staff types ───────────────────────────────────────────────────────
 type UserType = "driver" | "host" | "both";
 interface PadInfo {
@@ -1666,41 +1681,44 @@ export default function AdminPage() {
         </div>
       ) : !loggedIn && !role ? (
         /* ── ROLE CHOOSER ── */
-        <div style={{ flex: 1, overflowY: "auto", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "28px 24px" }}>
-          <div style={{ width: "100%", background: "#142A52", borderRadius: 28, padding: "40px 28px 32px", boxShadow: "0 12px 40px rgba(0,0,0,0.55)", display: "flex", flexDirection: "column", gap: 22 }}>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-              <div style={{ width: 60, height: 60, borderRadius: "50%", background: `rgba(255,255,255,0.08)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <>
+          <div style={{ flexShrink: 0, padding: "8px 20px 28px", background: NAVY }}>
+            <p style={{ fontSize: 14, color: "rgba(255,255,255,0.52)", margin: 0, lineHeight: 1.55 }}>Sign in to access the Lily Pad operations center.</p>
+          </div>
+          <div style={{ flex: 1, overflowY: "auto", background: "#fff", borderRadius: "28px 28px 0 0", padding: "28px 24px 40px" }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
+              <div style={{ width: 52, height: 52, borderRadius: "50%", background: "rgba(14,31,64,0.07)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="rgba(14,31,64,0.40)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
               </div>
-              <p style={{ fontSize: 22, fontWeight: 800, color: "#fff", margin: 0, letterSpacing: "-0.02em", textAlign: "center" }}>Choose your role</p>
+              <p style={{ fontSize: 22, fontWeight: 800, color: NAVY, margin: 0, letterSpacing: "-0.02em", textAlign: "center" }}>Choose your role</p>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 20 }}>
               <button onClick={() => { setRole("staff"); setError(""); setEmail(""); setPassword(""); }} style={{
-                background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 16, padding: "18px",
-                display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#fff", fontFamily: '"DM Sans",sans-serif',
-                fontSize: 16, fontWeight: 800, letterSpacing: "-0.01em",
+                background: "rgba(14,31,64,0.06)", border: "1.5px solid rgba(14,31,64,0.18)", borderRadius: 12, padding: "13px",
+                display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: NAVY, fontFamily: '"DM Sans",sans-serif',
+                fontSize: 14, fontWeight: 700, letterSpacing: "-0.01em",
               }}>
                 Staff
               </button>
               <button onClick={() => { setRole("admin"); setError(""); setEmail(""); setPassword(""); }} style={{
-                background: GREEN, border: "none", borderRadius: 16, padding: "18px",
+                background: GREEN, border: "none", borderRadius: 12, padding: "13px",
                 display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: NAVY, fontFamily: '"DM Sans",sans-serif',
-                fontSize: 16, fontWeight: 800, letterSpacing: "-0.01em",
+                fontSize: 14, fontWeight: 700, letterSpacing: "-0.01em",
               }}>
                 Admin
               </button>
               <button onClick={() => { resetActivation(); setShowActivate(true); }} style={{
                 background: "none", border: "none", padding: "8px", cursor: "pointer",
-                color: GREEN, fontFamily: '"DM Sans",sans-serif', fontSize: 13, fontWeight: 700, textAlign: "center",
+                color: "#3d6b18", fontFamily: '"DM Sans",sans-serif', fontSize: 13, fontWeight: 700, textAlign: "center",
               }}>
                 New here? Activate your account →
               </button>
 
               {/* ── Test Portal ── */}
-              <div style={{ borderTop: "1px solid rgba(255,255,255,0.07)", paddingTop: 14, marginTop: 2 }}>
+              <div style={{ borderTop: "1px solid rgba(14,31,64,0.08)", paddingTop: 14, marginTop: 2 }}>
                 <button
                   onClick={() => { setShowTestPortal(p => !p); setTestEmail(""); setTestPassword(""); setTestError(""); }}
-                  style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "rgba(255,255,255,0.30)", fontFamily: '"DM Sans",sans-serif', fontSize: 11, fontWeight: 600, textAlign: "center", width: "100%", letterSpacing: "0.04em" }}
+                  style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "rgba(14,31,64,0.30)", fontFamily: '"DM Sans",sans-serif', fontSize: 11, fontWeight: 600, textAlign: "center", width: "100%", letterSpacing: "0.04em" }}
                 >
                   {showTestPortal ? "Hide test portal" : "Test Portal"}
                 </button>
@@ -1716,7 +1734,7 @@ export default function AdminPage() {
                         value={testEmail}
                         onChange={e => { setTestEmail(e.target.value); setTestError(""); }}
                         onKeyDown={e => { if (e.key === "Enter") handleTestPortalLogin(); }}
-                        style={{ ...inputStyle, fontSize: 13, padding: "10px 14px" }}
+                        style={{ ...lightInputStyle }}
                       />
                       <input
                         type="password"
@@ -1724,7 +1742,7 @@ export default function AdminPage() {
                         value={testPassword}
                         onChange={e => { setTestPassword(e.target.value); setTestError(""); }}
                         onKeyDown={e => { if (e.key === "Enter") handleTestPortalLogin(); }}
-                        style={{ ...inputStyle, fontSize: 13, padding: "10px 14px" }}
+                        style={{ ...lightInputStyle }}
                       />
                       {testError && (
                         <p style={{ fontSize: 11, color: "#ef4444", margin: 0, textAlign: "center", fontFamily: '"DM Sans",sans-serif' }}>{testError}</p>
@@ -1732,14 +1750,14 @@ export default function AdminPage() {
                       <button
                         onClick={handleTestPortalLogin}
                         disabled={testLoading}
-                        style={{ background: testLoading ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 100, padding: "10px", color: "#fff", fontSize: 13, fontWeight: 700, cursor: testLoading ? "not-allowed" : "pointer", fontFamily: '"DM Sans",sans-serif' }}
+                        style={{ background: testLoading ? "rgba(14,31,64,0.06)" : "rgba(14,31,64,0.08)", border: "1px solid rgba(14,31,64,0.18)", borderRadius: 100, padding: "10px", color: NAVY, fontSize: 13, fontWeight: 700, cursor: testLoading ? "not-allowed" : "pointer", fontFamily: '"DM Sans",sans-serif' }}
                       >
                         {testLoading ? "Signing in…" : "Enter as tester"}
                       </button>
                       <button
                         onClick={handleTestPortalSendCode}
                         disabled={testResetLoading}
-                        style={{ background: "none", border: "none", padding: 0, cursor: testResetLoading ? "not-allowed" : "pointer", color: "rgba(255,255,255,0.35)", fontFamily: '"DM Sans",sans-serif', fontSize: 11, fontWeight: 500, textAlign: "center", textDecoration: "underline", textUnderlineOffset: 3 }}
+                        style={{ background: "none", border: "none", padding: 0, cursor: testResetLoading ? "not-allowed" : "pointer", color: "rgba(14,31,64,0.38)", fontFamily: '"DM Sans",sans-serif', fontSize: 11, fontWeight: 500, textAlign: "center", textDecoration: "underline", textUnderlineOffset: 3 }}
                       >
                         {testResetLoading ? "Sending…" : "Forgot password?"}
                       </button>
@@ -1748,8 +1766,8 @@ export default function AdminPage() {
                     {/* ── OTP entry ── */}
                     {testResetStep === "otp" && (
                       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                        <p style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", margin: 0, textAlign: "center", fontFamily: '"DM Sans",sans-serif' }}>
-                          Code sent to <strong style={{ color: "rgba(255,255,255,0.75)" }}>{testEmail}</strong>
+                        <p style={{ fontSize: 11, color: "rgba(14,31,64,0.45)", margin: 0, textAlign: "center", fontFamily: '"DM Sans",sans-serif' }}>
+                          Code sent to <strong style={{ color: NAVY }}>{testEmail}</strong>
                         </p>
                         <input
                           autoFocus
@@ -1759,18 +1777,18 @@ export default function AdminPage() {
                           value={testResetOtp}
                           onChange={e => { setTestResetOtp(e.target.value.replace(/\D/g, "")); setTestError(""); }}
                           onKeyDown={e => { if (e.key === "Enter") handleTestPortalVerifyOtp(); }}
-                          style={{ ...inputStyle, fontSize: 22, fontWeight: 700, textAlign: "center", letterSpacing: "0.20em", padding: "12px 14px" }}
+                          style={{ ...lightInputStyle, fontSize: 20, fontWeight: 700, textAlign: "center", letterSpacing: "0.20em" }}
                         />
                         {testError && (
                           <p style={{ fontSize: 11, color: "#ef4444", margin: 0, textAlign: "center", fontFamily: '"DM Sans",sans-serif' }}>{testError}</p>
                         )}
                         <button
                           onClick={handleTestPortalVerifyOtp}
-                          style={{ background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 100, padding: "10px", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: '"DM Sans",sans-serif' }}
+                          style={{ background: "rgba(14,31,64,0.08)", border: "1px solid rgba(14,31,64,0.18)", borderRadius: 100, padding: "10px", color: NAVY, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: '"DM Sans",sans-serif' }}
                         >
                           Continue
                         </button>
-                        <button onClick={() => { setTestResetStep("idle"); setTestResetOtp(""); setTestError(""); }} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "rgba(255,255,255,0.30)", fontFamily: '"DM Sans",sans-serif', fontSize: 11, textAlign: "center" }}>
+                        <button onClick={() => { setTestResetStep("idle"); setTestResetOtp(""); setTestError(""); }} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "rgba(14,31,64,0.35)", fontFamily: '"DM Sans",sans-serif', fontSize: 11, textAlign: "center" }}>
                           ← Back to sign in
                         </button>
                       </div>
@@ -1779,7 +1797,7 @@ export default function AdminPage() {
                     {/* ── New password ── */}
                     {testResetStep === "password" && (
                       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                        <p style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", margin: 0, textAlign: "center", fontFamily: '"DM Sans",sans-serif' }}>Set a new password</p>
+                        <p style={{ fontSize: 11, color: "rgba(14,31,64,0.45)", margin: 0, textAlign: "center", fontFamily: '"DM Sans",sans-serif' }}>Set a new password</p>
                         <input
                           autoFocus
                           type="password"
@@ -1787,7 +1805,7 @@ export default function AdminPage() {
                           value={testResetNewPw}
                           onChange={e => { setTestResetNewPw(e.target.value); setTestError(""); }}
                           onKeyDown={e => { if (e.key === "Enter") handleTestPortalSetPassword(); }}
-                          style={{ ...inputStyle, fontSize: 13, padding: "10px 14px" }}
+                          style={{ ...lightInputStyle }}
                         />
                         {testError && (
                           <p style={{ fontSize: 11, color: "#ef4444", margin: 0, textAlign: "center", fontFamily: '"DM Sans",sans-serif' }}>{testError}</p>
@@ -1795,7 +1813,7 @@ export default function AdminPage() {
                         <button
                           onClick={handleTestPortalSetPassword}
                           disabled={testResetLoading}
-                          style={{ background: testResetLoading ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 100, padding: "10px", color: "#fff", fontSize: 13, fontWeight: 700, cursor: testResetLoading ? "not-allowed" : "pointer", fontFamily: '"DM Sans",sans-serif' }}
+                          style={{ background: testResetLoading ? "rgba(14,31,64,0.06)" : "rgba(14,31,64,0.08)", border: "1px solid rgba(14,31,64,0.18)", borderRadius: 100, padding: "10px", color: NAVY, fontSize: 13, fontWeight: 700, cursor: testResetLoading ? "not-allowed" : "pointer", fontFamily: '"DM Sans",sans-serif' }}
                         >
                           {testResetLoading ? "Saving…" : "Set new password"}
                         </button>
@@ -1805,10 +1823,10 @@ export default function AdminPage() {
                     {/* ── Done ── */}
                     {testResetStep === "done" && (
                       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                        <p style={{ fontSize: 12, color: GREEN, margin: 0, textAlign: "center", fontFamily: '"DM Sans",sans-serif', fontWeight: 700 }}>
+                        <p style={{ fontSize: 12, color: "#3d6b18", margin: 0, textAlign: "center", fontFamily: '"DM Sans",sans-serif', fontWeight: 700 }}>
                           Password updated ✓
                         </p>
-                        <button onClick={() => { setTestResetStep("idle"); setTestResetOtp(""); setTestResetNewPw(""); setTestError(""); }} style={{ background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 100, padding: "10px", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: '"DM Sans",sans-serif' }}>
+                        <button onClick={() => { setTestResetStep("idle"); setTestResetOtp(""); setTestResetNewPw(""); setTestError(""); }} style={{ background: "rgba(14,31,64,0.08)", border: "1px solid rgba(14,31,64,0.18)", borderRadius: 100, padding: "10px", color: NAVY, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: '"DM Sans",sans-serif' }}>
                           Sign in now
                         </button>
                       </div>
@@ -1819,64 +1837,66 @@ export default function AdminPage() {
               </div>
             </div>
           </div>
-        </div>
+        </>
       ) : !loggedIn && role ? (
         /* ── ROLE-AWARE SIGN IN ── */
-        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "28px 24px" }}>
-          <div style={{
-            width: "100%", background: "#142A52", borderRadius: 28, padding: "36px 28px 32px",
-            boxShadow: "0 12px 40px rgba(0,0,0,0.55)", display: "flex", flexDirection: "column", alignItems: "stretch", gap: 14,
-          }}>
+        <>
+          <div style={{ flexShrink: 0, padding: "8px 20px 28px", background: NAVY }}>
+            <p style={{ fontSize: 14, color: "rgba(255,255,255,0.52)", margin: 0, lineHeight: 1.55 }}>
+              {role === "admin" ? "Admin access — enter your credentials." : "Staff access — enter your credentials."}
+            </p>
+          </div>
+          <div style={{ flex: 1, overflowY: "auto", background: "#fff", borderRadius: "28px 28px 0 0", padding: "28px 24px 40px", display: "flex", flexDirection: "column", gap: 14 }}>
             <div style={{ display: "flex", alignItems: "center", marginBottom: 4 }}>
-              <button onClick={() => { setRole(null); setError(""); }} style={{ background: "rgba(255,255,255,0.08)", border: "none", borderRadius: "50%", width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#fff" }}>
+              <button onClick={() => { setRole(null); setError(""); }} style={{ background: "rgba(14,31,64,0.07)", border: "none", borderRadius: "50%", width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: NAVY }}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M15 18l-6-6 6-6"/></svg>
               </button>
-              <span style={{ marginLeft: 10, fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.50)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Change role</span>
+              <span style={{ marginLeft: 10, fontSize: 11, fontWeight: 700, color: "rgba(14,31,64,0.40)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Change role</span>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, marginBottom: 4 }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, marginBottom: 4 }}>
               <div style={{
-                width: 60, height: 60, borderRadius: "50%",
-                background: role === "admin" ? GREEN : `rgba(255,255,255,0.08)`,
+                width: 52, height: 52, borderRadius: "50%",
+                background: role === "admin" ? GREEN : "rgba(14,31,64,0.07)",
                 display: "flex", alignItems: "center", justifyContent: "center",
               }}>
                 {role === "admin"
-                  ? <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                  : <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>}
+                  ? <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                  : <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="rgba(14,31,64,0.40)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>}
               </div>
-              <p style={{ fontSize: 22, fontWeight: 800, color: "#fff", margin: 0, letterSpacing: "-0.02em", textAlign: "center" }}>
+              <p style={{ fontSize: 20, fontWeight: 800, color: NAVY, margin: 0, letterSpacing: "-0.02em", textAlign: "center" }}>
                 {role === "admin" ? "Admin Sign In" : "Staff Sign In"}
               </p>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.62)", letterSpacing: "0.04em" }}>Email</label>
+              <label style={{ fontSize: 11, fontWeight: 700, color: "rgba(14,31,64,0.50)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Email</label>
               <input type="email" placeholder={role === "admin" ? "admin@lilypad.com" : "you@lilypad.com"} value={email}
                 onChange={e => { setEmail(e.target.value); setError(""); }}
                 onFocus={() => setEmailFocus(true)} onBlur={() => setEmailFocus(false)}
-                style={{ ...inputStyle, borderColor: emailFocus ? GREEN : "rgba(255,255,255,0.10)" }} />
+                style={{ ...lightInputStyle, borderColor: emailFocus ? GREEN : "rgba(14,31,64,0.15)" }} />
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.62)", letterSpacing: "0.04em" }}>Password</label>
+              <label style={{ fontSize: 11, fontWeight: 700, color: "rgba(14,31,64,0.50)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Password</label>
               <input type="password" placeholder="••••••••" value={password}
                 onChange={e => { setPassword(e.target.value); setError(""); }}
                 onFocus={() => setPwFocus(true)} onBlur={() => setPwFocus(false)}
                 onKeyDown={e => { if (e.key === "Enter") handleLogin(); }}
-                style={{ ...inputStyle, borderColor: pwFocus ? GREEN : "rgba(255,255,255,0.10)" }} />
+                style={{ ...lightInputStyle, borderColor: pwFocus ? GREEN : "rgba(14,31,64,0.15)" }} />
             </div>
             {error && (
               <p style={{ fontSize: 12, color: "#ef4444", textAlign: "center", margin: 0, fontFamily: '"DM Sans", sans-serif' }}>{error}</p>
             )}
-            <button onClick={handleLogin} disabled={loginLoading} style={{ background: loginLoading ? "rgba(141,214,63,0.55)" : GREEN, color: NAVY, border: "none", borderRadius: 100, padding: "15px", fontWeight: 800, fontSize: 15, fontFamily: '"DM Sans", sans-serif', cursor: loginLoading ? "not-allowed" : "pointer", marginTop: 4, letterSpacing: "0.01em" }}>
+            <button onClick={handleLogin} disabled={loginLoading} style={{ background: loginLoading ? "rgba(141,214,63,0.55)" : GREEN, color: NAVY, border: "none", borderRadius: 100, padding: "13px", fontWeight: 800, fontSize: 14, fontFamily: '"DM Sans", sans-serif', cursor: loginLoading ? "not-allowed" : "pointer", marginTop: 4, letterSpacing: "0.01em" }}>
               {loginLoading ? "Signing in…" : `Sign in as ${role === "admin" ? "Admin" : "Staff"}`}
             </button>
             <button
               type="button"
               onClick={() => { setForgotEmail(email); setForgotError(""); setForgotStep("email"); setForgotOpen(true); }}
-              style={{ background: "none", border: "none", textAlign: "center", fontSize: 12, color: "rgba(255,255,255,0.55)", margin: 0, cursor: "pointer", fontFamily: '"DM Sans", sans-serif', textDecoration: "underline", textUnderlineOffset: 3 }}
+              style={{ background: "none", border: "none", textAlign: "center", fontSize: 12, color: "rgba(14,31,64,0.45)", margin: 0, cursor: "pointer", fontFamily: '"DM Sans", sans-serif', textDecoration: "underline", textUnderlineOffset: 3 }}
             >
               Forgot password?
             </button>
           </div>
-        </div>
+        </>
       ) : view === "dashboard" ? (
         /* ── DASHBOARD ── */
         <div style={{ flex: 1, overflowY: "auto", padding: "24px 20px 32px", display: "flex", flexDirection: "column", gap: 20 }}>

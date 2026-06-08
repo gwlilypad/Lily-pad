@@ -28,7 +28,7 @@ function AdminSlide({ open }: { open: boolean }) {
   );
 }
 
-const SPLIT = 68;
+const SPLIT = 72;
 const CONNECT_THRESHOLD = 0.72;
 
 export default function HomePage() {
@@ -210,14 +210,12 @@ export default function HomePage() {
         position: "absolute", bottom: 0, left: 0, right: 0, height: `${100 - SPLIT}%`,
         background: "#F0F2F7",
         display: "flex", flexDirection: "column", alignItems: "center",
-        justifyContent: "center",
-        padding: "42px 24px calc(env(safe-area-inset-bottom) + 20px)",
+        padding: "18px 24px calc(env(safe-area-inset-bottom) + 16px)",
         boxSizing: "border-box", zIndex: 5,
       }}>
 
-        {/* FOR HOSTS — pinned near the dividing line */}
+        {/* FOR HOSTS — in flow, pinned near the dividing line */}
         <p style={{
-          position: "absolute", top: 18, left: 0, right: 0,
           margin: 0, fontSize: 10, fontWeight: 700,
           letterSpacing: "0.22em", color: "rgba(14,31,64,0.33)",
           textTransform: "uppercase", textAlign: "center",
@@ -225,8 +223,11 @@ export default function HomePage() {
           For Hosts
         </p>
 
+        {/* spacer pushes content block to bottom */}
+        <div style={{ flex: 1 }} />
+
         <h2 style={{
-          margin: "0 0 16px", fontSize: 26, fontWeight: 800,
+          margin: "0 0 14px", fontSize: 26, fontWeight: 800,
           color: "#0E1F40", letterSpacing: "-0.03em",
           textAlign: "center", lineHeight: 1.18,
         }}>
@@ -240,14 +241,14 @@ export default function HomePage() {
             border: "2.5px solid #0E1F40", borderRadius: 50,
             padding: "14px", fontSize: 15, fontWeight: 800,
             color: "#0E1F40", cursor: "pointer",
-            letterSpacing: "-0.01em", marginBottom: 16,
+            letterSpacing: "-0.01em", marginBottom: 14,
           }}
         >
           Start Earning
         </button>
 
         <p style={{
-          margin: "0 0 7px", fontSize: 12, fontWeight: 600,
+          margin: "0 0 6px", fontSize: 12, fontWeight: 600,
           color: "rgba(14,31,64,0.36)", textAlign: "center",
           letterSpacing: "0.10em", textTransform: "uppercase",
         }}>

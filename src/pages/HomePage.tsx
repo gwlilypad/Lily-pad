@@ -175,7 +175,7 @@ export default function HomePage() {
 
         {/* Centre content: headline + button + sign in */}
         <div style={{
-          width: "100%", padding: "0 24px 14px",
+          width: "100%", padding: "0 24px 36px",
           display: "flex", flexDirection: "column",
           alignItems: "center",
           boxSizing: "border-box",
@@ -219,12 +219,13 @@ export default function HomePage() {
           )}
         </div>
 
-        {/* FOR DRIVERS label */}
+        {/* FOR DRIVERS — pinned near the dividing line */}
         <p style={{
-          flex: "0 0 auto",
-          margin: "0 0 12px", fontSize: 10, fontWeight: 700,
+          position: "absolute", bottom: 10, left: 0, right: 0,
+          margin: 0, fontSize: 10, fontWeight: 700,
           letterSpacing: "0.22em", color: "rgba(255,255,255,0.30)",
           textTransform: "uppercase", textAlign: "center",
+          pointerEvents: "none",
         }}>
           For Drivers
         </p>
@@ -279,17 +280,6 @@ export default function HomePage() {
         }}>
           FAQ
         </p>
-
-        <div
-          onClick={() => setModalOpen(true)}
-          style={{
-            fontSize: 12, color: "rgba(14,31,64,0.42)", cursor: "pointer",
-            textDecoration: "underline", textDecorationColor: "rgba(14,31,64,0.22)",
-            textAlign: "center",
-          }}
-        >
-          Have a referral code?
-        </div>
 
       </div>
 

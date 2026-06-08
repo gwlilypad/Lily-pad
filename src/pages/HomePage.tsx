@@ -37,7 +37,6 @@ export default function HomePage() {
   const navigate = useNavigate();
   const [modalOpen, setModalOpen] = useState(false);
   const [modalSuccess, setModalSuccess] = useState(false);
-  const [authPrompt, setAuthPrompt] = useState(false);
   const [typeVal, setTypeVal] = useState<"driver" | "host">("driver");
   const [refCode, setRefCode] = useState("");
   const [adminOpen, setAdminOpen] = useState(false);
@@ -113,7 +112,7 @@ export default function HomePage() {
 
   function handleFindAPad() {
     setState(s => ({ ...s, accountType: "renter" }));
-    if (user) { goTo("find"); } else { setAuthPrompt(true); }
+    if (user) { goTo("find"); } else { navigate("/signup"); }
   }
 
   function handleListMyPad() {
@@ -300,35 +299,6 @@ export default function HomePage() {
       )}
 
       <AdminSlide open={adminOpen} />
-
-      {/* ── AUTH PROMPT MODAL ── */}
-      <div className={`modal-overlay${authPrompt ? " show" : ""}`} onClick={() => setAuthPrompt(false)}>
-        <div className="modal-sheet" onClick={e => e.stopPropagation()}>
-          <div className="modal-handle" />
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
-            <div style={{ width: 44, height: 44, borderRadius: "50%", background: "rgba(141,214,63,0.13)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8DD63F" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-            </div>
-            <div>
-              <p style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "#0E1F40", letterSpacing: "-0.02em" }}>Start Parking</p>
-              <p style={{ margin: 0, fontSize: 12, color: "rgba(14,31,64,0.45)", marginTop: 2 }}>Sign in or create a free account to continue.</p>
-            </div>
-          </div>
-          <button
-            onClick={() => { setAuthPrompt(false); navigate("/signin"); }}
-            style={{ width: "100%", background: "#0E1F40", color: "#fff", border: "none", borderRadius: 50, padding: "15px", fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 10, fontFamily: '"DM Sans", sans-serif' }}
-          >
-            Sign in
-          </button>
-          <button
-            onClick={() => { setAuthPrompt(false); goTo("signup"); }}
-            style={{ width: "100%", background: "transparent", color: "#0E1F40", border: "2px solid #0E1F40", borderRadius: 50, padding: "13px", fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 6, fontFamily: '"DM Sans", sans-serif' }}
-          >
-            Create account
-          </button>
-          <p style={{ textAlign: "center", fontSize: 12, color: "rgba(14,31,64,0.35)", margin: "8px 0 0", cursor: "pointer" }} onClick={() => setAuthPrompt(false)}>Maybe later</p>
-        </div>
-      </div>
 
       {/* ── REFERRAL MODAL ── */}
       <div className={`modal-overlay${modalOpen ? " show" : ""}`} onClick={closeModal}>

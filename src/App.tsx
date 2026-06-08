@@ -59,7 +59,7 @@ const PAGE_ROUTES: Record<PageId, string> = {
 function AppInner() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { role, loading: authLoading, isBetaTester } = useAuth();
+  const { user, role, loading: authLoading, isBetaTester } = useAuth();
   const [fading, setFading] = useState(false);
   const [state, setState] = useState<AppState>(loadInitialState);
 
@@ -210,6 +210,39 @@ function AppInner() {
         </Routes>
       </div>
       {adminSimBar}
+
+      {/* Sign in — rendered OUTSIDE .screen (overflow:hidden) so it's always visible on every device */}
+      {!user && location.pathname === "/" && (
+        <div style={{
+          position: "fixed",
+          bottom: 0, left: 0, right: 0,
+          zIndex: 9999,
+          display: "flex",
+          justifyContent: "center",
+          padding: "14px 24px calc(env(safe-area-inset-bottom) + 16px)",
+          background: "linear-gradient(to top, rgba(240,242,247,1) 55%, rgba(240,242,247,0))",
+          pointerEvents: "none",
+        }}>
+          <button
+            onClick={() => navigate("/signin")}
+            style={{
+              pointerEvents: "auto",
+              background: "#0E1F40",
+              border: "none",
+              borderRadius: 100,
+              padding: "13px 40px",
+              fontSize: 14, fontWeight: 700,
+              color: "#fff",
+              cursor: "pointer",
+              fontFamily: "'DM Sans',sans-serif",
+              boxShadow: "0 4px 20px rgba(14,31,64,0.28)",
+              letterSpacing: 0.1,
+            }}
+          >
+            Sign in
+          </button>
+        </div>
+      )}
     </AppContext.Provider>
   );
 }

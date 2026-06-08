@@ -285,39 +285,6 @@ export default function HomePage() {
 
       <AdminSlide open={adminOpen} />
 
-      {/* ── SIGN IN — fixed to bottom, always visible ── */}
-      {!user && (
-        <div style={{
-          position: "fixed",
-          bottom: 0, left: 0, right: 0,
-          zIndex: 200,
-          display: "flex",
-          justifyContent: "center",
-          padding: "12px 24px calc(env(safe-area-inset-bottom) + 14px)",
-          background: "linear-gradient(to top, #F0F2F7 60%, rgba(240,242,247,0))",
-          pointerEvents: "none",
-        }}>
-          <button
-            onClick={() => navigate("/signin")}
-            style={{
-              pointerEvents: "auto",
-              background: "#0E1F40",
-              border: "none",
-              borderRadius: 100,
-              padding: "12px 36px",
-              fontSize: 14, fontWeight: 700,
-              color: "#fff",
-              cursor: "pointer",
-              fontFamily: "'DM Sans',sans-serif",
-              letterSpacing: 0.1,
-              boxShadow: "0 4px 18px rgba(14,31,64,0.22)",
-            }}
-          >
-            Sign in
-          </button>
-        </div>
-      )}
-
       {/* ── REFERRAL MODAL ── */}
       <div className={`modal-overlay${modalOpen ? " show" : ""}`} onClick={closeModal}>
         <div className="modal-sheet" onClick={e => e.stopPropagation()}>

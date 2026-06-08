@@ -242,10 +242,10 @@ export default function HomePage() {
         <button
           onClick={handleListMyPad}
           style={{
-            width: "80%", background: "transparent",
-            border: "2.5px solid #0E1F40", borderRadius: 50,
+            width: "80%", background: "#0E1F40",
+            border: "none", borderRadius: 50,
             padding: "11px", fontSize: 11, fontWeight: 800,
-            color: "#0E1F40", cursor: "pointer",
+            color: "#fff", cursor: "pointer",
             letterSpacing: "-0.01em", marginBottom: 10,
           }}
         >

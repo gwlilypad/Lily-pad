@@ -212,38 +212,6 @@ function AppInner() {
       </div>
       {adminSimBar}
 
-      {/* Sign in — portal into document.body, escapes ALL overflow:hidden/position:fixed parents */}
-      {!user && location.pathname === "/" && createPortal(
-        <div style={{
-          position: "fixed",
-          bottom: 0, left: 0, right: 0,
-          zIndex: 99999,
-          display: "flex",
-          justifyContent: "center",
-          padding: "14px 24px calc(env(safe-area-inset-bottom, 20px) + 16px)",
-          background: "linear-gradient(to top, #F0F2F7 60%, rgba(240,242,247,0))",
-        }}>
-          <button
-            onClick={() => navigate("/signin")}
-            style={{
-              background: "#0E1F40",
-              border: "none",
-              borderRadius: 100,
-              padding: "14px 44px",
-              fontSize: 15, fontWeight: 700,
-              color: "#fff",
-              cursor: "pointer",
-              fontFamily: "'DM Sans',sans-serif",
-              boxShadow: "0 4px 24px rgba(14,31,64,0.32)",
-              letterSpacing: 0.1,
-              WebkitTapHighlightColor: "transparent",
-            }}
-          >
-            Sign in
-          </button>
-        </div>,
-        document.body
-      )}
     </AppContext.Provider>
   );
 }

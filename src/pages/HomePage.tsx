@@ -167,13 +167,13 @@ export default function HomePage() {
             WebkitUserSelect: "none",
           }}
         >
-          <img src={lilypadLogo} alt="Lily Pad" style={{ width: "62%", height: "auto", display: "block", pointerEvents: "none" }} />
+          <img src={lilypadLogo} alt="Lily Pad" style={{ width: "80%", height: "auto", display: "block", pointerEvents: "none" }} />
         </div>
 
         {/* Centre content: headline + button — anchored fixed distance above FOR DRIVERS */}
         <div style={{
           position: "absolute",
-          bottom: 95,
+          bottom: 78,
           left: 24, right: 24,
           display: "flex", flexDirection: "column",
           alignItems: "center",
@@ -198,6 +198,23 @@ export default function HomePage() {
           >
             Start Parking
           </button>
+
+          {!user && (
+            <div
+              onClick={() => navigate("/signin")}
+              style={{
+                marginTop: 14, cursor: "pointer",
+                fontSize: 13, fontWeight: 600,
+                color: "rgba(255,255,255,0.60)",
+                letterSpacing: 0.1,
+              }}
+            >
+              Already have an account?{" "}
+              <span style={{ color: "#8DD63F", fontWeight: 700, textDecoration: "underline", textDecorationColor: "rgba(141,214,63,0.4)" }}>
+                Sign in
+              </span>
+            </div>
+          )}
         </div>
 
         {/* FOR DRIVERS — same distance from dividing line as FOR HOSTS is on the other side */}

@@ -18,7 +18,7 @@ const SLIDES = [
   {
     title: "What happens next",
     body: "Complete your account to join the neighborhood. Have questions? Visit our FAQs or reach us at ",
-    email: "hq@axispad.com",
+    email: "support@lilypadparking.com",
   },
 ];
 

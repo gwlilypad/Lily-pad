@@ -257,14 +257,6 @@ export default function HomePage() {
           Start Earning
         </button>
 
-        <p style={{
-          margin: "0 0 4px", fontSize: 11, fontWeight: 600,
-          color: "rgba(14,31,64,0.36)", textAlign: "center",
-          letterSpacing: "0.10em", textTransform: "uppercase",
-        }}>
-          FAQ
-        </p>
-
         {!user && (
           <div
             onClick={() => navigate("/signin")}

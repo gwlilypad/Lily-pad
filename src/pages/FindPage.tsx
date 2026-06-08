@@ -2510,12 +2510,12 @@ export default function FindPage() {
         </div>
 
         {/* ── Collapsed: swipe hint ── */}
-        {sheetState === "collapsed" && !comingSoon && (
+        {sheetState === "collapsed" && (
           <div style={{ flexShrink: 0, padding: "4px 0 14px", textAlign: "center", pointerEvents: "none", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8DD63F" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.9 }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={comingSoon ? "rgba(255,255,255,0.28)" : "#8DD63F"} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.9 }}>
               <path d="M18 15l-6-6-6 6"/>
             </svg>
-            <span style={{ fontSize: 16, fontWeight: 800, color: "#fff", letterSpacing: -0.2 }}>
+            <span style={{ fontSize: 16, fontWeight: 800, color: comingSoon ? "rgba(255,255,255,0.28)" : "#fff", letterSpacing: -0.2 }}>
               Swipe up to find parking
             </span>
           </div>

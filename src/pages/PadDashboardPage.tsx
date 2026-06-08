@@ -233,6 +233,10 @@ export default function PadDashboardPage() {
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState("");
 
+  // Services saved toast
+  const [serviceToast, setServiceToast] = useState(false);
+  const serviceToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   async function saveEdit() {
     if (!openPad || !editDraft) return;
     setEditSaving(true);
@@ -452,7 +456,7 @@ export default function PadDashboardPage() {
       const has = p.services.includes(service);
       const updated = has ? p.services.filter(s => s !== service) : [...p.services, service];
       newServices = updated;
-      spotId = p.spotId;
+      spotId = p.spotId || "";
       return { ...p, services: updated };
     }));
     if (spotId) {
@@ -460,6 +464,10 @@ export default function PadDashboardPage() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ services: newServices }),
+      }).then(() => {
+        if (serviceToastTimer.current) clearTimeout(serviceToastTimer.current);
+        setServiceToast(true);
+        serviceToastTimer.current = setTimeout(() => setServiceToast(false), 1800);
       }).catch(() => {});
     }
   }
@@ -809,28 +817,36 @@ export default function PadDashboardPage() {
             <div style={{ background: "#142A52", borderRadius: 14, padding: "14px 14px", marginBottom: 14, border: "1px solid rgba(255,255,255,0.06)", boxShadow: "0 1px 6px rgba(0,0,0,0.18)" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
                 <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.36)", letterSpacing: 0.6, textTransform: "uppercase" }}>Services & amenities</div>
-                {!editMode && <span style={{ fontSize: 10, color: "rgba(255,255,255,0.28)", fontStyle: "italic" }}>Press "Edit listing" to change</span>}
+                <span style={{
+                  fontSize: 10, fontWeight: 700, letterSpacing: 0.4,
+                  color: serviceToast ? GREEN : "rgba(255,255,255,0.22)",
+                  transition: "color 0.25s",
+                }}>
+                  {serviceToast ? "✓ Saved" : "Tap to toggle"}
+                </span>
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {ALL_SERVICES.map(svc => {
-                  const on = editMode && editDraft ? editDraft.services.includes(svc) : openPad.services.includes(svc);
+                  const on = openPad.services.includes(svc);
                   return (
                     <button key={svc} onClick={() => {
-                      if (!editMode || !editDraft) return;
-                      setEditDraft(d => {
-                        if (!d) return d;
-                        const has = d.services.includes(svc);
-                        return { ...d, services: has ? d.services.filter(s => s !== svc) : [...d.services, svc] };
-                      });
+                      toggleService(openPad.id, svc);
+                      if (editDraft) {
+                        setEditDraft(d => {
+                          if (!d) return d;
+                          const has = d.services.includes(svc);
+                          return { ...d, services: has ? d.services.filter(s => s !== svc) : [...d.services, svc] };
+                        });
+                      }
                     }} style={{
                       padding: "7px 12px", borderRadius: 100,
                       background: on ? "rgba(141,214,63,0.16)" : "rgba(255,255,255,0.06)",
                       border: `1px solid ${on ? "rgba(141,214,63,0.40)" : "rgba(255,255,255,0.08)"}`,
                       color: on ? GREEN : "rgba(255,255,255,0.48)",
-                      fontSize: 12, fontWeight: 700, cursor: editMode ? "pointer" : "default",
+                      fontSize: 12, fontWeight: 700, cursor: "pointer",
                       fontFamily: "'DM Sans',sans-serif",
                       display: "flex", alignItems: "center", gap: 5,
-                      opacity: !editMode ? 0.85 : 1,
+                      transition: "background 0.15s, border-color 0.15s, color 0.15s",
                     }}>
                       {on && <span style={{ fontSize: 11 }}>✓</span>}
                       {svc}

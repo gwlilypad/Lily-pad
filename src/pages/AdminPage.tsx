@@ -1666,7 +1666,7 @@ export default function AdminPage() {
         </div>
       ) : !loggedIn && !role ? (
         /* ── ROLE CHOOSER ── */
-        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "28px 24px" }}>
+        <div style={{ flex: 1, overflowY: "auto", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "28px 24px" }}>
           <div style={{ width: "100%", background: "#142A52", borderRadius: 28, padding: "40px 28px 32px", boxShadow: "0 12px 40px rgba(0,0,0,0.55)", display: "flex", flexDirection: "column", gap: 22 }}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
               <div style={{ width: 60, height: 60, borderRadius: "50%", background: `rgba(255,255,255,0.08)`, display: "flex", alignItems: "center", justifyContent: "center" }}>

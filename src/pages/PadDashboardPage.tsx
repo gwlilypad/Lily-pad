@@ -223,7 +223,6 @@ export default function PadDashboardPage() {
 
   const [openPadId, setOpenPadId] = useState<number | null>(null);
   const [pendingPauseId, setPendingPauseId] = useState<number | null>(null);
-  const photoInputRef = useRef<HTMLInputElement>(null);
 
   // Rename state
   const [renamingPad, setRenamingPad] = useState<Pad | null>(null);
@@ -253,6 +252,7 @@ export default function PadDashboardPage() {
 
   // Spot draw modal
   const [drawModalOpen, setDrawModalOpen] = useState(false);
+  const [drawStartWithPicker, setDrawStartWithPicker] = useState(false);
 
   // Reset gallery index when switching pads
   useEffect(() => { setPhotoIndex(0); }, [openPadId]);
@@ -529,13 +529,9 @@ export default function PadDashboardPage() {
     }
   }
 
-  function onPhotoPick(e: React.ChangeEvent<HTMLInputElement>) {
-    if (!openPad) return;
-    const f = e.target.files?.[0];
-    if (!f) return;
-    const reader = new FileReader();
-    reader.onload = () => updatePad(openPad.id, { photoUrl: String(reader.result) });
-    reader.readAsDataURL(f);
+  function openDrawModal(withPicker: boolean) {
+    setDrawStartWithPicker(withPicker);
+    setDrawModalOpen(true);
   }
 
   return (
@@ -713,7 +709,6 @@ export default function PadDashboardPage() {
           /* ── DETAIL / EDIT VIEW (dark profile) ── */
           <>
             {/* Photo hero — swipeable gallery */}
-            <input ref={photoInputRef} type="file" accept="image/*" onChange={onPhotoPick} style={{ display: "none" }} />
             {(() => {
               const photos = openPad.photoUrls.length > 0 ? openPad.photoUrls : (openPad.photoUrl ? [openPad.photoUrl] : []);
               const safeIdx = Math.min(photoIndex, Math.max(0, photos.length - 1));
@@ -760,28 +755,30 @@ export default function PadDashboardPage() {
                     )}
                   </div>
                   <div style={{ position: "absolute", top: 12, right: 12, display: "flex", gap: 6 }} onClick={e => e.stopPropagation()}>
-                    {openPad.photoUrl && openPad.spotId && (
-                      <button onClick={() => setDrawModalOpen(true)} style={{
-                        background: "rgba(141,214,63,0.20)", backdropFilter: "blur(8px)",
-                        border: "1px solid rgba(141,214,63,0.45)", borderRadius: 100,
-                        padding: "7px 12px", fontSize: 11, fontWeight: 700, color: "#8DD63F",
-                        cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
-                        display: "flex", alignItems: "center", gap: 5,
-                      }}>
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
-                        Redraw
-                      </button>
+                    {openPad.spotId && (
+                      <>
+                        <button onClick={() => openDrawModal(false)} style={{
+                          background: "rgba(141,214,63,0.20)", backdropFilter: "blur(8px)",
+                          border: "1px solid rgba(141,214,63,0.45)", borderRadius: 100,
+                          padding: "7px 12px", fontSize: 11, fontWeight: 700, color: "#8DD63F",
+                          cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+                          display: "flex", alignItems: "center", gap: 5,
+                        }}>
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+                          Redraw
+                        </button>
+                        <button onClick={() => openDrawModal(true)} style={{
+                          background: "rgba(0,0,0,0.48)", backdropFilter: "blur(8px)",
+                          border: "1px solid rgba(255,255,255,0.18)", borderRadius: 100,
+                          padding: "7px 12px", fontSize: 11, fontWeight: 700, color: "#fff",
+                          cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+                          display: "flex", alignItems: "center", gap: 5,
+                        }}>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                          Photo
+                        </button>
+                      </>
                     )}
-                    <button onClick={() => photoInputRef.current?.click()} style={{
-                      background: "rgba(0,0,0,0.48)", backdropFilter: "blur(8px)",
-                      border: "1px solid rgba(255,255,255,0.18)", borderRadius: 100,
-                      padding: "7px 12px", fontSize: 11, fontWeight: 700, color: "#fff",
-                      cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
-                      display: "flex", alignItems: "center", gap: 5,
-                    }}>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-                      Photo
-                    </button>
                   </div>
                 </div>
               );
@@ -1330,10 +1327,12 @@ export default function PadDashboardPage() {
         spotId={openPad.spotId}
         userId={user.id}
         numPads={openPad.spotCount}
-        onClose={() => setDrawModalOpen(false)}
+        startWithPicker={drawStartWithPicker}
+        onClose={() => { setDrawModalOpen(false); setDrawStartWithPicker(false); }}
         onSaved={(newUrl, rawUrl) => {
           updatePad(openPad.id, { photoUrl: newUrl, rawPhotoUrl: rawUrl, photoUrls: [newUrl] });
           setDrawModalOpen(false);
+          setDrawStartWithPicker(false);
         }}
       />
     )}

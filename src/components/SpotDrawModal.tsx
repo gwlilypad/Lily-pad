@@ -84,11 +84,12 @@ interface Props {
   spotId: string;
   userId: string;
   numPads: number;
+  startWithPicker?: boolean;
   onClose: () => void;
   onSaved: (newUrl: string, rawUrl: string) => void;
 }
 
-export default function SpotDrawModal({ photoUrl, rawPhotoUrl, spotId, userId, numPads, onClose, onSaved }: Props) {
+export default function SpotDrawModal({ photoUrl, rawPhotoUrl, spotId, userId, numPads, startWithPicker, onClose, onSaved }: Props) {
   const [basePhoto, setBasePhoto] = useState(rawPhotoUrl || photoUrl);
   const [naturalW, setNaturalW]   = useState(0);
   const [naturalH, setNaturalH]   = useState(0);
@@ -109,12 +110,21 @@ export default function SpotDrawModal({ photoUrl, rawPhotoUrl, spotId, userId, n
 
   // Measure natural dimensions of current base photo
   useEffect(() => {
+    if (!basePhoto) { setNaturalW(1200); setNaturalH(900); return; }
     const img = new window.Image();
     img.crossOrigin = "anonymous";
     img.onload  = () => { setNaturalW(img.naturalWidth);  setNaturalH(img.naturalHeight); };
     img.onerror = () => { setNaturalW(1200); setNaturalH(900); };
     img.src = basePhoto;
   }, [basePhoto]);
+
+  // Auto-open file picker when startWithPicker is true
+  useEffect(() => {
+    if (startWithPicker) {
+      const t = setTimeout(() => fileRef.current?.click(), 120);
+      return () => clearTimeout(t);
+    }
+  }, [startWithPicker]);
 
   const drawScene = useCallback(() => {
     const c = canvasRef.current; if (!c) return;

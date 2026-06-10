@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/context/AuthContext";
 import type { BookingRec } from "@/context/AppContext";
+import BookingChatDrawer from "@/components/BookingChatDrawer";
 
 type DerivedStatus = "pending" | "upcoming" | "active" | "completed" | "cancelled" | "denied";
 
@@ -50,6 +51,8 @@ export default function BookingsPage() {
   const [apiBookings, setApiBookings]   = useState<BookingRec[]>([]);
   const [loading, setLoading]     = useState(true);
   const [expandedId, setExpandedId]   = useState<string|null>(null);
+
+  const [chatBooking, setChatBooking] = useState<{ uuid: string; addr: string; hostName: string } | null>(null);
 
   // Adjust-time state (inline in pill)
   const [adjustingId, setAdjustingId] = useState<string|null>(null);
@@ -216,6 +219,7 @@ export default function BookingsPage() {
   };
 
   return (
+    <>
     <div className="page active" style={{ background: NAVY, display: "flex", flexDirection: "column", fontFamily: "'DM Sans',sans-serif", minHeight: "100dvh" }}>
 
       {/* Header */}
@@ -401,6 +405,16 @@ export default function BookingsPage() {
                     </div>
                   )}
 
+                  {/* ── Message Host ── */}
+                  {!isAdjusting && !isExtending && !isCancelConfirm && ds !== "cancelled" && ds !== "denied" && (
+                    <button
+                      onClick={() => setChatBooking({ uuid: b.uuid!, addr: b.addr, hostName: b.hostName || "Host" })}
+                      style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:7, padding:"10px 0", borderRadius:12, background:"rgba(141,214,63,0.08)", border:`1px solid rgba(141,214,63,0.22)`, cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:700, color:GREEN, marginBottom:6 }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                      Message Host
+                    </button>
+                  )}
+
                   {/* ── Action buttons ── */}
                   {canModify && !isAdjusting && !isExtending && !isCancelConfirm && (
                     <div style={{ display:"flex", gap:8 }}>
@@ -437,5 +451,16 @@ export default function BookingsPage() {
         )}
       </div>
     </div>
+    {chatBooking && user?.id && (
+      <BookingChatDrawer
+        bookingId={chatBooking.uuid}
+        bookingAddr={chatBooking.addr}
+        myUserId={user.id}
+        myRole="driver"
+        otherName={chatBooking.hostName}
+        onClose={() => setChatBooking(null)}
+      />
+    )}
+    </>
   );
 }

@@ -4,12 +4,14 @@ import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
 import SpotDrawModal from "@/components/SpotDrawModal";
+import BookingChatDrawer from "@/components/BookingChatDrawer";
 
 const NAVY = "#0E1F40";
 const GREEN = "#8DD63F";
 
 interface ListerBooking {
   id: string;
+  driver_user_id?: string;
   spot_id: string;
   spot_address: string;
   driver_name: string;
@@ -21,6 +23,15 @@ interface ListerBooking {
   pad_type: string;
   status: string;
   created_at: string;
+}
+
+interface InboxItem {
+  booking_id: string;
+  driver_name: string;
+  spot_address: string;
+  last_message: string;
+  last_message_at: string;
+  sender_role: string;
 }
 
 function fmtDt(ts: string | null) {
@@ -181,6 +192,20 @@ export default function PadDashboardPage() {
       .catch(() => {});
   }, [user?.id]);
 
+  const fetchHostInbox = useCallback(() => {
+    if (!user?.id) return;
+    setInboxLoading(true);
+    fetch(`/api/booking-chat/host-inbox/${user.id}`)
+      .then(r => r.ok ? r.json() : [])
+      .then(data => { if (Array.isArray(data)) setHostInbox(data); })
+      .catch(() => {})
+      .finally(() => setInboxLoading(false));
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (user?.id) fetchHostInbox();
+  }, [user?.id, fetchHostInbox]);
+
   useEffect(() => {
     if (!user?.id) { setLoadingPads(false); return; }
     fetch(`/api/spots/user/${user.id}`)
@@ -272,6 +297,14 @@ export default function PadDashboardPage() {
 
   // List tab: "active" | "archived"
   const [listTab, setListTab] = useState<"active" | "archived">("active");
+
+  // Top-level view: pads list or reservations
+  const [padView, setPadView] = useState<"pads" | "reservations">("pads");
+  // Booking chat
+  const [chatBooking, setChatBooking] = useState<{ id: string; addr: string; driverName: string } | null>(null);
+  // Host message inbox
+  const [hostInbox, setHostInbox] = useState<InboxItem[]>([]);
+  const [inboxLoading, setInboxLoading] = useState(false);
 
   async function saveEdit() {
     if (!openPad || !editDraft) return;
@@ -548,7 +581,7 @@ export default function PadDashboardPage() {
           </button>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 20, fontWeight: 800, color: "#fff", letterSpacing: -0.5 }}>
-              {openPad ? openPad.name || openPad.address : "My Pads"}
+              {openPad ? openPad.name || openPad.address : padView === "pads" ? "My Pads" : "Reservations"}
             </div>
             <div style={{ fontSize: 12, color: "rgba(255,255,255,0.40)", marginTop: 2 }}>
               {openPad ? `${openPad.address} · ${openPad.city}` : `${pads.length} listing${pads.length !== 1 ? "s" : ""}`}
@@ -562,11 +595,29 @@ export default function PadDashboardPage() {
         </div>
       </div>
 
-      {/* Hero text — only shown on list view */}
+      {/* View tab switcher — only shown on list view */}
       {!openPad && (
-        <div style={{ flexShrink: 0, padding: "8px 20px 28px", background: NAVY }}>
-          <div style={{ fontSize: 14, color: "rgba(255,255,255,0.52)", lineHeight: 1.55 }}>
-            This is where you manage and monitor all of your Lily Pad listings.
+        <div style={{ flexShrink: 0, padding: "0 16px 16px", background: NAVY }}>
+          <div style={{ display: "flex", background: "rgba(255,255,255,0.08)", borderRadius: 12, padding: 3 }}>
+            {(["pads", "reservations"] as const).map(v => (
+              <button key={v} onClick={() => { setPadView(v); if (v === "reservations") fetchHostInbox(); }}
+                style={{
+                  flex: 1, padding: "9px 0", borderRadius: 10,
+                  background: padView === v ? "#fff" : "transparent",
+                  border: "none", cursor: "pointer",
+                  fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 800,
+                  color: padView === v ? NAVY : "rgba(255,255,255,0.50)",
+                  transition: "all 0.15s",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+                }}>
+                {v === "pads" ? "My Pads" : "Reservations"}
+                {v === "reservations" && listerBookings.filter(b => b.status === "pending").length > 0 && (
+                  <span style={{ background: "#f59e0b", borderRadius: 100, padding: "1px 6px", fontSize: 9, color: "#fff", fontWeight: 800 }}>
+                    {listerBookings.filter(b => b.status === "pending").length}
+                  </span>
+                )}
+              </button>
+            ))}
           </div>
         </div>
       )}
@@ -583,6 +634,104 @@ export default function PadDashboardPage() {
             <style>{`@keyframes lp-spin{to{transform:rotate(360deg)}}`}</style>
           </div>
         ) : !openPad ? (
+          padView === "reservations" ? (
+            /* ── RESERVATIONS VIEW ── */
+            <>
+              {/* ── Message center ── */}
+              {inboxLoading ? (
+                <div style={{ textAlign: "center", padding: "24px 0" }}>
+                  <div style={{ width: 22, height: 22, border: "2px solid rgba(14,31,64,0.10)", borderTopColor: NAVY, borderRadius: "50%", animation: "lp-spin 0.8s linear infinite", margin: "0 auto" }} />
+                  <style>{`@keyframes lp-spin{to{transform:rotate(360deg)}}`}</style>
+                </div>
+              ) : hostInbox.length > 0 ? (
+                <div style={{ marginBottom: 24 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                    <div style={{ width: 3, height: 16, borderRadius: 2, background: GREEN }} />
+                    <span style={{ fontSize: 12, fontWeight: 800, color: NAVY, letterSpacing: 0.3, textTransform: "uppercase" as const }}>Messages</span>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(14,31,64,0.45)", background: "rgba(14,31,64,0.08)", borderRadius: 100, padding: "2px 7px" }}>{hostInbox.length}</span>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column" as const, gap: 6 }}>
+                    {hostInbox.map(item => {
+                      const unread = item.sender_role === "driver";
+                      return (
+                        <button key={item.booking_id}
+                          onClick={() => setChatBooking({ id: item.booking_id, addr: item.spot_address, driverName: item.driver_name })}
+                          style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: unread ? "rgba(141,214,63,0.06)" : "#fff", borderRadius: 14, border: `1px solid ${unread ? "rgba(141,214,63,0.22)" : "rgba(14,31,64,0.08)"}`, cursor: "pointer", textAlign: "left" as const, fontFamily: "'DM Sans',sans-serif", boxShadow: "0 1px 4px rgba(14,31,64,0.05)" }}>
+                          <div style={{ width: 40, height: 40, borderRadius: "50%", background: GREEN, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 15, color: NAVY, flexShrink: 0 }}>
+                            {(item.driver_name[0] || "D").toUpperCase()}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
+                              <span style={{ fontSize: 13, fontWeight: 800, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{item.driver_name}</span>
+                              <span style={{ fontSize: 10, color: "rgba(14,31,64,0.38)", whiteSpace: "nowrap" as const, flexShrink: 0 }}>{fmtDt(item.last_message_at)}</span>
+                            </div>
+                            <div style={{ fontSize: 12, color: unread ? NAVY : "rgba(14,31,64,0.45)", fontWeight: unread ? 600 : 400, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
+                              {item.sender_role === "host" ? "You: " : ""}{item.last_message}
+                            </div>
+                            <div style={{ fontSize: 10.5, color: "rgba(14,31,64,0.35)", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{item.spot_address}</div>
+                          </div>
+                          {unread && <div style={{ width: 9, height: 9, borderRadius: "50%", background: GREEN, flexShrink: 0 }} />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
+              {/* ── All reservations ── */}
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                  <div style={{ width: 3, height: 16, borderRadius: 2, background: GREEN }} />
+                  <span style={{ fontSize: 12, fontWeight: 800, color: NAVY, letterSpacing: 0.3, textTransform: "uppercase" as const }}>All Reservations</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(14,31,64,0.45)", background: "rgba(14,31,64,0.08)", borderRadius: 100, padding: "2px 7px" }}>{listerBookings.length}</span>
+                </div>
+                {listerBookings.length === 0 ? (
+                  <div style={{ background: "rgba(14,31,64,0.04)", borderRadius: 16, padding: "28px 20px", textAlign: "center" as const, border: "1px dashed rgba(14,31,64,0.18)", color: "rgba(14,31,64,0.35)", fontSize: 13 }}>
+                    No reservations yet.
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column" as const, gap: 6 }}>
+                    {listerBookings.map(b => {
+                      const nowMs = Date.now();
+                      const start = b.start_ts ? new Date(b.start_ts).getTime() : 0;
+                      const end   = b.end_ts   ? new Date(b.end_ts).getTime()   : 0;
+                      const ds = b.status === "cancelled" ? "cancelled" : b.status === "denied" ? "denied" : b.status === "pending" ? "pending" : end < nowMs ? "completed" : start <= nowMs && nowMs < end ? "active" : "upcoming";
+                      const stMap: Record<string, { bg: string; color: string; label: string }> = {
+                        pending:   { bg: "rgba(251,191,36,0.12)", color: "#f59e0b",             label: "Awaiting" },
+                        upcoming:  { bg: "rgba(141,214,63,0.12)", color: "#3d8c0a",             label: "Upcoming" },
+                        active:    { bg: "rgba(52,199,89,0.14)",  color: "#1a7a3c",             label: "Active"   },
+                        completed: { bg: "rgba(14,31,64,0.06)",   color: "rgba(14,31,64,0.40)", label: "Done"     },
+                        cancelled: { bg: "rgba(255,80,80,0.08)",  color: "#ef4444",             label: "Cancelled"},
+                        denied:    { bg: "rgba(255,80,80,0.08)",  color: "#ef4444",             label: "Denied"   },
+                      };
+                      const st = stMap[ds] || stMap.completed;
+                      return (
+                        <button key={b.id}
+                          onClick={() => setChatBooking({ id: b.id, addr: b.spot_address, driverName: b.driver_name })}
+                          style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: "#fff", borderRadius: 14, border: "1px solid rgba(14,31,64,0.08)", cursor: "pointer", textAlign: "left" as const, fontFamily: "'DM Sans',sans-serif", boxShadow: "0 1px 4px rgba(14,31,64,0.06)" }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
+                              <span style={{ fontSize: 13, fontWeight: 800, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{b.driver_name}</span>
+                              <div style={{ background: st.bg, borderRadius: 100, padding: "3px 8px", fontSize: 9.5, fontWeight: 800, color: st.color, whiteSpace: "nowrap" as const, flexShrink: 0, letterSpacing: 0.3, textTransform: "uppercase" as const }}>
+                                {st.label}
+                              </div>
+                            </div>
+                            <div style={{ fontSize: 11, color: "rgba(14,31,64,0.45)", marginTop: 2 }}>
+                              {fmtDt(b.start_ts)} · {fmtTm(b.start_ts)}{b.end_ts ? ` – ${fmtTm(b.end_ts)}` : ""}
+                            </div>
+                            <div style={{ fontSize: 10.5, color: "rgba(14,31,64,0.35)", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{b.spot_address}</div>
+                          </div>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(14,31,64,0.28)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                          </svg>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
           /* ── LIST VIEW ── */
           <>
             {/* ══ YOUR PADS ══ */}
@@ -705,6 +854,7 @@ export default function PadDashboardPage() {
             </div>
 
           </>
+          )
         ) : (
           /* ── DETAIL / EDIT VIEW (dark profile) ── */
           <>
@@ -1334,6 +1484,18 @@ export default function PadDashboardPage() {
           setDrawModalOpen(false);
           setDrawStartWithPicker(false);
         }}
+      />
+    )}
+
+    {/* ── Booking chat drawer ── */}
+    {chatBooking && user?.id && (
+      <BookingChatDrawer
+        bookingId={chatBooking.id}
+        bookingAddr={chatBooking.addr}
+        myUserId={user.id}
+        myRole="host"
+        otherName={chatBooking.driverName}
+        onClose={() => setChatBooking(null)}
       />
     )}
     </>

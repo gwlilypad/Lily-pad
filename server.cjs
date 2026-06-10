@@ -133,6 +133,15 @@ CREATE TABLE IF NOT EXISTS public.bookings (
   created_at    TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS public.booking_messages (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  booking_id  TEXT NOT NULL,
+  sender_id   UUID NOT NULL,
+  sender_role TEXT NOT NULL,
+  message     TEXT NOT NULL,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS public.support_conversations (
   id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id          UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
@@ -316,6 +325,20 @@ CREATE TABLE IF NOT EXISTS public.early_access_signups (
         await runSQL(`SELECT pg_notify('pgrst', 'reload schema');`).catch(() => {});
       }
       console.log('[DB] early_access_signups table ✓');
+
+      // ── booking_messages table (idempotent) ──
+      await runSQL(`
+CREATE TABLE IF NOT EXISTS public.booking_messages (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  booking_id  TEXT NOT NULL,
+  sender_id   UUID NOT NULL,
+  sender_role TEXT NOT NULL,
+  message     TEXT NOT NULL,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+`).catch(() => {});
+      await runSQL(`SELECT pg_notify('pgrst', 'reload schema');`).catch(() => {});
+      console.log('[DB] booking_messages table ✓');
       return;
     }
     console.log('[DB] spots table missing — attempting auto-create…');
@@ -1965,6 +1988,7 @@ app.get('/api/bookings/lister/:listerId', async (req, res) => {
       const er = bd.extend_request || null;
       return {
         id:             b.id,
+        driver_user_id: b.user_id,
         spot_id:        b.spot_id,
         spot_address:   bd.addr || spotMap[b.spot_id] || '',
         driver_name:    bd.driver_name  || 'Driver',
@@ -2358,6 +2382,98 @@ app.get('/api/bookings/:userId', async (req, res) => {
       };
     });
     res.json(mapped);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Booking Chat: host inbox (latest msg per booking, stored in booking_data) ──
+app.get('/api/booking-chat/host-inbox/:hostId', async (req, res) => {
+  const { hostId } = req.params;
+  try {
+    const spotRes = await fetch(`${SUPABASE_URL}/rest/v1/spots?host_user_id=eq.${hostId}&select=id`, { headers: SVC_HEADERS });
+    const spots = await spotRes.json();
+    if (!Array.isArray(spots) || spots.length === 0) return res.json([]);
+    const spotIds = spots.map(s => s.id);
+
+    const bRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/bookings?spot_id=in.(${spotIds.join(',')})&select=id,booking_data&order=created_at.desc`,
+      { headers: SVC_HEADERS }
+    );
+    const bookings = await bRes.json();
+    if (!Array.isArray(bookings)) return res.json([]);
+
+    const inbox = [];
+    for (const b of bookings) {
+      const bd = b.booking_data || {};
+      const msgs = Array.isArray(bd.chat_messages) ? bd.chat_messages : [];
+      if (msgs.length === 0) continue;
+      const last = msgs[msgs.length - 1];
+      inbox.push({
+        booking_id:      b.id,
+        driver_name:     bd.driver_name  || 'Driver',
+        spot_address:    bd.addr         || '',
+        last_message:    last.message,
+        last_message_at: last.created_at,
+        sender_role:     last.sender_role,
+      });
+    }
+    res.json(inbox);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Booking Chat: fetch messages (from booking_data.chat_messages) ─────────────
+app.get('/api/booking-chat/:bookingId', async (req, res) => {
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/bookings?id=eq.${req.params.bookingId}&select=booking_data`,
+      { headers: SVC_HEADERS }
+    );
+    const rows = await r.json();
+    if (!Array.isArray(rows) || rows.length === 0) return res.json([]);
+    const msgs = rows[0]?.booking_data?.chat_messages;
+    res.json(Array.isArray(msgs) ? msgs : []);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Booking Chat: send message (append to booking_data.chat_messages) ──────────
+app.post('/api/booking-chat/:bookingId', async (req, res) => {
+  const { bookingId } = req.params;
+  const { sender_id, sender_role, message } = req.body;
+  if (!sender_id || !sender_role || !message?.trim()) {
+    return res.status(400).json({ error: 'sender_id, sender_role, and message are required' });
+  }
+  try {
+    // 1. Fetch current booking_data
+    const getR = await fetch(
+      `${SUPABASE_URL}/rest/v1/bookings?id=eq.${bookingId}&select=booking_data`,
+      { headers: SVC_HEADERS }
+    );
+    const rows = await getR.json();
+    if (!Array.isArray(rows) || rows.length === 0) return res.status(404).json({ error: 'Booking not found' });
+    const bd = rows[0].booking_data || {};
+    const existing = Array.isArray(bd.chat_messages) ? bd.chat_messages : [];
+
+    // 2. Append new message
+    const newMsg = {
+      id:          require('crypto').randomUUID(),
+      booking_id:  bookingId,
+      sender_id,
+      sender_role,
+      message:     message.trim(),
+      created_at:  new Date().toISOString(),
+    };
+    const updated = [...existing, newMsg];
+
+    // 3. Patch booking_data with updated messages
+    const patchR = await fetch(`${SUPABASE_URL}/rest/v1/bookings?id=eq.${bookingId}`, {
+      method: 'PATCH',
+      headers: { ...SVC_HEADERS, 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ booking_data: { ...bd, chat_messages: updated } }),
+    });
+    if (!patchR.ok) {
+      const e = await patchR.json().catch(() => ({}));
+      return res.status(patchR.status).json({ error: e });
+    }
+    res.json(newMsg);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

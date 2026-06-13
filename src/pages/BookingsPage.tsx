@@ -17,12 +17,12 @@ function deriveStatus(b: BookingRec, now: number): DerivedStatus {
 }
 
 const STATUS_STYLES: Record<DerivedStatus, { bg: string; border: string; color: string; label: string }> = {
-  pending:   { bg:"rgba(251,191,36,0.13)", border:"rgba(251,191,36,0.35)", color:"#f59e0b",               label:"Awaiting approval" },
-  upcoming:  { bg:"rgba(141,214,63,0.12)", border:"rgba(141,214,63,0.30)", color:"#8DD63F",               label:"Upcoming"   },
-  active:    { bg:"rgba(52,199,89,0.14)",  border:"rgba(52,199,89,0.30)",  color:"#34c759",               label:"Active now" },
-  completed: { bg:"rgba(255,255,255,0.07)",border:"rgba(255,255,255,0.10)",color:"rgba(255,255,255,0.45)",label:"Completed"  },
-  cancelled: { bg:"rgba(255,80,80,0.10)",  border:"rgba(255,80,80,0.20)",  color:"#ff6060",               label:"Cancelled"  },
-  denied:    { bg:"rgba(255,80,80,0.10)",  border:"rgba(255,80,80,0.20)",  color:"#ff6060",               label:"Not approved" },
+  pending:   { bg:"rgba(251,191,36,0.12)", border:"rgba(251,191,36,0.28)", color:"#d97706",               label:"Awaiting" },
+  upcoming:  { bg:"rgba(141,214,63,0.12)", border:"rgba(141,214,63,0.25)", color:"#3d8c0a",               label:"Upcoming" },
+  active:    { bg:"rgba(52,199,89,0.13)",  border:"rgba(52,199,89,0.25)",  color:"#1a7a3c",               label:"Active"   },
+  completed: { bg:"rgba(14,31,64,0.05)",   border:"rgba(14,31,64,0.10)",   color:"rgba(14,31,64,0.38)",   label:"Done"     },
+  cancelled: { bg:"rgba(239,68,68,0.08)",  border:"rgba(239,68,68,0.18)",  color:"#ef4444",               label:"Cancelled"},
+  denied:    { bg:"rgba(239,68,68,0.08)",  border:"rgba(239,68,68,0.18)",  color:"#ef4444",               label:"Declined" },
 };
 
 const GREEN = "#8DD63F";
@@ -212,19 +212,18 @@ export default function BookingsPage() {
 
   const inputStyle: React.CSSProperties = {
     width: "100%", padding: "10px 12px", borderRadius: 10,
-    border: "1.5px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.05)",
-    color: "#fff", fontFamily: "'DM Sans',sans-serif", fontSize: 13,
+    border: "1.5px solid rgba(14,31,64,0.15)", background: "#F4F7FA",
+    color: NAVY, fontFamily: "'DM Sans',sans-serif", fontSize: 13,
     boxSizing: "border-box", outline: "none",
-    colorScheme: "dark",
   };
 
   return (
     <>
     <div className="page active" style={{ background: NAVY, display: "flex", flexDirection: "column", fontFamily: "'DM Sans',sans-serif", minHeight: "100dvh" }}>
 
-      {/* Header */}
-      <div style={{ flexShrink: 0, padding: "52px 20px 0", background: NAVY }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+      {/* Navy header */}
+      <div style={{ flexShrink: 0, padding: "52px 20px 20px", background: NAVY }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <button onClick={() => navigate(-1)} style={{ width:36,height:36,borderRadius:"50%",background:"rgba(255,255,255,0.10)",border:"1px solid rgba(255,255,255,0.12)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer" }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
           </button>
@@ -233,222 +232,226 @@ export default function BookingsPage() {
             <div style={{ fontSize:12, color:"rgba(255,255,255,0.38)", marginTop:2 }}>Your reserved spots</div>
           </div>
         </div>
+      </div>
+
+      {/* White card body */}
+      <div style={{ flex:1, display:"flex", flexDirection:"column", background:"#EDEEF0", borderRadius:"28px 28px 0 0", overflow:"hidden" }}>
 
         {/* Tabs */}
-        <div style={{ display:"flex", borderBottom:"1px solid rgba(255,255,255,0.08)" }}>
+        <div style={{ display:"flex", background:"#fff", borderRadius:"28px 28px 0 0", borderBottom:"1px solid rgba(14,31,64,0.07)", flexShrink:0, padding:"0 8px" }}>
           {(["upcoming","past"] as const).map(f => {
             const labels = { upcoming:"Upcoming", past:"Past" };
             const on = filter === f;
             return (
               <button key={f} onClick={() => { setFilter(f); setExpandedId(null); setAdjustingId(null); setCancelConfirmId(null); }}
-                style={{ flex:1, padding:"11px 0", border:"none", background:"transparent", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:on?700:500, color:on?"#fff":"rgba(255,255,255,0.35)", borderBottom:`2px solid ${on?GREEN:"transparent"}`, transition:"all 0.18s" }}>
+                style={{ flex:1, padding:"16px 0", border:"none", background:"transparent", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:on?700:500, color:on?NAVY:"rgba(14,31,64,0.35)", borderBottom:`2px solid ${on?GREEN:"transparent"}`, marginBottom:-1, transition:"all 0.18s" }}>
                 {labels[f]}
               </button>
             );
           })}
         </div>
-      </div>
 
-      {/* List */}
-      <div style={{ flex:1, overflowY:"auto", padding:"16px 16px 32px", display:"flex", flexDirection:"column", gap:10 }}>
-        {loading ? (
-          <div style={{ textAlign:"center", padding:"60px 0" }}>
-            <div style={{ width:28,height:28,border:"3px solid rgba(141,214,63,0.3)",borderTopColor:GREEN,borderRadius:"50%",animation:"lp-spin 0.8s linear infinite",margin:"0 auto" }} />
-            <style>{`@keyframes lp-spin{to{transform:rotate(360deg)}}`}</style>
-          </div>
-        ) : filtered.length === 0 ? (
-          <div style={{ textAlign:"center", padding:"60px 0", color:"rgba(255,255,255,0.25)", fontSize:14 }}>
-            {filter === "upcoming" ? "No upcoming bookings." : "No past bookings."}
-          </div>
-        ) : filtered.map(b => {
-          const ds = deriveStatus(b, now);
-          const st = STATUS_STYLES[ds];
-          const dur = fmtDur(b.endTs - b.startTs);
-          const total = (b.pricePerHr * (b.endTs - b.startTs) / 3600000);
-          const totalLabel = `$${(Math.round(total * 100) / 100).toFixed(2)}`;
-          const isExpanded = expandedId === b.uuid;
-          const isAdjusting = adjustingId === b.uuid;
-          const isExtending = extendingId === b.uuid;
-          const isCancelConfirm = cancelConfirmId === b.uuid;
-          const canModify = ds === "upcoming" || ds === "active" || ds === "pending";
-          const extStatus = extStatusMap[b.uuid!] || null;
-
-          return (
-            <div key={b.uuid || b.id}
-              style={{ background:"rgba(255,255,255,0.05)", borderRadius:18, border:`1.5px solid ${isExpanded ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.07)"}`, overflow:"hidden", transition:"border-color 0.18s" }}>
-
-              {/* ── Pill header (always visible, click to toggle) ── */}
-              <button onClick={() => toggleExpand(b.uuid!)} style={{ width:"100%", padding:"14px 16px", background:"none", border:"none", cursor:"pointer", display:"flex", alignItems:"center", gap:10, textAlign:"left" }}>
-                <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontSize:14, fontWeight:700, color:"#fff", letterSpacing:-0.2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{b.addr}</div>
-                  <div style={{ fontSize:11, color:"rgba(255,255,255,0.38)", marginTop:2 }}>{fmtDate(b.startTs)} · {fmtTime(b.startTs)}–{fmtTime(b.endTs)}</div>
-                </div>
-                <div style={{ background:st.bg, border:`1px solid ${st.border}`, borderRadius:20, padding:"3px 9px", fontSize:10, fontWeight:800, color:st.color, letterSpacing:0.4, textTransform:"uppercase", flexShrink:0 }}>
-                  {st.label}
-                </div>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink:0, transform:isExpanded?"rotate(180deg)":"rotate(0deg)", transition:"transform 0.2s" }}>
-                  <path d="M6 9l6 6 6-6"/>
-                </svg>
-              </button>
-
-              {/* ── Expanded content ── */}
-              {isExpanded && (
-                <div style={{ borderTop:"1px solid rgba(255,255,255,0.07)", padding:"14px 16px 16px" }}>
-
-                  {/* Detail chips */}
-                  <div style={{ display:"flex", gap:7, marginBottom:12, flexWrap:"wrap" }}>
-                    {[
-                      { icon:<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>, val:fmtDate(b.startTs) },
-                      { icon:<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>, val:`${fmtTime(b.startTs)} · ${dur}` },
-                      { icon:<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>, val:totalLabel },
-                    ].map((item, i) => (
-                      <div key={i} style={{ display:"flex", alignItems:"center", gap:5, background:"rgba(255,255,255,0.05)", borderRadius:8, padding:"5px 10px" }}>
-                        <span style={{ color:"rgba(255,255,255,0.30)", flexShrink:0 }}>{item.icon}</span>
-                        <span style={{ fontSize:11, fontWeight:600, color:"rgba(255,255,255,0.60)", whiteSpace:"nowrap" }}>{item.val}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Pad type + host */}
-                  <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginBottom:12 }}>
-                    {b.city} · {b.padType}{b.hostName && b.hostName !== "Host" ? ` · ${b.hostName}` : ""}
-                  </div>
-
-                  {/* Status messages */}
-                  {ds === "pending" && (
-                    <div style={{ marginBottom:12, padding:"10px 12px", background:"rgba(251,191,36,0.07)", borderRadius:10, border:"1px solid rgba(251,191,36,0.18)", fontSize:12, color:"rgba(255,255,255,0.55)", lineHeight:1.5 }}>
-                      Waiting for the host to approve. You'll get an email when they respond.
-                    </div>
-                  )}
-                  {ds === "denied" && (
-                    <div style={{ marginBottom:12, padding:"10px 12px", background:"rgba(255,80,80,0.06)", borderRadius:10, border:"1px solid rgba(255,80,80,0.14)", fontSize:12, color:"rgba(255,180,180,0.80)", lineHeight:1.5 }}>
-                      The host was unable to accept this request. Search the map to find another spot nearby.
-                    </div>
-                  )}
-
-                  {/* ── Extension status banner ── */}
-                  {extStatus && !isExtending && (
-                    <div style={{ marginBottom:12, padding:"10px 12px", borderRadius:10, border:`1px solid ${extStatus.status==="auto_approved"?"rgba(141,214,63,0.30)":extStatus.status==="pending"?"rgba(124,58,237,0.25)":"rgba(255,80,80,0.18)"}`, background:extStatus.status==="auto_approved"?"rgba(141,214,63,0.08)":extStatus.status==="pending"?"rgba(124,58,237,0.06)":"rgba(255,80,80,0.06)", fontSize:12, color:"rgba(255,255,255,0.65)", lineHeight:1.5 }}>
-                      {extStatus.status === "auto_approved" && <>✅ Extension approved — checkout extended to <strong style={{color:"#fff"}}>{fmtTime(new Date(extStatus.new_end_ts).getTime())}</strong> on <strong style={{color:"#fff"}}>{fmtDate(new Date(extStatus.new_end_ts).getTime())}</strong>.</>}
-                      {extStatus.status === "pending"       && <>⏱ Extension request sent — waiting for host to approve. New checkout: <strong style={{color:"#fff"}}>{fmtTime(new Date(extStatus.new_end_ts).getTime())}</strong>.</>}
-                      {extStatus.status === "denied"        && <>❌ Host denied the extension request. Checkout remains at the original time.</>}
-                    </div>
-                  )}
-
-                  {/* ── Extend form (active bookings — end-time only) ── */}
-                  {canModify && isExtending && (
-                    <div style={{ background:"rgba(255,255,255,0.04)", borderRadius:12, padding:"12px", marginBottom:12, display:"flex", flexDirection:"column", gap:8 }}>
-                      <div style={{ fontSize:11, fontWeight:700, color:"rgba(255,255,255,0.45)", letterSpacing:"0.06em", textTransform:"uppercase" }}>Request extension</div>
-                      <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                        <label style={{ fontSize:11, color:"rgba(255,255,255,0.40)", fontWeight:600 }}>New checkout time</label>
-                        <input type="datetime-local" value={extNewEnd} onChange={e => setExtNewEnd(e.target.value)} style={inputStyle} />
-                      </div>
-                      {extError && <p style={{ fontSize:11, color:"#f87171", margin:0 }}>{extError}</p>}
-                      <div style={{ display:"flex", gap:8, marginTop:2 }}>
-                        <button onClick={() => doExtend(b)} disabled={extSaving}
-                          style={{ flex:2, padding:"10px 0", borderRadius:10, background:extSaving?"rgba(124,58,237,0.35)":"#7c3aed", border:"none", color:"#fff", fontWeight:800, fontSize:13, cursor:extSaving?"not-allowed":"pointer", fontFamily:"'DM Sans',sans-serif" }}>
-                          {extSaving ? "Sending…" : "Send request"}
-                        </button>
-                        <button onClick={() => { setExtendingId(null); setExtError(""); }}
-                          style={{ flex:1, padding:"10px 0", borderRadius:10, background:"rgba(255,255,255,0.07)", border:"1px solid rgba(255,255,255,0.12)", color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"'DM Sans',sans-serif" }}>
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* ── Adjust Time form (inline) ── */}
-                  {canModify && isAdjusting && (
-                    <div style={{ background:"rgba(255,255,255,0.04)", borderRadius:12, padding:"12px", marginBottom:12, display:"flex", flexDirection:"column", gap:8 }}>
-                      <div style={{ fontSize:11, fontWeight:700, color:"rgba(255,255,255,0.45)", letterSpacing:"0.06em", textTransform:"uppercase" }}>Adjust time</div>
-                      <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                        <label style={{ fontSize:11, color:"rgba(255,255,255,0.40)", fontWeight:600 }}>Start</label>
-                        <input type="datetime-local" value={adjStart} onChange={e => setAdjStart(e.target.value)} style={inputStyle} />
-                      </div>
-                      <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                        <label style={{ fontSize:11, color:"rgba(255,255,255,0.40)", fontWeight:600 }}>End</label>
-                        <input type="datetime-local" value={adjEnd} onChange={e => setAdjEnd(e.target.value)} style={inputStyle} />
-                      </div>
-                      {adjError && <p style={{ fontSize:11, color:"#f87171", margin:0 }}>{adjError}</p>}
-                      <div style={{ display:"flex", gap:8, marginTop:2 }}>
-                        <button onClick={() => doReschedule(b)} disabled={adjSaving}
-                          style={{ flex:1, padding:"10px 0", borderRadius:10, background:adjSaving?"rgba(141,214,63,0.35)":GREEN, border:"none", color:NAVY, fontWeight:800, fontSize:13, cursor:adjSaving?"not-allowed":"pointer", fontFamily:"'DM Sans',sans-serif" }}>
-                          {adjSaving ? "Saving…" : "Save"}
-                        </button>
-                        <button onClick={() => { setAdjustingId(null); setAdjError(""); }}
-                          style={{ flex:1, padding:"10px 0", borderRadius:10, background:"rgba(255,255,255,0.07)", border:"1px solid rgba(255,255,255,0.12)", color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"'DM Sans',sans-serif" }}>
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* ── Cancel confirm (inline) ── */}
-                  {isCancelConfirm && (
-                    <div style={{ background:"rgba(255,80,80,0.06)", borderRadius:12, padding:"12px", marginBottom:12, border:"1px solid rgba(255,80,80,0.18)" }}>
-                      <div style={{ fontSize:13, fontWeight:700, color:"#fff", marginBottom:4 }}>
-                        {ds === "pending" ? "Cancel this request?" : "Cancel this booking?"}
-                      </div>
-                      <div style={{ fontSize:11, color:"rgba(255,255,255,0.45)", marginBottom:12 }}>
-                        {b.addr} · {fmtDate(b.startTs)}
-                      </div>
-                      <div style={{ display:"flex", gap:8 }}>
-                        <button onClick={() => doCancel(b)} disabled={cancellingId === b.uuid}
-                          style={{ flex:1, padding:"10px 0", borderRadius:10, background:"#ef4444", border:"none", color:"#fff", fontWeight:800, fontSize:13, cursor:cancellingId===b.uuid?"wait":"pointer", fontFamily:"'DM Sans',sans-serif", opacity:cancellingId===b.uuid?0.7:1 }}>
-                          {cancellingId === b.uuid ? "Cancelling…" : ds === "pending" ? "Yes, cancel" : "Yes, cancel"}
-                        </button>
-                        <button onClick={() => setCancelConfirmId(null)}
-                          style={{ flex:1, padding:"10px 0", borderRadius:10, background:"rgba(255,255,255,0.07)", border:"1px solid rgba(255,255,255,0.12)", color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"'DM Sans',sans-serif" }}>
-                          Keep it
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* ── Message Host ── */}
-                  {!isAdjusting && !isExtending && !isCancelConfirm && ds !== "cancelled" && ds !== "denied" && (
-                    <button
-                      onClick={() => setChatBooking({ uuid: b.uuid!, addr: b.addr, hostName: b.hostName || "Host" })}
-                      style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:7, padding:"10px 0", borderRadius:12, background:"rgba(141,214,63,0.08)", border:`1px solid rgba(141,214,63,0.22)`, cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:700, color:GREEN, marginBottom:6 }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                      Message Host
-                    </button>
-                  )}
-
-                  {/* ── Action buttons ── */}
-                  {canModify && !isAdjusting && !isExtending && !isCancelConfirm && (
-                    <div style={{ display:"flex", gap:8 }}>
-                      {ds === "active" && !extStatus && (
-                        <button onClick={() => startExtend(b)}
-                          style={{ flex:1, padding:"10px 0", borderRadius:12, background:"rgba(124,58,237,0.10)", border:"1px solid rgba(124,58,237,0.25)", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:700, color:"#9b6ff7" }}>
-                          ⏱ Extend
-                        </button>
-                      )}
-                      {ds === "upcoming" && (
-                        <button onClick={() => startAdjust(b)}
-                          style={{ flex:1, padding:"10px 0", borderRadius:12, background:"rgba(141,214,63,0.10)", border:`1px solid rgba(141,214,63,0.25)`, cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:700, color:GREEN }}>
-                          Adjust Time
-                        </button>
-                      )}
-                      <button onClick={() => setCancelConfirmId(b.uuid!)}
-                        style={{ flex:1, padding:"10px 0", borderRadius:12, background:"rgba(255,80,80,0.08)", border:"1px solid rgba(255,80,80,0.18)", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:700, color:"rgba(255,128,128,0.9)" }}>
-                        {ds === "pending" ? "Cancel request" : "Cancel"}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
+        {/* Cards list */}
+        <div style={{ flex:1, overflowY:"auto", padding:"14px 16px 40px", display:"flex", flexDirection:"column", gap:9 }}>
+          {loading ? (
+            <div style={{ textAlign:"center", padding:"60px 0" }}>
+              <div style={{ width:28,height:28,border:"3px solid rgba(14,31,64,0.10)",borderTopColor:NAVY,borderRadius:"50%",animation:"lp-spin 0.8s linear infinite",margin:"0 auto" }} />
+              <style>{`@keyframes lp-spin{to{transform:rotate(360deg)}}`}</style>
             </div>
-          );
-        })}
+          ) : filtered.length === 0 ? (
+            <div style={{ textAlign:"center", padding:"60px 20px", color:"rgba(14,31,64,0.30)", fontSize:14 }}>
+              {filter === "upcoming" ? "No upcoming bookings." : "No past bookings."}
+            </div>
+          ) : filtered.map(b => {
+            const ds = deriveStatus(b, now);
+            const st = STATUS_STYLES[ds];
+            const dur = fmtDur(b.endTs - b.startTs);
+            const total = (b.pricePerHr * (b.endTs - b.startTs) / 3600000);
+            const totalLabel = `$${(Math.round(total * 100) / 100).toFixed(2)}`;
+            const isExpanded = expandedId === b.uuid;
+            const isAdjusting = adjustingId === b.uuid;
+            const isExtending = extendingId === b.uuid;
+            const isCancelConfirm = cancelConfirmId === b.uuid;
+            const canModify = ds === "upcoming" || ds === "active" || ds === "pending";
+            const extStatus = extStatusMap[b.uuid!] || null;
 
-        {/* Find a spot CTA */}
-        {!loading && (
-          <button onClick={() => goTo("find")} style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"15px 0", borderRadius:100, background:GREEN, border:"none", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:15, fontWeight:700, color:NAVY, marginTop:4 }}>
-            Find a spot
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-          </button>
-        )}
+            return (
+              <div key={b.uuid || b.id}
+                style={{ background:"#fff", borderRadius:18, border:`1px solid ${isExpanded ? "rgba(14,31,64,0.12)" : "rgba(14,31,64,0.07)"}`, boxShadow:"0 1px 5px rgba(14,31,64,0.06)", overflow:"hidden", transition:"border-color 0.18s" }}>
+
+                {/* Pill header */}
+                <button onClick={() => toggleExpand(b.uuid!)} style={{ width:"100%", padding:"14px 16px", background:"none", border:"none", cursor:"pointer", display:"flex", alignItems:"center", gap:10, textAlign:"left" }}>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:14, fontWeight:700, color:NAVY, letterSpacing:-0.2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{b.addr}</div>
+                    <div style={{ fontSize:11, color:"rgba(14,31,64,0.40)", marginTop:2 }}>{fmtDate(b.startTs)} · {fmtTime(b.startTs)}–{fmtTime(b.endTs)}</div>
+                  </div>
+                  <div style={{ background:st.bg, border:`1px solid ${st.border}`, borderRadius:20, padding:"3px 9px", fontSize:10, fontWeight:800, color:st.color, letterSpacing:0.4, textTransform:"uppercase", flexShrink:0 }}>
+                    {st.label}
+                  </div>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(14,31,64,0.25)" strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink:0, transform:isExpanded?"rotate(180deg)":"rotate(0deg)", transition:"transform 0.2s" }}>
+                    <path d="M6 9l6 6 6-6"/>
+                  </svg>
+                </button>
+
+                {/* Expanded content */}
+                {isExpanded && (
+                  <div style={{ borderTop:"1px solid rgba(14,31,64,0.07)", padding:"14px 16px 16px" }}>
+
+                    {/* Detail chips */}
+                    <div style={{ display:"flex", gap:7, marginBottom:12, flexWrap:"wrap" }}>
+                      {[
+                        { icon:<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>, val:fmtDate(b.startTs) },
+                        { icon:<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>, val:`${fmtTime(b.startTs)} · ${dur}` },
+                        { icon:<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>, val:totalLabel },
+                      ].map((item, i) => (
+                        <div key={i} style={{ display:"flex", alignItems:"center", gap:5, background:"rgba(14,31,64,0.05)", borderRadius:8, padding:"5px 10px" }}>
+                          <span style={{ color:"rgba(14,31,64,0.30)", flexShrink:0 }}>{item.icon}</span>
+                          <span style={{ fontSize:11, fontWeight:600, color:"rgba(14,31,64,0.55)", whiteSpace:"nowrap" }}>{item.val}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Pad type + host */}
+                    <div style={{ fontSize:11, color:"rgba(14,31,64,0.40)", marginBottom:12 }}>
+                      {b.city} · {b.padType}{b.hostName && b.hostName !== "Host" ? ` · ${b.hostName}` : ""}
+                    </div>
+
+                    {/* Status messages */}
+                    {ds === "pending" && (
+                      <div style={{ marginBottom:12, padding:"10px 12px", background:"rgba(251,191,36,0.07)", borderRadius:10, border:"1px solid rgba(251,191,36,0.22)", fontSize:12, color:"#92650a", lineHeight:1.5 }}>
+                        Waiting for the host to approve. You'll get an email when they respond.
+                      </div>
+                    )}
+                    {ds === "denied" && (
+                      <div style={{ marginBottom:12, padding:"10px 12px", background:"rgba(239,68,68,0.06)", borderRadius:10, border:"1px solid rgba(239,68,68,0.15)", fontSize:12, color:"#ef4444", lineHeight:1.5 }}>
+                        The host was unable to accept this request. Search the map to find another spot nearby.
+                      </div>
+                    )}
+
+                    {/* Extension status banner */}
+                    {extStatus && !isExtending && (
+                      <div style={{ marginBottom:12, padding:"10px 12px", borderRadius:10, border:`1px solid ${extStatus.status==="auto_approved"?"rgba(141,214,63,0.30)":extStatus.status==="pending"?"rgba(124,58,237,0.22)":"rgba(239,68,68,0.18)"}`, background:extStatus.status==="auto_approved"?"rgba(141,214,63,0.07)":extStatus.status==="pending"?"rgba(124,58,237,0.05)":"rgba(239,68,68,0.05)", fontSize:12, color:NAVY, lineHeight:1.5 }}>
+                        {extStatus.status === "auto_approved" && <>✅ Extension approved — checkout extended to <strong>{fmtTime(new Date(extStatus.new_end_ts).getTime())}</strong> on <strong>{fmtDate(new Date(extStatus.new_end_ts).getTime())}</strong>.</>}
+                        {extStatus.status === "pending"       && <>⏱ Extension request sent — waiting for host to approve. New checkout: <strong>{fmtTime(new Date(extStatus.new_end_ts).getTime())}</strong>.</>}
+                        {extStatus.status === "denied"        && <>❌ Host denied the extension request. Checkout remains at the original time.</>}
+                      </div>
+                    )}
+
+                    {/* Extend form */}
+                    {canModify && isExtending && (
+                      <div style={{ background:"rgba(14,31,64,0.03)", borderRadius:12, padding:"12px", marginBottom:12, display:"flex", flexDirection:"column", gap:8, border:"1px solid rgba(14,31,64,0.08)" }}>
+                        <div style={{ fontSize:11, fontWeight:700, color:"rgba(14,31,64,0.45)", letterSpacing:"0.06em", textTransform:"uppercase" }}>Request extension</div>
+                        <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                          <label style={{ fontSize:11, color:"rgba(14,31,64,0.45)", fontWeight:600 }}>New checkout time</label>
+                          <input type="datetime-local" value={extNewEnd} onChange={e => setExtNewEnd(e.target.value)} style={inputStyle} />
+                        </div>
+                        {extError && <p style={{ fontSize:11, color:"#ef4444", margin:0 }}>{extError}</p>}
+                        <div style={{ display:"flex", gap:8, marginTop:2 }}>
+                          <button onClick={() => doExtend(b)} disabled={extSaving}
+                            style={{ flex:2, padding:"10px 0", borderRadius:10, background:extSaving?"rgba(124,58,237,0.35)":"#7c3aed", border:"none", color:"#fff", fontWeight:800, fontSize:13, cursor:extSaving?"not-allowed":"pointer", fontFamily:"'DM Sans',sans-serif" }}>
+                            {extSaving ? "Sending…" : "Send request"}
+                          </button>
+                          <button onClick={() => { setExtendingId(null); setExtError(""); }}
+                            style={{ flex:1, padding:"10px 0", borderRadius:10, background:"rgba(14,31,64,0.06)", border:"1px solid rgba(14,31,64,0.10)", color:NAVY, fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"'DM Sans',sans-serif" }}>
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Adjust Time form */}
+                    {canModify && isAdjusting && (
+                      <div style={{ background:"rgba(14,31,64,0.03)", borderRadius:12, padding:"12px", marginBottom:12, display:"flex", flexDirection:"column", gap:8, border:"1px solid rgba(14,31,64,0.08)" }}>
+                        <div style={{ fontSize:11, fontWeight:700, color:"rgba(14,31,64,0.45)", letterSpacing:"0.06em", textTransform:"uppercase" }}>Adjust time</div>
+                        <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                          <label style={{ fontSize:11, color:"rgba(14,31,64,0.45)", fontWeight:600 }}>Start</label>
+                          <input type="datetime-local" value={adjStart} onChange={e => setAdjStart(e.target.value)} style={inputStyle} />
+                        </div>
+                        <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                          <label style={{ fontSize:11, color:"rgba(14,31,64,0.45)", fontWeight:600 }}>End</label>
+                          <input type="datetime-local" value={adjEnd} onChange={e => setAdjEnd(e.target.value)} style={inputStyle} />
+                        </div>
+                        {adjError && <p style={{ fontSize:11, color:"#ef4444", margin:0 }}>{adjError}</p>}
+                        <div style={{ display:"flex", gap:8, marginTop:2 }}>
+                          <button onClick={() => doReschedule(b)} disabled={adjSaving}
+                            style={{ flex:1, padding:"10px 0", borderRadius:10, background:adjSaving?"rgba(141,214,63,0.35)":GREEN, border:"none", color:NAVY, fontWeight:800, fontSize:13, cursor:adjSaving?"not-allowed":"pointer", fontFamily:"'DM Sans',sans-serif" }}>
+                            {adjSaving ? "Saving…" : "Save"}
+                          </button>
+                          <button onClick={() => { setAdjustingId(null); setAdjError(""); }}
+                            style={{ flex:1, padding:"10px 0", borderRadius:10, background:"rgba(14,31,64,0.06)", border:"1px solid rgba(14,31,64,0.10)", color:NAVY, fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"'DM Sans',sans-serif" }}>
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Cancel confirm */}
+                    {isCancelConfirm && (
+                      <div style={{ background:"rgba(239,68,68,0.04)", borderRadius:12, padding:"12px", marginBottom:12, border:"1px solid rgba(239,68,68,0.15)" }}>
+                        <div style={{ fontSize:13, fontWeight:700, color:NAVY, marginBottom:4 }}>
+                          {ds === "pending" ? "Cancel this request?" : "Cancel this booking?"}
+                        </div>
+                        <div style={{ fontSize:11, color:"rgba(14,31,64,0.45)", marginBottom:12 }}>
+                          {b.addr} · {fmtDate(b.startTs)}
+                        </div>
+                        <div style={{ display:"flex", gap:8 }}>
+                          <button onClick={() => doCancel(b)} disabled={cancellingId === b.uuid}
+                            style={{ flex:1, padding:"10px 0", borderRadius:10, background:"#ef4444", border:"none", color:"#fff", fontWeight:800, fontSize:13, cursor:cancellingId===b.uuid?"wait":"pointer", fontFamily:"'DM Sans',sans-serif", opacity:cancellingId===b.uuid?0.7:1 }}>
+                            {cancellingId === b.uuid ? "Cancelling…" : "Yes, cancel"}
+                          </button>
+                          <button onClick={() => setCancelConfirmId(null)}
+                            style={{ flex:1, padding:"10px 0", borderRadius:10, background:"rgba(14,31,64,0.06)", border:"1px solid rgba(14,31,64,0.10)", color:NAVY, fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"'DM Sans',sans-serif" }}>
+                            Keep it
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Message Host */}
+                    {!isAdjusting && !isExtending && !isCancelConfirm && ds !== "cancelled" && ds !== "denied" && (
+                      <button
+                        onClick={() => setChatBooking({ uuid: b.uuid!, addr: b.addr, hostName: b.hostName || "Host" })}
+                        style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:7, padding:"10px 0", borderRadius:12, background:"rgba(141,214,63,0.08)", border:`1px solid rgba(141,214,63,0.22)`, cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:700, color:"#3d8c0a", marginBottom:6 }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                        Message Host
+                      </button>
+                    )}
+
+                    {/* Action buttons */}
+                    {canModify && !isAdjusting && !isExtending && !isCancelConfirm && (
+                      <div style={{ display:"flex", gap:8 }}>
+                        {ds === "active" && !extStatus && (
+                          <button onClick={() => startExtend(b)}
+                            style={{ flex:1, padding:"10px 0", borderRadius:12, background:"rgba(124,58,237,0.08)", border:"1px solid rgba(124,58,237,0.20)", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:700, color:"#7c3aed" }}>
+                            ⏱ Extend
+                          </button>
+                        )}
+                        {ds === "upcoming" && (
+                          <button onClick={() => startAdjust(b)}
+                            style={{ flex:1, padding:"10px 0", borderRadius:12, background:"rgba(141,214,63,0.10)", border:`1px solid rgba(141,214,63,0.25)`, cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:700, color:"#3d8c0a" }}>
+                            Adjust Time
+                          </button>
+                        )}
+                        <button onClick={() => setCancelConfirmId(b.uuid!)}
+                          style={{ flex:1, padding:"10px 0", borderRadius:12, background:"rgba(239,68,68,0.07)", border:"1px solid rgba(239,68,68,0.16)", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:700, color:"#ef4444" }}>
+                          {ds === "pending" ? "Cancel request" : "Cancel"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {/* Find a spot CTA */}
+          {!loading && (
+            <button onClick={() => goTo("find")} style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"15px 0", borderRadius:100, background:GREEN, border:"none", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:15, fontWeight:700, color:NAVY, marginTop:4 }}>
+              Find a spot
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </button>
+          )}
+        </div>
       </div>
     </div>
     {chatBooking && user?.id && (

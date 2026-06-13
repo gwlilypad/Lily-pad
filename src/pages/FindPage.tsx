@@ -1450,9 +1450,10 @@ export default function FindPage() {
     try {
       const { place, cityHint } = parseQueryCity(q);
 
-      // Resolve bias: explicit city mention in query takes priority over stored cityBias
+      // Resolve bias: explicit city mention takes priority, then GPS/saved location
       let biasLat = cityBias?.lat;
       let biasLng = cityBias?.lng;
+      let explicitCity = false;
       if (cityHint) {
         try {
           const cr = await fetch(
@@ -1460,28 +1461,38 @@ export default function FindPage() {
             { headers: { "Accept-Language": "en" } }
           );
           const cd: NominatimResult[] = await cr.json();
-          if (cd.length > 0) { biasLat = parseFloat(cd[0].lat); biasLng = parseFloat(cd[0].lon); }
-        } catch { /* keep existing bias */ }
+          if (cd.length > 0) {
+            biasLat = parseFloat(cd[0].lat);
+            biasLng = parseFloat(cd[0].lon);
+            explicitCity = true;
+          }
+        } catch { /* keep GPS bias */ }
       }
 
-      // Both engines search globally. When the user explicitly types "in [city]" we geocode
-      // that city and use it as a bias — otherwise zero bias so results are not locked to
-      // the user's current location (Photon uses IP-based geolocation by default, so we
-      // must pass location_bias_scale=0 to suppress it for unqualified queries).
       const searchTerm = cityHint ? place : q;
-      const hasExplicitCity = cityHint && biasLat != null && biasLng != null;
-      const photonParams = hasExplicitCity
-        ? `&lat=${biasLat}&lon=${biasLng}&location_bias_scale=0.5`
-        : `&location_bias_scale=0`;
+      const hasBias = biasLat != null && biasLng != null;
+
+      // Always bias toward user's location (GPS or explicit city).
+      // Higher scale (0.7) when user typed a city, softer (0.35) when just using GPS
+      // so nearby-but-not-overwhelming results surface first.
+      const photonScale = explicitCity ? 0.7 : 0.35;
+      const photonParams = hasBias
+        ? `&lat=${biasLat}&lon=${biasLng}&location_bias_scale=${photonScale}`
+        : "";
+
+      // Nominatim viewbox: ±0.6° around bias point (loosely bounded so global results still appear)
+      const nomViewbox = hasBias
+        ? `&viewbox=${biasLng! - 0.6},${biasLat! + 0.6},${biasLng! + 0.6},${biasLat! - 0.6}&bounded=0`
+        : "";
 
       // Fire Nominatim + Photon in parallel
       const [nomRes, photonRes] = await Promise.allSettled([
         fetch(
-          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchTerm)}&format=json&limit=5&addressdetails=1`,
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchTerm)}&format=json&limit=6&addressdetails=1${nomViewbox}`,
           { headers: { "Accept-Language": "en" } }
         ).then(r => r.json() as Promise<NominatimResult[]>),
         fetch(
-          `https://photon.komoot.io/api/?q=${encodeURIComponent(searchTerm)}&limit=6${photonParams}`,
+          `https://photon.komoot.io/api/?q=${encodeURIComponent(searchTerm)}&limit=8${photonParams}`,
           { headers: { "Accept-Language": "en" } }
         ).then(r => r.json() as Promise<{ features: PhotonFeature[] }>),
       ]);
@@ -1492,7 +1503,7 @@ export default function FindPage() {
         : [];
       const photonData: NominatimResult[] = photonFeatures.map(photonToNom);
 
-      // Merge — Nominatim first (usually more precise), then Photon extras
+      // Merge — Nominatim first (more precise), then Photon extras
       // Deduplicate by rounded coordinate pair
       const seen = new Set<string>();
       const merged: NominatimResult[] = [];
@@ -1500,6 +1511,17 @@ export default function FindPage() {
         if (!r.lat || !r.lon || !r.display_name) continue;
         const key = `${parseFloat(r.lat).toFixed(2)},${parseFloat(r.lon).toFixed(2)}`;
         if (!seen.has(key)) { seen.add(key); merged.push(r); }
+      }
+
+      // Sort by distance from bias point so nearest results appear first
+      if (hasBias) {
+        const bLat = biasLat!;
+        const bLng = biasLng!;
+        merged.sort((a, b) => {
+          const da = Math.hypot(parseFloat(a.lat) - bLat, parseFloat(a.lon) - bLng);
+          const db = Math.hypot(parseFloat(b.lat) - bLat, parseFloat(b.lon) - bLng);
+          return da - db;
+        });
       }
 
       setSuggestions(merged.slice(0, 6));

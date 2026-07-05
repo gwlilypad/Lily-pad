@@ -1,0 +1,2 @@
+- [Env vars: Railway prod vs Replit dev](env-vars-railway-vs-replit.md) — this project's prod runs on Railway; Replit secrets are dev/preview only, set both places separately.
+- [Stripe payment flow architecture](stripe-payment-flow.md) — one-off PaymentIntent per booking (not the subscription/product-catalog skill pattern), amount always recalculated server-side.

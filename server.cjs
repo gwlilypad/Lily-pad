@@ -1,6 +1,7 @@
 const express = require('express');
 const path    = require('path');
 const fs      = require('fs');
+const Stripe  = require('stripe');
 
 const app  = express();
 const PORT = process.env.PORT || 5000;
@@ -8,6 +9,13 @@ const PORT = process.env.PORT || 5000;
 const SUPABASE_URL  = 'https://mcfxoimaqgpyntvasbsw.supabase.co';
 const SUPABASE_ANON = process.env.VITE_SUPABASE_ANON_KEY    || '';
 const SVC_KEY       = process.env.SUPABASE_SERVICE_ROLE_KEY  || '';
+
+// Accept either naming convention (Railway/production commonly uses unprefixed
+// STRIPE_*, Replit dev/preview may use VITE_-prefixed for the publishable key).
+const STRIPE_SECRET_KEY      = process.env.STRIPE_SECRET_KEY || '';
+const STRIPE_PUBLISHABLE_KEY = process.env.STRIPE_PUBLISHABLE_KEY || process.env.VITE_STRIPE_PUBLISHABLE_KEY || '';
+const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
+if (!stripe) console.warn('[Stripe] STRIPE_SECRET_KEY not set — payment endpoints will return 503.');
 
 // Comma-separated list of emails allowed to register as staff/admin
 // Set this in Replit Secrets as ADMIN_EMAILS=alice@co.com,bob@co.com
@@ -1882,12 +1890,72 @@ app.post('/api/spots/:id/reject', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── Bookings: create (creates as 'pending' — lister must approve) ───────────────
+// ── Stripe: expose publishable key to the client (avoids needing a VITE_-prefixed
+//    build-time var — works regardless of how the host platform names it) ──────
+app.get('/api/stripe-config', (req, res) => {
+  if (!STRIPE_PUBLISHABLE_KEY) return res.status(503).json({ error: 'Stripe is not configured on the server.' });
+  res.json({ publishableKey: STRIPE_PUBLISHABLE_KEY });
+});
+
+// ── Stripe: create a PaymentIntent for a pending booking ─────────────────────
+// Amount is always recalculated server-side from the spot's real price_per_hr —
+// never trust a client-supplied amount.
+app.post('/api/create-payment-intent', async (req, res) => {
+  if (!stripe) return res.status(503).json({ error: 'Stripe is not configured on the server.' });
+  const { spot_id, start_ts, end_ts, user_id } = req.body || {};
+  if (!spot_id || !start_ts || !end_ts) return res.status(400).json({ error: 'spot_id, start_ts, end_ts required' });
+
+  try {
+    const spotRes  = await fetch(`${SUPABASE_URL}/rest/v1/spots?id=eq.${spot_id}&select=price_per_hr,address`, { headers: SVC_HEADERS });
+    const spotRows = await spotRes.json();
+    const spot     = Array.isArray(spotRows) ? spotRows[0] : null;
+    if (!spot) return res.status(404).json({ error: 'Spot not found' });
+
+    const pricePerHr = Number(spot.price_per_hr) || 0;
+    const durMs   = new Date(end_ts).getTime() - new Date(start_ts).getTime();
+    if (!(durMs > 0)) return res.status(400).json({ error: 'end_ts must be after start_ts' });
+    const durHrs  = Math.max(1, Math.round(durMs / (60 * 60 * 1000)));
+    const total   = Math.round(pricePerHr * durHrs * 100) / 100;
+    const amountCents = Math.max(50, Math.round(total * 100)); // Stripe minimum charge is $0.50
+
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: amountCents,
+      currency: 'usd',
+      automatic_payment_methods: { enabled: true },
+      metadata: {
+        spot_id: String(spot_id),
+        user_id: user_id || '',
+        start_ts: String(start_ts),
+        end_ts: String(end_ts),
+        address: spot.address || '',
+      },
+    });
+
+    res.json({ clientSecret: paymentIntent.client_secret, paymentIntentId: paymentIntent.id, amount: total });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Bookings: create (creates as 'pending' unless a verified Stripe payment ───
+//    has already succeeded, in which case it's created as 'confirmed') ────────
 app.post('/api/bookings', async (req, res) => {
-  const { user_id, spot_id, start_ts, end_ts, price_per_hr, total_price, booking_data } = req.body || {};
+  const { user_id, spot_id, start_ts, end_ts, price_per_hr, total_price, booking_data, payment_intent_id } = req.body || {};
   if (!user_id) return res.status(400).json({ error: 'user_id required' });
 
   try {
+    // If a payment intent was supplied, verify it actually succeeded before
+    // trusting the client's "paid" claim.
+    let bookingStatus = 'pending';
+    let verifiedPaymentIntentId = null;
+    if (payment_intent_id) {
+      if (!stripe) return res.status(503).json({ error: 'Stripe is not configured on the server.' });
+      const pi = await stripe.paymentIntents.retrieve(payment_intent_id);
+      if (pi.status !== 'succeeded') {
+        return res.status(402).json({ error: `Payment not completed (status: ${pi.status})` });
+      }
+      bookingStatus = 'confirmed';
+      verifiedPaymentIntentId = pi.id;
+    }
+
     // Look up driver profile and spot/lister info in parallel
     const [driverRes, spotRes] = await Promise.all([
       fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${user_id}&select=full_name,email`, { headers: SVC_HEADERS }),
@@ -1922,6 +1990,7 @@ app.post('/api/bookings', async (req, res) => {
       lister_id:    listerId,
       driver_name:  driverName,
       driver_email: driverEmail,
+      ...(verifiedPaymentIntentId ? { stripe_payment_intent_id: verifiedPaymentIntentId } : {}),
     };
 
     const r = await fetch(`${SUPABASE_URL}/rest/v1/bookings`, {
@@ -1931,13 +2000,13 @@ app.post('/api/bookings', async (req, res) => {
         user_id,
         spot_id: String(spot_id || ''),
         booking_data: data_payload,
-        status: 'pending',
+        status: bookingStatus,
       }),
     });
     const data = await r.json();
     if (!r.ok) return res.status(r.status).json({ error: data });
 
-    // Email lister about the new request (non-blocking)
+    // Email lister about the new booking (non-blocking)
     const addr   = booking_data?.addr || spot?.address || 'your spot';
     const dtOpts = { month: 'short', day: 'numeric' };
     const tmOpts = { hour: 'numeric', minute: '2-digit' };
@@ -1945,18 +2014,19 @@ app.post('/api/bookings', async (req, res) => {
     const fromStr = start_ts ? new Date(start_ts).toLocaleTimeString('en-US', tmOpts) : '';
     const tillStr = end_ts   ? new Date(end_ts).toLocaleTimeString('en-US', tmOpts)   : '';
     const totalLabel = total_price ? `$${Number(total_price).toFixed(2)}` : '';
-    sendEmail(listerEmail, 'New Booking Request — Lily Pad',
+    const isPaid = bookingStatus === 'confirmed';
+    sendEmail(listerEmail, isPaid ? 'New Paid Booking — Lily Pad' : 'New Booking Request — Lily Pad',
       `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
-        <h2 style="color:#0E1F40;margin:0 0 8px">New booking request 🛏</h2>
+        <h2 style="color:#0E1F40;margin:0 0 8px">${isPaid ? 'New paid booking ✅' : 'New booking request 🛏'}</h2>
         <p style="color:#555;margin:0 0 16px">Hi ${listerName},</p>
-        <p style="color:#555;margin:0 0 20px"><strong>${driverName}</strong> has requested to book your spot.</p>
+        <p style="color:#555;margin:0 0 20px"><strong>${driverName}</strong> ${isPaid ? 'has paid and confirmed a booking for your spot.' : 'has requested to book your spot.'}</p>
         <div style="background:#f5f7fa;border-radius:12px;padding:16px;margin-bottom:20px">
           <div style="font-size:13px;color:#0E1F40;margin-bottom:6px"><strong>📍 ${addr}</strong></div>
           <div style="font-size:13px;color:#555;margin-bottom:4px">📅 ${dateStr}</div>
           <div style="font-size:13px;color:#555;margin-bottom:4px">⏰ ${fromStr} → ${tillStr}</div>
           ${totalLabel ? `<div style="font-size:13px;color:#555"><strong>💰 ${totalLabel}</strong></div>` : ''}
         </div>
-        <p style="color:#555;margin:0 0 20px">Log in to your Lily Pad account and open <strong>My Pads</strong> to approve or deny this request.</p>
+        <p style="color:#555;margin:0 0 20px">${isPaid ? 'This booking is already confirmed and paid — open <strong>My Pads</strong> to view the details.' : 'Log in to your Lily Pad account and open <strong>My Pads</strong> to approve or deny this request.'}</p>
         <p style="font-size:12px;color:#999;margin:0">— Lily Pad</p>
       </div>`
     );

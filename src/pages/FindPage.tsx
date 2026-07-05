@@ -7,6 +7,7 @@ import {
   type SupportTicket,
 } from "@/lib/support";
 import { supabase } from "@/lib/supabase";
+import StripePaymentForm from "@/components/StripePaymentForm";
 import { MapContainer, TileLayer, Marker, Pane, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -1050,6 +1051,13 @@ export default function FindPage() {
   const [bookingConf, setBookingConf] = useState<{
     addr: string; padType: string; startTs: number; endTs: number; totalPrice: number; confNum: string;
   } | null>(null);
+  const [paymentStep, setPaymentStep] = useState<{
+    clientSecret: string; publishableKey: string; amount: number;
+    spotId: string; addr: string; padType: string; hostPhone: string;
+    startTs: number; endTs: number; priceNum: number;
+  } | null>(null);
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [paymentSetupError, setPaymentSetupError] = useState("");
   const [nearbyMode, setNearbyMode] = useState(false);
   const [mapSearchOrigin, setMapSearchOrigin] = useState<[number, number] | null>(null);
   const [showHotspots, setShowHotspots] = useState(false);
@@ -3223,66 +3231,155 @@ export default function FindPage() {
               {/* Book my lily pad CTA */}
               <div style={{ padding: "10px 16px 0", paddingBottom: "calc(env(safe-area-inset-bottom) + 18px)", flexShrink: 0, marginTop: "auto" }}>
                 <button
-                  disabled={isBooked || conflict || bookStartTs == null || bookEndTs == null || bookEndTs <= bookStartTs}
+                  disabled={isBooked || conflict || bookStartTs == null || bookEndTs == null || bookEndTs <= bookStartTs || paymentLoading}
                   onClick={async () => {
-                    if (bookStartTs == null || bookEndTs == null || isBooked || conflict) return;
+                    if (bookStartTs == null || bookEndTs == null || isBooked || conflict || paymentLoading) return;
                     const priceNum = Number(spot.price.replace(/[^0-9.]/g, "")) || 0;
                     const padType = (spot.meta.split("·")[0] || "Spot").trim();
                     const uuidDigits = spot.id.replace(/[^0-9]/g, "").padEnd(10, "5");
                     const hostPhone = `(${uuidDigits.slice(0,3)}) ${uuidDigits.slice(3,6)}-${uuidDigits.slice(6,10)}`;
-                    const durMs = bookEndTs - bookStartTs;
-                    const durHrs = Math.max(1, Math.round(durMs / (60 * 60 * 1000)));
-                    const totalPrice = Math.round(priceNum * durHrs * 100) / 100;
-                    let confNum = `LP-${Date.now().toString(36).toUpperCase().slice(-6)}`;
-                    let bookingUuid: string | undefined;
-                    if (user) {
-                      try {
-                        const r = await fetch("/api/bookings", {
+
+                    if (!user) return;
+
+                    setPaymentSetupError("");
+                    setPaymentLoading(true);
+                    try {
+                      const [cfgRes, piRes] = await Promise.all([
+                        fetch("/api/stripe-config"),
+                        fetch("/api/create-payment-intent", {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
                           body: JSON.stringify({
-                            user_id: user.id,
                             spot_id: spot.id,
+                            user_id: user.id,
                             start_ts: new Date(bookStartTs).toISOString(),
                             end_ts: new Date(bookEndTs).toISOString(),
-                            price_per_hr: priceNum,
-                            total_price: totalPrice,
-                            booking_data: { addr: spot.addr, padType, hostName, hostPhone },
                           }),
-                        });
-                        if (r.ok) {
-                          const data = await r.json();
-                          if (data?.id) {
-                            bookingUuid = String(data.id);
-                            confNum = `LP-${bookingUuid.slice(0, 8).toUpperCase()}`;
-                          }
-                        }
-                      } catch { /* non-blocking */ }
+                        }),
+                      ]);
+                      const cfg = await cfgRes.json();
+                      const pi  = await piRes.json();
+                      if (!cfgRes.ok || !cfg.publishableKey) throw new Error(cfg.error || "Payments are not set up yet.");
+                      if (!piRes.ok || !pi.clientSecret) throw new Error(pi.error || "Could not start payment.");
+
+                      setPaymentStep({
+                        clientSecret: pi.clientSecret,
+                        publishableKey: cfg.publishableKey,
+                        amount: pi.amount,
+                        spotId: spot.id, addr: spot.addr, padType, hostPhone,
+                        startTs: bookStartTs, endTs: bookEndTs, priceNum,
+                      });
+                    } catch (e: any) {
+                      setPaymentSetupError(e?.message || "Could not start payment. Please try again.");
+                    } finally {
+                      setPaymentLoading(false);
                     }
-                    setAppState(s => {
-                      const newId = s.bookings.reduce((m, b) => Math.max(m, Number(b.id)), 0) + 1;
-                      const rec = {
-                        id: newId, uuid: bookingUuid,
-                        spotId: spot.id, addr: spot.addr, city: "Houston, TX", padType,
-                        startTs: bookStartTs, endTs: bookEndTs, pricePerHr: priceNum,
-                        hostName, hostPhone, status: "pending" as const,
-                      };
-                      return { ...s, bookings: [...s.bookings, rec] };
-                    });
-                    setBookingConf({ addr: spot.addr, padType, startTs: bookStartTs, endTs: bookEndTs, totalPrice, confNum });
                   }}
-                  style={{ width: "100%", padding: "15px", background: (isBooked || conflict) ? "rgba(239,68,68,0.25)" : "#8DD63F", border: "none", borderRadius: 100, fontSize: 15, fontWeight: 700, color: (isBooked || conflict) ? "#fca5a5" : "#0E1F40", cursor: (isBooked || conflict) ? "not-allowed" : "pointer", fontFamily: "'DM Sans', sans-serif", letterSpacing: -0.2, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, boxShadow: (isBooked || conflict) ? "none" : "0 2px 16px rgba(141,214,63,0.35)" }}
+                  style={{ width: "100%", padding: "15px", background: (isBooked || conflict) ? "rgba(239,68,68,0.25)" : "#8DD63F", border: "none", borderRadius: 100, fontSize: 15, fontWeight: 700, color: (isBooked || conflict) ? "#fca5a5" : "#0E1F40", cursor: (isBooked || conflict || paymentLoading) ? "not-allowed" : "pointer", fontFamily: "'DM Sans', sans-serif", letterSpacing: -0.2, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, boxShadow: (isBooked || conflict) ? "none" : "0 2px 16px rgba(141,214,63,0.35)", opacity: paymentLoading ? 0.7 : 1 }}
                 >
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                     <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" />
                   </svg>
-                  {isBooked ? "Currently booked" : conflict ? "Time already booked" : "Book my lily pad"}
+                  {isBooked ? "Currently booked" : conflict ? "Time already booked" : paymentLoading ? "Preparing payment…" : "Book my lily pad"}
                 </button>
+                {paymentSetupError && (
+                  <div style={{ marginTop: 10, fontSize: 12, color: "#fca5a5", textAlign: "center" }}>{paymentSetupError}</div>
+                )}
               </div>
             </div>
           );
         })()}
       </div>
+
+      {/* ── STRIPE PAYMENT OVERLAY ── */}
+      {!comingSoon && paymentStep && (() => {
+        const fmtD = (ts: number) => new Date(ts).toLocaleDateString(undefined, { weekday:"short", month:"short", day:"numeric" });
+        const fmtT = (ts: number) => new Date(ts).toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit" });
+        return (
+          <div style={{
+            position: "absolute", inset: 0, zIndex: 300,
+            background: "#0E1F40",
+            display: "flex", flexDirection: "column",
+            alignItems: "center", justifyContent: "center",
+            padding: "32px 20px", overflowY: "auto",
+          }}>
+            <div style={{ width: "100%", maxWidth: 380 }}>
+              <button
+                onClick={() => setPaymentStep(null)}
+                style={{ background: "none", border: "none", color: "rgba(255,255,255,0.6)", fontSize: 14, marginBottom: 20, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontFamily: "'DM Sans', sans-serif" }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M15 18l-6-6 6-6" /></svg>
+                Back
+              </button>
+              <h2 style={{ color: "#fff", fontSize: 22, fontWeight: 700, margin: "0 0 6px", fontFamily: "'DM Sans', sans-serif" }}>Confirm & pay</h2>
+              <p style={{ color: "rgba(255,255,255,0.55)", fontSize: 13, margin: "0 0 20px" }}>{paymentStep.addr}</p>
+              <div style={{ background: "rgba(255,255,255,0.06)", borderRadius: 14, padding: 16, marginBottom: 24 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "rgba(255,255,255,0.7)", marginBottom: 6 }}>
+                  <span>{fmtD(paymentStep.startTs)}</span>
+                  <span>{fmtT(paymentStep.startTs)} → {fmtT(paymentStep.endTs)}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 16, color: "#fff", fontWeight: 700, marginTop: 8 }}>
+                  <span>Total</span>
+                  <span>${paymentStep.amount.toFixed(2)}</span>
+                </div>
+              </div>
+              <StripePaymentForm
+                clientSecret={paymentStep.clientSecret}
+                publishableKey={paymentStep.publishableKey}
+                amount={paymentStep.amount}
+                onError={(msg) => setPaymentSetupError(msg)}
+                onSuccess={async (paymentIntentId) => {
+                  const ps = paymentStep;
+                  let confNum = `LP-${Date.now().toString(36).toUpperCase().slice(-6)}`;
+                  let bookingUuid: string | undefined;
+                  try {
+                    const r = await fetch("/api/bookings", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        user_id: user!.id,
+                        spot_id: ps.spotId,
+                        start_ts: new Date(ps.startTs).toISOString(),
+                        end_ts: new Date(ps.endTs).toISOString(),
+                        price_per_hr: ps.priceNum,
+                        total_price: ps.amount,
+                        payment_intent_id: paymentIntentId,
+                        booking_data: { addr: ps.addr, padType: ps.padType, hostName, hostPhone: ps.hostPhone },
+                      }),
+                    });
+                    if (r.ok) {
+                      const data = await r.json();
+                      if (data?.id) {
+                        bookingUuid = String(data.id);
+                        confNum = `LP-${bookingUuid.slice(0, 8).toUpperCase()}`;
+                      }
+                    } else {
+                      const err = await r.json().catch(() => null);
+                      setPaymentSetupError(err?.error || "Payment succeeded but we couldn't save your booking. Contact support with your payment confirmation.");
+                      return;
+                    }
+                  } catch {
+                    setPaymentSetupError("Payment succeeded but we couldn't save your booking. Contact support with your payment confirmation.");
+                    return;
+                  }
+                  setAppState(s => {
+                    const newId = s.bookings.reduce((m, b) => Math.max(m, Number(b.id)), 0) + 1;
+                    const rec = {
+                      id: newId, uuid: bookingUuid,
+                      spotId: ps.spotId, addr: ps.addr, city: "Houston, TX", padType: ps.padType,
+                      startTs: ps.startTs, endTs: ps.endTs, pricePerHr: ps.priceNum,
+                      hostName, hostPhone: ps.hostPhone, status: "confirmed" as const,
+                    };
+                    return { ...s, bookings: [...s.bookings, rec] };
+                  });
+                  setPaymentStep(null);
+                  setBookingConf({ addr: ps.addr, padType: ps.padType, startTs: ps.startTs, endTs: ps.endTs, totalPrice: ps.amount, confNum });
+                }}
+              />
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── BOOKING CONFIRMATION OVERLAY ── */}
       {!comingSoon && bookingConf && (() => {

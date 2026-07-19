@@ -12,3 +12,9 @@ id = "ystbAN8j20EM6KxI4YDaV"
 uri = "file://lily-pad-full.zip"
 type = "unspecified"
 title = "Lily Pad — Full Source Code"
+
+[[outputs]]
+id = "Pehy4_vxGRzUJ7rlGUTft"
+uri = "file://dist-build.zip"
+type = "unspecified"
+title = "Lily Pad — Latest Build (dist/)"

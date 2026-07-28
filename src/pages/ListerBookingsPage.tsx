@@ -124,7 +124,7 @@ export default function ListerBookingsPage() {
   const tabCounts = { new: newReqs.length, current: current.length, past: past.length };
   const tabItems  = tab === "new" ? newReqs : tab === "current" ? current : past;
   const tabDefs: { key: "new" | "current" | "past"; label: string }[] = [
-    { key: "new", label: "New" }, { key: "current", label: "Current" }, { key: "past", label: "Past" },
+    { key: "new", label: "New" }, { key: "current", label: "Active" }, { key: "past", label: "Past" },
   ];
 
   return (

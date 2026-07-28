@@ -295,8 +295,8 @@ export default function PadDashboardPage() {
   const [archiveConfirmId, setArchiveConfirmId] = useState<number | null>(null);
   const [archiving, setArchiving] = useState(false);
 
-  // List tab: "active" | "archived"
-  const [listTab, setListTab] = useState<"active" | "archived">("active");
+  // List tab: "active" | "pending" | "archived"
+  const [listTab, setListTab] = useState<"active" | "pending" | "archived">("active");
 
   // Top-level view: pads list or reservations
   const [padView, setPadView] = useState<"pads" | "reservations">("pads");
@@ -446,13 +446,21 @@ export default function PadDashboardPage() {
   const openPad = openPadId == null ? null : pads.find(p => p.id === openPadId) || null;
   const pendingPad = pendingPauseId == null ? null : pads.find(p => p.id === pendingPauseId) || null;
 
-  // Sort: active → pending → paused (archived excluded from active tab)
-  const activePads   = pads.filter(p => p.status !== "archived");
+  // Sort: active → paused (pending and archived have their own tabs)
+  const pendingPads  = pads.filter(p => p.status === "pending");
+  const activePads   = pads.filter(p => p.status !== "archived" && p.status !== "pending");
   const archivedPads = pads.filter(p => p.status === "archived");
   const sortedPads = [...activePads].sort((a, b) => {
-    const order: Record<string, number> = { active: 0, pending: 1, paused: 2 };
+    const order: Record<string, number> = { active: 0, paused: 1 };
     return (order[a.status] ?? 1) - (order[b.status] ?? 1);
   });
+
+  // Auto-switch to pending tab when user has pending pads
+  React.useEffect(() => {
+    if (pendingPads.length > 0 && listTab === "active" && activePads.length === 0) {
+      setListTab("pending");
+    }
+  }, [pads.length]);
 
   async function archivePad(id: number) {
     const pad = pads.find(p => p.id === id);
@@ -741,7 +749,7 @@ export default function PadDashboardPage() {
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <div style={{ width: 3, height: 16, borderRadius: 2, background: GREEN }} />
                   <span style={{ fontSize: 12, fontWeight: 800, color: NAVY, letterSpacing: 0.3, textTransform: "uppercase" }}>Your Pads</span>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(14,31,64,0.45)", background: "rgba(14,31,64,0.08)", borderRadius: 100, padding: "2px 7px" }}>{activePads.length}</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(14,31,64,0.45)", background: "rgba(14,31,64,0.08)", borderRadius: 100, padding: "2px 7px" }}>{activePads.length + pendingPads.length}</span>
                 </div>
                 <div style={{ display: "flex", gap: 14 }}>
                   {[
@@ -758,7 +766,7 @@ export default function PadDashboardPage() {
 
               {/* Tabs */}
               <div style={{ display: "flex", gap: 4, marginBottom: 14, background: "rgba(14,31,64,0.06)", borderRadius: 12, padding: 4 }}>
-                {(["active", "archived"] as const).map(tab => (
+                {(["active", "pending", "archived"] as const).map(tab => (
                   <button key={tab} onClick={() => setListTab(tab)} style={{
                     flex: 1, padding: "8px 0", borderRadius: 9,
                     background: listTab === tab ? "#fff" : "transparent",
@@ -771,7 +779,12 @@ export default function PadDashboardPage() {
                     textTransform: "capitalize",
                     display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
                   }}>
-                    {tab === "active" ? "Active" : "Archived"}
+                    {tab === "active" ? "Active" : tab === "pending" ? "Pending" : "Archived"}
+                    {tab === "pending" && pendingPads.length > 0 && (
+                      <span style={{ fontSize: 9, fontWeight: 800, background: "rgba(251,191,36,0.22)", borderRadius: 100, padding: "1px 5px", color: "#a07800" }}>
+                        {pendingPads.length}
+                      </span>
+                    )}
                     {tab === "archived" && archivedPads.length > 0 && (
                       <span style={{ fontSize: 9, fontWeight: 800, background: "rgba(14,31,64,0.12)", borderRadius: 100, padding: "1px 5px", color: "rgba(14,31,64,0.55)" }}>
                         {archivedPads.length}
@@ -781,13 +794,21 @@ export default function PadDashboardPage() {
                 ))}
               </div>
 
-              {/* Pad cards */}
-              {(listTab === "active" ? sortedPads : archivedPads).length === 0 ? (
-                <div style={{ background: "rgba(14,31,64,0.04)", borderRadius: 16, padding: "28px 20px", textAlign: "center", border: "1px dashed rgba(14,31,64,0.18)", color: "rgba(14,31,64,0.35)", fontSize: 13 }}>
-                  {listTab === "active" ? "No pads listed yet." : "No archived pads."}
-                </div>
-              ) : (
-                (listTab === "active" ? sortedPads : archivedPads).map(pad => (
+              {/* Pending tab — under review banner */}
+              {listTab === "pending" && (
+                <>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 10, background: "rgba(251,191,36,0.10)", border: "1px solid rgba(251,191,36,0.30)", borderRadius: 14, padding: "12px 14px", marginBottom: 14 }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a07800" strokeWidth="2.2" strokeLinecap="round" style={{ flexShrink: 0, marginTop: 1 }}><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+                    <div>
+                      <div style={{ fontSize: 12.5, fontWeight: 700, color: "#7a5800", lineHeight: 1.3 }}>Under review</div>
+                      <div style={{ fontSize: 11.5, color: "rgba(120,88,0,0.70)", marginTop: 2, lineHeight: 1.4 }}>Your pad is being reviewed by our team. We'll notify you once it's approved and live.</div>
+                    </div>
+                  </div>
+                  {pendingPads.length === 0 ? (
+                    <div style={{ background: "rgba(14,31,64,0.04)", borderRadius: 16, padding: "28px 20px", textAlign: "center", border: "1px dashed rgba(14,31,64,0.18)", color: "rgba(14,31,64,0.35)", fontSize: 13 }}>
+                      No pads pending review.
+                    </div>
+                  ) : pendingPads.map(pad => (
                   <div key={pad.id} onClick={() => setOpenPadId(pad.id)} style={{
                     background: "#fff", borderRadius: 18, border: "1px solid rgba(14,31,64,0.10)",
                     overflow: "hidden", marginBottom: 12,
@@ -837,7 +858,69 @@ export default function PadDashboardPage() {
                       </div>
                     </div>
                   </div>
-                ))
+                  ))}
+                </>
+              )}
+
+              {/* Active / Archived pad cards */}
+              {listTab !== "pending" && (
+                (listTab === "active" ? sortedPads : archivedPads).length === 0 ? (
+                  <div style={{ background: "rgba(14,31,64,0.04)", borderRadius: 16, padding: "28px 20px", textAlign: "center", border: "1px dashed rgba(14,31,64,0.18)", color: "rgba(14,31,64,0.35)", fontSize: 13 }}>
+                    {listTab === "active" ? "No pads listed yet." : "No archived pads."}
+                  </div>
+                ) : (
+                  (listTab === "active" ? sortedPads : archivedPads).map(pad => (
+                    <div key={pad.id} onClick={() => setOpenPadId(pad.id)} style={{
+                      background: "#fff", borderRadius: 18, border: "1px solid rgba(14,31,64,0.10)",
+                      overflow: "hidden", marginBottom: 12,
+                      boxShadow: "0 2px 12px rgba(14,31,64,0.10)", cursor: "pointer",
+                      opacity: pad.status === "paused" || pad.status === "archived" ? 0.72 : 1,
+                    }}>
+                      <div style={{
+                        height: 120,
+                        background: `url(${pad.photoUrl}) center/cover, linear-gradient(135deg,rgba(141,214,63,0.18),rgba(14,31,64,0.12))`,
+                        position: "relative",
+                        filter: pad.status === "paused" || pad.status === "archived" ? "grayscale(0.55)" : "none",
+                      }}>
+                        <div style={{ position: "absolute", top: 10, right: 10 }}>
+                          <StatusPill pad={pad} />
+                        </div>
+                        {pad.status !== "pending" && pad.status !== "archived" && (
+                          <div style={{ position: "absolute", top: 10, left: 10, display: "flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.92)", borderRadius: 100, padding: "5px 8px 5px 10px", boxShadow: "0 2px 6px rgba(0,0,0,0.22)" }}>
+                            <span style={{ fontSize: 10, fontWeight: 700, color: NAVY, letterSpacing: 0.3 }}>
+                              {pad.status === "paused" ? "Closed" : "Open"}
+                            </span>
+                            <PauseSwitch paused={pad.status === "paused"} onPress={() => requestPauseToggle(pad.id)} />
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ padding: "12px 14px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                              <div style={{ fontSize: 14.5, fontWeight: 700, color: NAVY, letterSpacing: -0.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {pad.name}
+                              </div>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); startRename(pad); }}
+                                style={{ flexShrink: 0, padding: "2px 8px", borderRadius: 100, background: "rgba(141,214,63,0.12)", border: "1px solid rgba(141,214,63,0.35)", color: "#5a9e1a", fontSize: 10, fontWeight: 800, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", letterSpacing: 0.2 }}
+                              >
+                                Rename
+                              </button>
+                            </div>
+                            <div style={{ fontSize: 11.5, color: "rgba(14,31,64,0.45)" }}>
+                              {pad.address} · {pad.type}{pad.spotCount > 1 ? ` · ${pad.spotCount} spots` : ""}
+                            </div>
+                          </div>
+                          <div style={{ textAlign: "right", flexShrink: 0 }}>
+                            <div style={{ fontSize: 17, fontWeight: 800, color: GREEN }}>${pad.price}<span style={{ fontSize: 10, color: "rgba(141,214,63,0.55)", fontWeight: 500 }}>/hr</span></div>
+                            <div style={{ fontSize: 10, color: "rgba(14,31,64,0.38)", marginTop: 2 }}>Since {pad.since}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )
               )}
 
               {/* Add new pad */}

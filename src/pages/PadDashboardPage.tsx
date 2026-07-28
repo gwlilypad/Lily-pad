@@ -456,7 +456,7 @@ export default function PadDashboardPage() {
   });
 
   // Auto-switch to pending tab when user has pending pads
-  React.useEffect(() => {
+  useEffect(() => {
     if (pendingPads.length > 0 && listTab === "active" && activePads.length === 0) {
       setListTab("pending");
     }

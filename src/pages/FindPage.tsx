@@ -1085,7 +1085,7 @@ export default function FindPage() {
   const [myHostSpots, setMyHostSpots] = useState<SpotRecord[]>([]);
   const [managingSpot, setManagingSpot] = useState<SpotRecord | null>(null);
   const [hostBookings, setHostBookings] = useState<Array<{start_ts:number,total_price:number,status:string}>>([]);
-  const [earningsRange, setEarningsRange] = useState<'D'|'W'|'M'|'Y'|'ALL'>('M');
+  const [earningsRange, setEarningsRange] = useState<'D'|'W'|'M'|'Y'|'ALL'>('ALL');
   const [chartScrubIdx, setChartScrubIdx] = useState<number|null>(null);
   const [hostDashView, setHostDashView]   = useState<'main'|'earnings'>('main');
   const [supportView, setSupportView] = useState<"menu" | "thread">("menu");
@@ -4159,7 +4159,7 @@ export default function FindPage() {
                 )}
               </svg>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 2, padding: "2px 16px 14px" }}>
-                {(['D','W','M','Y','ALL'] as const).map(r => (
+                {(['ALL','D','W','M','Y'] as const).map(r => (
                   <button key={r} onClick={() => { setEarningsRange(r); setChartScrubIdx(null); }} style={{
                     padding: "5px 13px", borderRadius: 20,
                     background: earningsRange === r ? "rgba(255,255,255,0.14)" : "transparent", border: "none",

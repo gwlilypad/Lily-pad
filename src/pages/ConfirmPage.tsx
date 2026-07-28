@@ -49,10 +49,12 @@ export default function ConfirmPage() {
 
         {/* Host info */}
         <div style={{ background: "#fff", borderRadius: 14, border: "0.5px solid rgba(14,31,64,0.08)", padding: "11px 13px", display: "flex", alignItems: "center", gap: 10, marginBottom: 12, width: "100%" }}>
-          <div style={{ width: 34, height: 34, borderRadius: "50%", background: "#0E1F40", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 13 }}>AJ</div>
+          <div style={{ width: 34, height: 34, borderRadius: "50%", background: "#0E1F40", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 13 }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          </div>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 500, color: "#0E1F40" }}>Alex Johnson</div>
-            <div style={{ fontSize: 11, fontWeight: 300, color: "rgba(14,31,64,0.4)" }}>Your host · (555) 234-5678</div>
+            <div style={{ fontSize: 13, fontWeight: 500, color: "#0E1F40" }}>Your host</div>
+            <div style={{ fontSize: 11, fontWeight: 300, color: "rgba(14,31,64,0.4)" }}>Contact info available in the app</div>
           </div>
         </div>
 

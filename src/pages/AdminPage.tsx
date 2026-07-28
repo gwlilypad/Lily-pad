@@ -1022,14 +1022,14 @@ export default function AdminPage() {
   type ServiceTab = "email" | "tickets";
   type PipelineFilter = "all" | "open" | "pending" | "resolved";
   type AudienceFilter = "all" | "renter" | "padRenter";
-  type EmailAudienceFilter = "all" | "renter" | "padRenter" | "guest";
-  type EmailCategoryFilter = "all" | EmailCategory;
+  type EmailAudienceFilter = "all" | "renter" | "padRenter";
+  type EmailDateFilter = "all" | "week" | "month";
   type SortDir = "recent" | "oldest";
   const [serviceTab, setServiceTab] = useState<ServiceTab>("email");
   const [pipelineFilter, setPipelineFilter] = useState<PipelineFilter>("open");
   const [audienceFilter, setAudienceFilter] = useState<AudienceFilter>("all");
   const [emailAudienceFilter, setEmailAudienceFilter] = useState<EmailAudienceFilter>("all");
-  const [emailCategoryFilter, setEmailCategoryFilter] = useState<EmailCategoryFilter>("all");
+  const [emailDateFilter, setEmailDateFilter] = useState<EmailDateFilter>("all");
   const [emailUnreadOnly, setEmailUnreadOnly] = useState(false);
   const [sortDir, setSortDir] = useState<SortDir>("recent");
   const [emailSortDir, setEmailSortDir] = useState<SortDir>("recent");
@@ -1568,7 +1568,7 @@ export default function AdminPage() {
     setPipelineFilter("open");
     setAudienceFilter("all");
     setEmailAudienceFilter("all");
-    setEmailCategoryFilter("all");
+    setEmailDateFilter("all");
     setEmailUnreadOnly(false);
     setSortDir("recent");
     setEmailSortDir("recent");
@@ -2254,8 +2254,12 @@ export default function AdminPage() {
           const unreadEmails = emails.filter(e => !e.read).length;
           const filteredEmails = sortedEmails.filter(e => {
             if (emailAudienceFilter !== "all" && e.accountType !== emailAudienceFilter) return false;
-            if (emailCategoryFilter !== "all" && e.category !== emailCategoryFilter) return false;
             if (emailUnreadOnly && e.read) return false;
+            if (emailDateFilter !== "all") {
+              const now = Date.now();
+              const cutoff = emailDateFilter === "week" ? now - 7 * 24 * 60 * 60 * 1000 : now - 30 * 24 * 60 * 60 * 1000;
+              if (e.receivedAt < cutoff) return false;
+            }
             return true;
           });
           const selectedEmail = selectedEmailId ? emails.find(e => e.id === selectedEmailId) || null : null;
@@ -2281,7 +2285,6 @@ export default function AdminPage() {
                   <div><span style={{ color: "rgba(14,31,64,0.45)" }}>From </span><span style={{ color: NAVY, fontWeight: 700 }}>{e.fromName}</span></div>
                   <div><span style={{ color: "rgba(14,31,64,0.45)" }}>Email </span><span style={{ color: NAVY, fontWeight: 700 }}>{e.fromAddress}</span></div>
                   <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase", padding: "3px 8px", borderRadius: 6, color: emailAudPillFg(e.accountType), background: emailAudPillBg(e.accountType) }}>{emailAudienceLabel(e.accountType)}</span>
-                  <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase", padding: "3px 8px", borderRadius: 6, color: "rgba(14,31,64,0.60)", background: "rgba(14,31,64,0.07)" }}>{emailCategoryLabel(e.category)}</span>
                   <div><span style={{ color: "rgba(14,31,64,0.45)" }}>Received </span><span style={{ color: NAVY, fontWeight: 700 }}>{formatEmailTime(e.receivedAt)}</span></div>
                 </div>
                 <div style={{ background: "#fff", borderRadius: 18, padding: "16px 18px", color: NAVY, fontSize: 13.5, lineHeight: 1.55, whiteSpace: "pre-wrap", wordBreak: "break-word", border: "1px solid rgba(14,31,64,0.08)", boxShadow: "0 2px 8px rgba(14,31,64,0.06)" }}>
@@ -2805,20 +2808,25 @@ export default function AdminPage() {
 
                   {/* ── Email filters ── */}
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {/* Audience: All / Drivers / Listers */}
                     <div style={{ display: "flex", gap: 4, background: "rgba(14,31,64,0.06)", borderRadius: 100, padding: 4 }}>
                       {([
-                        { key: "all" as EmailAudienceFilter, label: "All accounts" },
-                        { key: "renter" as EmailAudienceFilter, label: "Renters" },
+                        { key: "all" as EmailAudienceFilter, label: "All" },
+                        { key: "renter" as EmailAudienceFilter, label: "Drivers" },
                         { key: "padRenter" as EmailAudienceFilter, label: "Listers" },
-                        { key: "guest" as EmailAudienceFilter, label: "Guests" },
                       ]).map(f => (
                         <button key={f.key} onClick={() => setEmailAudienceFilter(f.key)} style={{ flex: 1, padding: "7px 6px", borderRadius: 100, border: "none", background: emailAudienceFilter === f.key ? "#fff" : "transparent", color: emailAudienceFilter === f.key ? NAVY : "rgba(14,31,64,0.50)", fontWeight: 700, fontSize: 11, cursor: "pointer", fontFamily: '"DM Sans",sans-serif' }}>{f.label}</button>
                       ))}
                     </div>
+                    {/* Date range + sort */}
                     <div style={{ display: "flex", gap: 6 }}>
-                      <div style={{ flex: 1, display: "flex", gap: 4, background: "rgba(14,31,64,0.06)", borderRadius: 100, padding: 4, overflowX: "auto" }}>
-                        {(["all", "billing", "account", "support", "feedback", "other"] as EmailCategoryFilter[]).map(c => (
-                          <button key={c} onClick={() => setEmailCategoryFilter(c)} style={{ padding: "7px 12px", borderRadius: 100, border: "none", background: emailCategoryFilter === c ? GREEN : "transparent", color: emailCategoryFilter === c ? NAVY : "rgba(14,31,64,0.55)", fontWeight: 700, fontSize: 11, cursor: "pointer", fontFamily: '"DM Sans",sans-serif', whiteSpace: "nowrap" }}>{c === "all" ? "All topics" : emailCategoryLabel(c as EmailCategory)}</button>
+                      <div style={{ flex: 1, display: "flex", gap: 4, background: "rgba(14,31,64,0.06)", borderRadius: 100, padding: 4 }}>
+                        {([
+                          { key: "all" as EmailDateFilter, label: "All time" },
+                          { key: "week" as EmailDateFilter, label: "Last week" },
+                          { key: "month" as EmailDateFilter, label: "Last month" },
+                        ]).map(d => (
+                          <button key={d.key} onClick={() => setEmailDateFilter(d.key)} style={{ flex: 1, padding: "7px 6px", borderRadius: 100, border: "none", background: emailDateFilter === d.key ? GREEN : "transparent", color: emailDateFilter === d.key ? NAVY : "rgba(14,31,64,0.55)", fontWeight: 700, fontSize: 11, cursor: "pointer", fontFamily: '"DM Sans",sans-serif', whiteSpace: "nowrap" }}>{d.label}</button>
                         ))}
                       </div>
                       <button onClick={() => setEmailSortDir(d => d === "recent" ? "oldest" : "recent")} style={{ background: "#fff", border: "1px solid rgba(14,31,64,0.12)", borderRadius: 100, padding: "7px 14px", color: "rgba(14,31,64,0.65)", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: '"DM Sans",sans-serif', display: "flex", alignItems: "center", gap: 6 }}>
@@ -2848,7 +2856,6 @@ export default function AdminPage() {
                             <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                               <span style={{ fontSize: 13, fontWeight: e.read ? 700 : 800, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.subject}</span>
                               <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase", padding: "2px 6px", borderRadius: 5, color: emailAudPillFg(e.accountType), background: emailAudPillBg(e.accountType) }}>{emailAudienceLabel(e.accountType)}</span>
-                              <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase", padding: "2px 6px", borderRadius: 5, color: "rgba(14,31,64,0.60)", background: "rgba(14,31,64,0.07)" }}>{emailCategoryLabel(e.category)}</span>
                             </div>
                             <div style={{ fontSize: 11, color: "rgba(14,31,64,0.50)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                               {e.fromName} · {e.fromAddress}

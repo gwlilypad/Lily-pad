@@ -1582,34 +1582,15 @@ app.get('/api/geocode', async (req, res) => {
   }
 });
 
-// ── Helper: find a globally-unique spot_name starting from baseName ──────────
+// ── Helper: spot_name is stored in description JSON blob (no separate column) ──
+// Just return the provided name as-is; uniqueness not enforced at DB level.
 async function findUniquePadName(baseName) {
-  let name = baseName;
-  let attempt = 1;
-  while (true) {
-    const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/spots?spot_name=ilike.${encodeURIComponent(name)}&select=id&limit=1`,
-      { headers: SVC_HEADERS }
-    );
-    const data = await r.json();
-    if (!Array.isArray(data) || data.length === 0) return name;
-    attempt++;
-    name = `${baseName} ${attempt}`;
-    if (attempt > 999) return `${baseName} ${Date.now()}`; // safety
-  }
+  return baseName || 'My Lily Pad';
 }
 
-// ── Spots: check whether a name is available (case-insensitive) ───────────────
+// ── Spots: check whether a name is available — always available (no DB column) ─
 app.get('/api/spots/check-name', async (req, res) => {
-  const { name, excludeId } = req.query;
-  if (!name || !String(name).trim()) return res.json({ available: false });
-  try {
-    let url = `${SUPABASE_URL}/rest/v1/spots?spot_name=ilike.${encodeURIComponent(String(name).trim())}&select=id&limit=1`;
-    if (excludeId) url += `&id=neq.${excludeId}`;
-    const r = await fetch(url, { headers: SVC_HEADERS });
-    const data = await r.json();
-    res.json({ available: Array.isArray(data) && data.length === 0 });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  res.json({ available: true });
 });
 
 // ── Spots: create a new pad listing ───────────────────────────────────────────
@@ -1640,9 +1621,9 @@ app.post('/api/spots', async (req, res) => {
   try {
     // photo_url(s) encoded inside description JSON — no separate column needed
     const allUrls = Array.isArray(photo_urls) && photo_urls.length ? photo_urls : (photo_url ? [photo_url] : []);
-    const descPayload = JSON.stringify({ text: description || '', photo_url: allUrls[0] || '', photo_urls: allUrls });
-    // Assign a globally-unique pad name
-    const assignedName = await findUniquePadName(rawSpotName?.trim() || 'My Lily Pad');
+    // spot_name lives inside the description JSON blob (no separate DB column)
+    const assignedName = (rawSpotName?.trim()) || 'My Lily Pad';
+    const descPayload = JSON.stringify({ text: description || '', photo_url: allUrls[0] || '', photo_urls: allUrls, spot_name: assignedName });
     const r = await fetch(`${SUPABASE_URL}/rest/v1/spots`, {
       method : 'POST',
       headers: { ...SVC_HEADERS, 'Prefer': 'return=representation' },
@@ -1656,7 +1637,6 @@ app.post('/api/spots', async (req, res) => {
         description: descPayload,
         lat, lng,
         status: 'pending',
-        spot_name: assignedName,
       }),
     });
     const data = await r.json();
@@ -1668,6 +1648,7 @@ app.post('/api/spots', async (req, res) => {
         const parsed = JSON.parse(row.description || '{}');
         row.photo_url   = parsed.photo_url || '';
         row.description = parsed.text || '';
+        row.spot_name   = parsed.spot_name || assignedName;
       } catch {}
     }
     res.json(row);
@@ -1689,7 +1670,7 @@ app.patch('/api/spots/:id', async (req, res) => {
     const existing = Array.isArray(curData) ? curData[0] : curData;
 
     // Parse existing description JSON (may be plain text for legacy rows)
-    let descObj = { text: '', photo_url: '', raw_photo_url: '', photo_urls: [], services: [] };
+    let descObj = { text: '', photo_url: '', raw_photo_url: '', photo_urls: [], services: [], spot_name: '' };
     try {
       const p = JSON.parse(existing?.description || '{}');
       if (p && typeof p === 'object') descObj = {
@@ -1698,6 +1679,7 @@ app.patch('/api/spots/:id', async (req, res) => {
         raw_photo_url: p.raw_photo_url || '',
         photo_urls: Array.isArray(p.photo_urls) ? p.photo_urls : [],
         services: Array.isArray(p.services) ? p.services : [],
+        spot_name: p.spot_name || existing?.spot_name || '',
       };
     } catch { descObj.text = existing?.description || ''; }
 
@@ -1707,6 +1689,11 @@ app.patch('/api/spots/:id', async (req, res) => {
     if ('photo_urls'    in body) descObj.photo_urls    = body.photo_urls;
     if ('description'   in body) descObj.text          = body.description;
     if ('services'      in body) descObj.services      = body.services;
+    // spot_name lives in the description blob (no DB column)
+    if ('spot_name'     in body) {
+      const newName = String(body.spot_name || '').trim();
+      if (newName) descObj.spot_name = newName;
+    }
 
     const patchFields = { description: JSON.stringify(descObj) };
     if ('status'       in body) patchFields.status       = body.status;
@@ -1718,21 +1705,6 @@ app.patch('/api/spots/:id', async (req, res) => {
       const existingSpotData = existing?.spot_data || {};
       patchFields.spot_data = { ...existingSpotData, auto_approve: !!body.auto_approve };
     }
-    if ('spot_name'    in body) {
-      const newName = String(body.spot_name || '').trim();
-      if (newName) {
-        // Uniqueness check (case-insensitive, exclude self)
-        const chkR = await fetch(
-          `${SUPABASE_URL}/rest/v1/spots?spot_name=ilike.${encodeURIComponent(newName)}&id=neq.${id}&select=id&limit=1`,
-          { headers: SVC_HEADERS }
-        );
-        const chkData = await chkR.json();
-        if (Array.isArray(chkData) && chkData.length > 0) {
-          return res.status(409).json({ error: 'That pad name is already taken. Choose a different name.' });
-        }
-        patchFields.spot_name = newName;
-      }
-    }
 
     const r = await fetch(
       `${SUPABASE_URL}/rest/v1/spots?id=eq.${id}`,
@@ -1742,7 +1714,7 @@ app.patch('/api/spots/:id', async (req, res) => {
     if (!r.ok) return res.status(r.status).json({ error: data });
     const row = Array.isArray(data) ? (data[0] || null) : data;
     // Decode response
-    if (row) { try { const p = JSON.parse(row.description || '{}'); row.photo_url = p.photo_url || ''; row.description = p.text || ''; } catch {} }
+    if (row) { try { const p = JSON.parse(row.description || '{}'); row.photo_url = p.photo_url || ''; row.description = p.text || ''; row.spot_name = p.spot_name || row.spot_name || ''; } catch {} }
     res.json(row);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1759,7 +1731,7 @@ app.get('/api/spots/user/:userId', async (req, res) => {
     if (!r.ok) return res.status(r.status).json({ error: data });
     const rows = Array.isArray(data) ? data : [];
     const flat = rows.map(s => {
-      let photo_url = '', descText = s.description || '', photo_urls = [], services = [];
+      let photo_url = '', descText = s.description || '', photo_urls = [], services = [], spot_name = '';
       try {
         const p = JSON.parse(s.description || '{}');
         if (p && typeof p === 'object') {
@@ -1767,10 +1739,11 @@ app.get('/api/spots/user/:userId', async (req, res) => {
           descText   = p.text       || '';
           photo_urls = Array.isArray(p.photo_urls) ? p.photo_urls : (photo_url ? [photo_url] : []);
           services   = Array.isArray(p.services)   ? p.services   : [];
+          spot_name  = p.spot_name  || s.spot_name || '';
         }
       } catch {}
       if (!photo_urls.length && photo_url) photo_urls = [photo_url];
-      return { ...s, description: descText, photo_url, photo_urls, services };
+      return { ...s, description: descText, photo_url, photo_urls, services, spot_name };
     });
     res.json(flat);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -1787,17 +1760,18 @@ app.get('/api/spots/pending', async (req, res) => {
     if (!r.ok) return res.status(r.status).json({ error: data });
     const rows = Array.isArray(data) ? data : [];
     const flat = rows.map(s => {
-      let photo_url = '', descText = s.description || '', photo_urls = [];
+      let photo_url = '', descText = s.description || '', photo_urls = [], spot_name = '';
       try {
         const p = JSON.parse(s.description || '{}');
         if (p && typeof p === 'object') {
           photo_url  = p.photo_url  || '';
           descText   = p.text       || '';
           photo_urls = Array.isArray(p.photo_urls) ? p.photo_urls : (photo_url ? [photo_url] : []);
+          spot_name  = p.spot_name  || s.spot_name || '';
         }
       } catch {}
       if (!photo_urls.length && photo_url) photo_urls = [photo_url];
-      return { ...s, description: descText, photo_url, photo_urls, host_name: s.host?.full_name || '', host_email: s.host?.email || '' };
+      return { ...s, description: descText, photo_url, photo_urls, spot_name, host_name: s.host?.full_name || '', host_email: s.host?.email || '' };
     });
     res.json(flat);
   } catch (e) { res.status(500).json({ error: e.message }); }

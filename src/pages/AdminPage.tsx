@@ -867,7 +867,7 @@ function ResolutionReadout({ r }: { r: SupportResolution }) {
 }
 
 // ── Main page ───────────────────────────────────────────────────────────────
-type View = "dashboard" | "users" | "userDetail" | "service" | "staff";
+type View = "dashboard" | "users" | "userDetail" | "service" | "staff" | "payments";
 type AdminView = "renters" | "hosts";
 type StaffAuthAction = { kind: "suspend" | "reinstate"; staffId: string; staffName: string };
 interface PendingSpot {
@@ -910,6 +910,7 @@ export default function AdminPage() {
   const [testResetAccessToken, setTestResetAccessToken] = useState<string|null>(null);
 
   const [view, setView] = useState<View>("dashboard");
+  const [adminAccessToken, setAdminAccessToken] = useState<string>("");
   const [users, setUsers] = useState<MockUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   type AdminStats = { totalSpots: number; activeSpots: number; pendingSpots: number; totalUsers: number; newUsersThisWeek: number; totalBookings: number };
@@ -943,6 +944,28 @@ export default function AdminPage() {
   const [selectedSpot, setSelectedSpot]   = useState<PendingSpot | null>(null);
   const [approveConfirmSpot, setApproveConfirmSpot] = useState<PendingSpot | null>(null);
   const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null);
+
+  // Payments section
+  type Transaction = {
+    id: string; created_at: string; driver_name: string; driver_email: string;
+    addr: string; spot_id: string; total_price: number; platform_fee: number;
+    host_payout: number; payment_intent_id: string; connect_account_id: string;
+    refund_status: string | null; start_ts: string | null;
+    payment_method_last4: string; payment_method_brand: string;
+  };
+  type PendingRefund = {
+    id: string; status: string; spot_id: string; driver_name: string; driver_email: string;
+    addr: string; total_price: number; payment_intent_id: string;
+    refund_requester_type: string; refund_reason: string; refund_requested_at: string; start_ts: string | null;
+  };
+  const [paymentsTab, setPaymentsTab] = useState<"transactions" | "refunds" | "revenue">("transactions");
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [pendingRefunds, setPendingRefunds] = useState<PendingRefund[]>([]);
+  const [loadingTransactions, setLoadingTransactions] = useState(false);
+  const [loadingRefunds, setLoadingRefunds] = useState(false);
+  const [approvingRefundId, setApprovingRefundId] = useState<string | null>(null);
+  const [denyingRefundId, setDenyingRefundId] = useState<string | null>(null);
+  const [txDateFilter, setTxDateFilter] = useState<"all" | "7d" | "30d" | "90d">("all");
 
   // Staff accounts (admin manages these).
   const [staffList, setStaffList] = useState<StaffAccount[]>([]);
@@ -1042,6 +1065,67 @@ export default function AdminPage() {
   useEffect(() => subscribeToSupport(() => refreshTickets()), []);
   useEffect(() => { if (view === "service") refreshTickets(); }, [view]);
   useEffect(() => subscribeEmails(() => setEmails(loadEmails())), []);
+
+  // Load payments data when payments view opens
+  useEffect(() => {
+    if (view === "payments") {
+      if (paymentsTab === "transactions" && transactions.length === 0) fetchTransactions();
+      if (paymentsTab === "refunds") fetchPendingRefunds();
+    }
+  }, [view, paymentsTab]);
+
+  function adminAuthHeaders(): Record<string, string> {
+    return adminAccessToken
+      ? { "Content-Type": "application/json", "Authorization": `Bearer ${adminAccessToken}` }
+      : { "Content-Type": "application/json" };
+  }
+
+  async function fetchTransactions() {
+    setLoadingTransactions(true);
+    try {
+      const r = await fetch("/api/admin/transactions", { headers: adminAuthHeaders() });
+      const d = await r.json();
+      if (r.ok && Array.isArray(d)) setTransactions(d);
+    } catch { /* silent */ }
+    finally { setLoadingTransactions(false); }
+  }
+
+  async function fetchPendingRefunds() {
+    setLoadingRefunds(true);
+    try {
+      const r = await fetch("/api/refunds/pending", { headers: adminAuthHeaders() });
+      const d = await r.json();
+      if (r.ok && Array.isArray(d)) setPendingRefunds(d);
+    } catch { /* silent */ }
+    finally { setLoadingRefunds(false); }
+  }
+
+  async function approveRefund(bookingId: string) {
+    setApprovingRefundId(bookingId);
+    try {
+      const r = await fetch(`/api/refunds/approve/${bookingId}`, { method: "POST", headers: adminAuthHeaders() });
+      if (r.ok) {
+        setPendingRefunds(prev => prev.filter(b => b.id !== bookingId));
+        setToast("Refund approved and processed");
+      } else {
+        const d = await r.json();
+        setToast(d.error || "Failed to process refund");
+      }
+    } catch { setToast("Network error — try again"); }
+    finally { setApprovingRefundId(null); }
+  }
+
+  async function denyRefund(bookingId: string) {
+    setDenyingRefundId(bookingId);
+    try {
+      const r = await fetch(`/api/refunds/deny/${bookingId}`, { method: "POST", headers: adminAuthHeaders() });
+      if (r.ok) {
+        setPendingRefunds(prev => prev.filter(b => b.id !== bookingId));
+        setToast("Refund request denied");
+      }
+    } catch { /* silent */ }
+    finally { setDenyingRefundId(null); }
+  }
 
   // Fetch pending spots / early access signups when the matching section opens
   useEffect(() => {
@@ -1533,6 +1617,7 @@ export default function AdminPage() {
       const serverRole: AdminRole = data.role === "admin" ? "admin" : "staff";
       setRole(serverRole);
       setLoggedIn(true);
+      if (data.session?.access_token) setAdminAccessToken(data.session.access_token);
     } catch { setError("Network error. Please try again."); }
     finally { setLoginLoading(false); }
   }
@@ -2623,6 +2708,215 @@ export default function AdminPage() {
             </div>
           );
         })()
+      ) : view === "payments" && role === "admin" ? (
+        /* ── PAYMENTS ── */
+        (() => {
+          const fmtUsd = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+          const fmtDate = (s: string | null) => s ? new Date(s).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—";
+
+          // Date filter
+          const cutoffMs: Record<string, number> = { "7d": 7, "30d": 30, "90d": 90 };
+          const filtered = txDateFilter === "all" ? transactions : transactions.filter(t => {
+            const d = new Date(t.created_at).getTime();
+            return d >= Date.now() - cutoffMs[txDateFilter] * 86400000;
+          });
+
+          // Revenue stats
+          const totalGross = filtered.reduce((s, t) => s + t.total_price, 0);
+          const totalFees  = filtered.reduce((s, t) => s + t.platform_fee, 0);
+          const totalPayout = filtered.reduce((s, t) => s + t.host_payout, 0);
+
+          // Monthly bar chart data (last 6 months)
+          const now = new Date();
+          const months = Array.from({ length: 6 }, (_, i) => {
+            const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+            return { label: d.toLocaleDateString("en-US", { month: "short" }), year: d.getFullYear(), month: d.getMonth() };
+          });
+          const monthlyFees = months.map(m => ({
+            ...m,
+            fees: transactions.filter(t => {
+              const d = new Date(t.created_at);
+              return d.getFullYear() === m.year && d.getMonth() === m.month;
+            }).reduce((s, t) => s + t.platform_fee, 0),
+          }));
+          const maxFees = Math.max(...monthlyFees.map(m => m.fees), 1);
+
+          return (
+            <div style={{ flex: 1, overflowY: "auto", background: "#f5f7fa", borderRadius: "28px 28px 0 0", padding: "20px 20px 32px", display: "flex", flexDirection: "column", gap: 14 }}>
+              {/* Header */}
+              <div>
+                <p style={{ fontSize: 11, fontWeight: 700, color: "rgba(14,31,64,0.45)", letterSpacing: "0.12em", textTransform: "uppercase", margin: 0 }}>Admin · Finance</p>
+                <p style={{ fontSize: 22, fontWeight: 800, color: NAVY, margin: "2px 0 0", letterSpacing: "-0.02em" }}>Payments</p>
+              </div>
+
+              {/* Tab pills */}
+              <div style={{ display: "flex", background: "rgba(14,31,64,0.06)", borderRadius: 100, padding: 3 }}>
+                {(["transactions", "refunds", "revenue"] as const).map(tab => (
+                  <button key={tab} onClick={() => setPaymentsTab(tab)} style={{
+                    flex: 1, padding: "7px 4px", borderRadius: 100, border: "none",
+                    background: paymentsTab === tab ? "#fff" : "transparent",
+                    color: paymentsTab === tab ? NAVY : "rgba(14,31,64,0.50)",
+                    fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: '"DM Sans",sans-serif',
+                    boxShadow: paymentsTab === tab ? "0 1px 4px rgba(14,31,64,0.12)" : "none",
+                    transition: "all 0.15s", textTransform: "capitalize", letterSpacing: "0.02em",
+                  }}>
+                    {tab === "refunds" ? `Refunds${pendingRefunds.length > 0 ? ` (${pendingRefunds.length})` : ""}` : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                  </button>
+                ))}
+              </div>
+
+              {paymentsTab === "transactions" && (
+                <>
+                  {/* Date filter */}
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {(["all", "7d", "30d", "90d"] as const).map(f => (
+                      <button key={f} onClick={() => setTxDateFilter(f)} style={{
+                        padding: "5px 10px", borderRadius: 100, border: "none",
+                        background: txDateFilter === f ? NAVY : "rgba(14,31,64,0.08)",
+                        color: txDateFilter === f ? "#fff" : "rgba(14,31,64,0.55)",
+                        fontSize: 10.5, fontWeight: 700, cursor: "pointer", fontFamily: '"DM Sans",sans-serif',
+                      }}>{f === "all" ? "All time" : `Last ${f}`}</button>
+                    ))}
+                  </div>
+
+                  {/* Summary cards */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                    {[
+                      { label: "Gross", value: fmtUsd(totalGross), color: NAVY },
+                      { label: "Platform fees", value: fmtUsd(totalFees), color: GREEN },
+                      { label: "Host payouts", value: fmtUsd(totalPayout), color: "rgba(14,31,64,0.6)" },
+                    ].map(c => (
+                      <div key={c.label} style={{ background: "#fff", borderRadius: 14, padding: "10px 12px", border: "1px solid rgba(14,31,64,0.07)", boxShadow: "0 2px 8px rgba(14,31,64,0.06)" }}>
+                        <p style={{ margin: "0 0 2px", fontSize: 9, fontWeight: 700, color: "rgba(14,31,64,0.45)", textTransform: "uppercase", letterSpacing: 0.5 }}>{c.label}</p>
+                        <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: c.color }}>{c.value}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {loadingTransactions ? (
+                    <p style={{ textAlign: "center", fontSize: 13, color: "rgba(14,31,64,0.45)", padding: "24px 0" }}>Loading…</p>
+                  ) : filtered.length === 0 ? (
+                    <div style={{ textAlign: "center", padding: "32px 0", color: "rgba(14,31,64,0.35)", fontSize: 13 }}>No transactions found.</div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {filtered.map(t => (
+                        <div key={t.id} style={{ background: "#fff", borderRadius: 14, padding: "12px 14px", border: "1px solid rgba(14,31,64,0.07)", boxShadow: "0 2px 8px rgba(14,31,64,0.04)" }}>
+                          <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.addr || "—"}</p>
+                              <p style={{ margin: "2px 0 0", fontSize: 11, color: "rgba(14,31,64,0.50)" }}>{t.driver_name} · {fmtDate(t.start_ts || t.created_at)}</p>
+                            </div>
+                            <div style={{ textAlign: "right", flexShrink: 0 }}>
+                              <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: NAVY }}>{fmtUsd(t.total_price)}</p>
+                              {t.refund_status && (
+                                <span style={{ fontSize: 9.5, fontWeight: 700, color: t.refund_status === "approved" ? "#ef4444" : t.refund_status === "requested" ? "#f59e0b" : "rgba(14,31,64,0.4)", textTransform: "uppercase" }}>{t.refund_status}</span>
+                              )}
+                            </div>
+                          </div>
+                          <div style={{ marginTop: 6, display: "flex", gap: 12, fontSize: 10.5, color: "rgba(14,31,64,0.45)" }}>
+                            <span>Fee: <strong style={{ color: GREEN }}>{fmtUsd(t.platform_fee)}</strong></span>
+                            <span>Payout: {fmtUsd(t.host_payout)}</span>
+                            {t.payment_method_last4 && <span>{t.payment_method_brand || "Card"} ···· {t.payment_method_last4}</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {paymentsTab === "refunds" && (
+                <>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: NAVY }}>Pending Refund Requests</p>
+                    <button onClick={fetchPendingRefunds} style={{ background: "none", border: "1px solid rgba(14,31,64,0.15)", borderRadius: 8, padding: "5px 10px", fontSize: 11, fontWeight: 700, color: "rgba(14,31,64,0.55)", cursor: "pointer", fontFamily: '"DM Sans",sans-serif' }}>Refresh</button>
+                  </div>
+                  {loadingRefunds ? (
+                    <p style={{ textAlign: "center", fontSize: 13, color: "rgba(14,31,64,0.45)", padding: "24px 0" }}>Loading…</p>
+                  ) : pendingRefunds.length === 0 ? (
+                    <div style={{ textAlign: "center", padding: "32px 0", background: "#fff", borderRadius: 16, border: "1px solid rgba(14,31,64,0.07)" }}>
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="rgba(14,31,64,0.20)" strokeWidth="1.5" style={{ display: "block", margin: "0 auto 8px" }}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                      <p style={{ margin: 0, fontSize: 13, color: "rgba(14,31,64,0.40)" }}>No pending refund requests</p>
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {pendingRefunds.map(b => (
+                        <div key={b.id} style={{ background: "#fff", borderRadius: 16, padding: "14px 16px", border: "1px solid rgba(245,158,11,0.25)", boxShadow: "0 2px 10px rgba(14,31,64,0.06)" }}>
+                          <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 8 }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{b.addr || "Booking"}</p>
+                              <p style={{ margin: "2px 0 0", fontSize: 11.5, color: "rgba(14,31,64,0.50)" }}>{b.driver_name} · {fmtDate(b.start_ts || b.refund_requested_at)}</p>
+                            </div>
+                            <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: NAVY, flexShrink: 0 }}>{fmtUsd(b.total_price)}</p>
+                          </div>
+                          <div style={{ background: "rgba(245,158,11,0.08)", borderRadius: 10, padding: "8px 12px", marginBottom: 10 }}>
+                            <p style={{ margin: "0 0 2px", fontSize: 9.5, fontWeight: 700, color: "rgba(14,31,64,0.50)", textTransform: "uppercase", letterSpacing: 0.4 }}>Reason · {b.refund_requester_type}</p>
+                            <p style={{ margin: 0, fontSize: 12.5, color: NAVY, lineHeight: 1.4 }}>{b.refund_reason || "No reason provided"}</p>
+                          </div>
+                          <div style={{ display: "flex", gap: 8 }}>
+                            <button
+                              onClick={() => denyRefund(b.id)}
+                              disabled={!!approvingRefundId || denyingRefundId === b.id}
+                              style={{ flex: 1, padding: "10px", borderRadius: 100, border: "1.5px solid rgba(239,68,68,0.35)", background: "rgba(239,68,68,0.07)", color: "#ef4444", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: '"DM Sans",sans-serif', opacity: denyingRefundId === b.id ? 0.6 : 1 }}
+                            >
+                              {denyingRefundId === b.id ? "Denying…" : "✕ Deny"}
+                            </button>
+                            <button
+                              onClick={() => approveRefund(b.id)}
+                              disabled={!!denyingRefundId || approvingRefundId === b.id}
+                              style={{ flex: 1, padding: "10px", borderRadius: 100, border: "none", background: approvingRefundId === b.id ? "rgba(141,214,63,0.55)" : GREEN, color: NAVY, fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: '"DM Sans",sans-serif' }}
+                            >
+                              {approvingRefundId === b.id ? "Processing…" : "✓ Approve"}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {paymentsTab === "revenue" && (
+                <>
+                  {/* Revenue stat cards */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                    {[
+                      { label: "Total Gross", value: fmtUsd(transactions.reduce((s, t) => s + t.total_price, 0)), color: NAVY },
+                      { label: "Platform Fees", value: fmtUsd(transactions.reduce((s, t) => s + t.platform_fee, 0)), color: GREEN },
+                      { label: "Host Payouts", value: fmtUsd(transactions.reduce((s, t) => s + t.host_payout, 0)), color: "rgba(14,31,64,0.6)" },
+                      { label: "Transactions", value: String(transactions.length), color: NAVY },
+                    ].map(c => (
+                      <div key={c.label} style={{ background: "#fff", borderRadius: 14, padding: "14px 16px", border: "1px solid rgba(14,31,64,0.07)", boxShadow: "0 2px 8px rgba(14,31,64,0.06)" }}>
+                        <p style={{ margin: "0 0 2px", fontSize: 9.5, fontWeight: 700, color: "rgba(14,31,64,0.45)", textTransform: "uppercase", letterSpacing: 0.5 }}>{c.label}</p>
+                        <p style={{ margin: 0, fontSize: 20, fontWeight: 800, color: c.color }}>{c.value}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Monthly bar chart */}
+                  <div style={{ background: "#fff", borderRadius: 16, padding: "16px", border: "1px solid rgba(14,31,64,0.07)", boxShadow: "0 2px 8px rgba(14,31,64,0.06)" }}>
+                    <p style={{ margin: "0 0 14px", fontSize: 11, fontWeight: 700, color: "rgba(14,31,64,0.45)", textTransform: "uppercase", letterSpacing: 0.5 }}>Monthly Platform Fees</p>
+                    <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 80 }}>
+                      {monthlyFees.map(m => (
+                        <div key={m.label} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                          <div style={{ width: "100%", background: GREEN, borderRadius: "4px 4px 0 0", height: `${Math.max(4, Math.round((m.fees / maxFees) * 70))}px`, transition: "height 0.3s" }} />
+                          <p style={{ margin: 0, fontSize: 9, fontWeight: 600, color: "rgba(14,31,64,0.45)" }}>{m.label}</p>
+                        </div>
+                      ))}
+                    </div>
+                    {monthlyFees.every(m => m.fees === 0) && (
+                      <p style={{ textAlign: "center", fontSize: 12, color: "rgba(14,31,64,0.35)", marginTop: 8 }}>No confirmed payments yet</p>
+                    )}
+                  </div>
+
+                  {loadingTransactions && (
+                    <p style={{ textAlign: "center", fontSize: 12, color: "rgba(14,31,64,0.45)" }}>Loading revenue data…</p>
+                  )}
+                </>
+              )}
+            </div>
+          );
+        })()
       ) : view === "users" ? (
         /* ── USER LIST ── */
         <div style={{ flex: 1, overflowY: "auto", background: "#f5f7fa", borderRadius: "28px 28px 0 0", padding: "20px 20px 32px", display: "flex", flexDirection: "column", gap: 14 }}>
@@ -3437,6 +3731,12 @@ export default function AdminPage() {
               active: view === "staff",
               onClick: () => { setView("staff"); setSelectedUserId(null); },
               svg: <><circle cx="9" cy="7" r="3"/><path d="M2 21v-1a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v1"/><circle cx="17" cy="9" r="2.5"/><path d="M22 19v-.5a3.5 3.5 0 0 0-3.5-3.5H17"/></>,
+            }] : []),
+            ...(role === "admin" ? [{
+              label: "PAYMENTS",
+              active: view === "payments",
+              onClick: () => { setView("payments"); setSelectedUserId(null); setPaymentsTab("transactions"); },
+              svg: <><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></>,
             }] : []),
           ]).map(item => (
             <button

@@ -207,6 +207,9 @@ function AppInner() {
           <Route path="/savedspots" element={<AuthGuard><SavedSpotsPage /></AuthGuard>} />
           <Route path="/customerservice" element={<AuthGuard><CustomerServicePage /></AuthGuard>} />
           <Route path="/listingsuccess" element={<AuthGuard><ListingSuccessPage /></AuthGuard>} />
+          {/* Stripe Connect return/refresh — land back on /payment with a query param */}
+          <Route path="/connect-return" element={<Navigate to="/payment?stripe_connect=return" replace />} />
+          <Route path="/connect-refresh" element={<Navigate to="/payment?stripe_connect=refresh" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>

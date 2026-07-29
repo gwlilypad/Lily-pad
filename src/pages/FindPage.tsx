@@ -1078,7 +1078,7 @@ export default function FindPage() {
   const [savedSpots, setSavedSpots] = useState<number[]>(() => {
     try { return JSON.parse(localStorage.getItem("lilypad_saved") ?? "[]") as number[]; } catch { return []; }
   });
-  const [acctView, setAcctView] = useState<"menu" | "saved" | "account" | "support" | "bookings" | "manage-spot">("menu");
+  const [acctView, setAcctView] = useState<"menu" | "saved" | "account" | "support" | "bookings" | "manage-spot" | "payments">("menu");
   const [drawerMode, setDrawerMode] = useState<"driver" | "lister">(() => {
     try { return (localStorage.getItem("lilypad_drawer_mode") as "driver" | "lister") || "driver"; } catch { return "driver"; }
   });
@@ -1088,6 +1088,18 @@ export default function FindPage() {
   const [earningsRange, setEarningsRange] = useState<'D'|'W'|'M'|'Y'|'ALL'>('ALL');
   const [chartScrubIdx, setChartScrubIdx] = useState<number|null>(null);
   const [hostDashView, setHostDashView]   = useState<'main'|'earnings'>('main');
+
+  // Payments tab state
+  const [paymentMethod, setPaymentMethod] = useState<{ last4: string; brand: string } | null | undefined>(undefined);
+  const [customerBookings, setCustomerBookings] = useState<Array<{
+    id: string; status: string; addr: string; start_ts: string | null; total_price: number;
+    payment_intent_id: string; refund_status: string | null; created_at: string;
+  }>>([]);
+  const [loadingPayments, setLoadingPayments] = useState(false);
+  const [refundModalBookingId, setRefundModalBookingId] = useState<string | null>(null);
+  const [refundReason, setRefundReason] = useState("");
+  const [refundSubmitting, setRefundSubmitting] = useState(false);
+  const [refundDone, setRefundDone] = useState<string | null>(null);
   const [supportView, setSupportView] = useState<"menu" | "thread">("menu");
   const [supportTickets, setSupportTickets] = useState<SupportTicket[]>(() => loadTickets());
   const supportUserId = useRef<string>(getOrCreateUserId());
@@ -3244,11 +3256,16 @@ export default function FindPage() {
                     setPaymentSetupError("");
                     setPaymentLoading(true);
                     try {
+                      const { data: _piSess } = await supabase.auth.getSession();
+                      const _piTok = _piSess.session?.access_token;
+                      const _piAuthHdr: Record<string, string> = _piTok
+                        ? { "Content-Type": "application/json", "Authorization": `Bearer ${_piTok}` }
+                        : { "Content-Type": "application/json" };
                       const [cfgRes, piRes] = await Promise.all([
                         fetch("/api/stripe-config"),
                         fetch("/api/create-payment-intent", {
                           method: "POST",
-                          headers: { "Content-Type": "application/json" },
+                          headers: _piAuthHdr,
                           body: JSON.stringify({
                             spot_id: spot.id,
                             user_id: user.id,
@@ -3333,9 +3350,14 @@ export default function FindPage() {
                   let confNum = `LP-${Date.now().toString(36).toUpperCase().slice(-6)}`;
                   let bookingUuid: string | undefined;
                   try {
+                    const { data: _bkSess } = await supabase.auth.getSession();
+                    const _bkTok = _bkSess.session?.access_token;
+                    const _bkAuthHdr: Record<string, string> = _bkTok
+                      ? { "Content-Type": "application/json", "Authorization": `Bearer ${_bkTok}` }
+                      : { "Content-Type": "application/json" };
                     const r = await fetch("/api/bookings", {
                       method: "POST",
-                      headers: { "Content-Type": "application/json" },
+                      headers: _bkAuthHdr,
                       body: JSON.stringify({
                         user_id: user!.id,
                         spot_id: ps.spotId,
@@ -3540,6 +3562,30 @@ export default function FindPage() {
                     lister: false,
                     accent: false,
                     onClick: () => { setAcctOpen(false); acctOpenRef.current = false; goTo("customerservice"); },
+                  },
+                  {
+                    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>,
+                    label: "Payments",
+                    sub: "Cards & payment history",
+                    lister: false,
+                    accent: false,
+                    onClick: () => {
+                      setAcctView("payments");
+                      if (user?.id && loadingPayments === false && paymentMethod === undefined) {
+                        setLoadingPayments(true);
+                        supabase.auth.getSession().then(({ data: sess }) => {
+                          const tok = sess.session?.access_token;
+                          const hdrs: Record<string, string> = tok ? { "Authorization": `Bearer ${tok}` } : {};
+                          return Promise.all([
+                            fetch(`/api/customer/payment-method/${user.id}`, { headers: hdrs }).then(r => r.ok ? r.json() : null),
+                            fetch(`/api/customer/bookings/${user.id}`, { headers: hdrs }).then(r => r.ok ? r.json() : []),
+                          ]);
+                        }).then(([pm, bks]) => {
+                          setPaymentMethod(pm);
+                          setCustomerBookings(Array.isArray(bks) ? bks : []);
+                        }).catch(() => { setPaymentMethod(null); }).finally(() => setLoadingPayments(false));
+                      }
+                    },
                   },
                   {
                     icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
@@ -3938,6 +3984,155 @@ export default function FindPage() {
                 </div>
               ))}
             </div>
+          ) : acctView === "payments" ? (
+            /* ── Payments view ── */
+            (() => {
+              const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+              const refundBk = refundModalBookingId ? customerBookings.find(b => b.id === refundModalBookingId) : null;
+              return (
+                <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+                  {/* Header */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+                    <button onClick={() => { setAcctView("menu"); setRefundModalBookingId(null); }} style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.10)", borderRadius: "50%", width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "rgba(255,255,255,0.7)", flexShrink: 0 }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M15 18l-6-6 6-6"/></svg>
+                    </button>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: "#fff", letterSpacing: -0.2 }}>Payments</span>
+                  </div>
+
+                  {loadingPayments ? (
+                    <p style={{ fontSize: 13, color: "rgba(255,255,255,0.40)", textAlign: "center", padding: "24px 0" }}>Loading…</p>
+                  ) : refundModalBookingId && refundBk ? (
+                    /* Refund request sub-view */
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                        <button onClick={() => { setRefundModalBookingId(null); setRefundReason(""); setRefundDone(null); }} style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.10)", borderRadius: "50%", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "rgba(255,255,255,0.7)", flexShrink: 0 }}>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M15 18l-6-6 6-6"/></svg>
+                        </button>
+                        <span style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>Request Refund</span>
+                      </div>
+                      {refundDone ? (
+                        <div style={{ textAlign: "center", padding: "16px 0" }}>
+                          <div style={{ width: 44, height: 44, borderRadius: "50%", background: "rgba(141,214,63,0.18)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 10px" }}>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8DD63F" strokeWidth="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+                          </div>
+                          <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#fff" }}>Request submitted</p>
+                          <p style={{ margin: "4px 0 16px", fontSize: 11.5, color: "rgba(255,255,255,0.45)" }}>We'll review and respond within 3–5 business days.</p>
+                          <button onClick={() => { setRefundDone(null); setRefundModalBookingId(null); }} style={{ background: "#8DD63F", color: "#0E1F40", border: "none", borderRadius: 100, padding: "10px 24px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: '"DM Sans", sans-serif' }}>Done</button>
+                        </div>
+                      ) : (
+                        <>
+                          <div style={{ background: "rgba(255,255,255,0.06)", borderRadius: 12, padding: "10px 14px", border: "1px solid rgba(255,255,255,0.09)" }}>
+                            <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{refundBk.addr || "Booking"}</p>
+                            <p style={{ margin: "2px 0 0", fontSize: 11, color: "rgba(255,255,255,0.45)" }}>
+                              {refundBk.start_ts ? new Date(refundBk.start_ts).toLocaleDateString() : "—"} · ${Number(refundBk.total_price).toFixed(2)}
+                            </p>
+                          </div>
+                          <textarea
+                            value={refundReason}
+                            onChange={e => setRefundReason(e.target.value)}
+                            placeholder="Describe the reason for your refund request…"
+                            style={{ width: "100%", minHeight: 80, padding: "10px 14px", borderRadius: 12, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)", color: "#fff", fontSize: 13, fontFamily: '"DM Sans", sans-serif', resize: "vertical", boxSizing: "border-box", outline: "none" }}
+                          />
+                          <button
+                            disabled={!refundReason.trim() || refundSubmitting}
+                            onClick={async () => {
+                              if (!refundReason.trim() || !user?.id) return;
+                              setRefundSubmitting(true);
+                              const { data: sess } = await supabase.auth.getSession();
+                              const tok = sess.session?.access_token;
+                              const authHdr = tok ? { "Content-Type": "application/json", "Authorization": `Bearer ${tok}` } : { "Content-Type": "application/json" };
+                              await fetch("/api/refunds/request", {
+                                method: "POST",
+                                headers: authHdr,
+                                body: JSON.stringify({ bookingId: refundModalBookingId, requesterId: user.id, requesterType: "driver", reason: refundReason }),
+                              }).catch(() => {});
+                              setCustomerBookings(prev => prev.map(b => b.id === refundModalBookingId ? { ...b, refund_status: "requested" } : b));
+                              setRefundSubmitting(false);
+                              setRefundDone(refundModalBookingId);
+                            }}
+                            style={{ width: "100%", padding: "13px", borderRadius: 100, border: "none", background: refundReason.trim() && !refundSubmitting ? "#8DD63F" : "rgba(141,214,63,0.30)", color: "#0E1F40", fontWeight: 700, fontSize: 14, cursor: refundReason.trim() && !refundSubmitting ? "pointer" : "not-allowed", fontFamily: '"DM Sans", sans-serif' }}
+                          >
+                            {refundSubmitting ? "Submitting…" : "Submit Request"}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      {/* Saved payment method */}
+                      <div style={{ marginBottom: 16 }}>
+                        <p style={{ margin: "0 0 8px", fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.40)", letterSpacing: 0.5, textTransform: "uppercase" }}>Saved Card</p>
+                        {paymentMethod ? (
+                          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderRadius: 12, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)" }}>
+                            <div style={{ width: 38, height: 26, borderRadius: 4, background: "rgba(255,255,255,0.10)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                              <svg width="20" height="14" viewBox="0 0 40 28" fill="none"><rect width="40" height="28" rx="4" fill="rgba(255,255,255,0.08)"/><rect x="0" y="8" width="40" height="8" fill="rgba(255,255,255,0.18)"/></svg>
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#fff" }}>
+                                {paymentMethod.brand ? paymentMethod.brand.charAt(0).toUpperCase() + paymentMethod.brand.slice(1) : "Card"} ···· {paymentMethod.last4}
+                              </p>
+                              <p style={{ margin: 0, fontSize: 10.5, color: "rgba(255,255,255,0.40)" }}>Used for payments</p>
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{ padding: "12px 14px", borderRadius: 12, background: "rgba(255,255,255,0.04)", border: "1px dashed rgba(255,255,255,0.12)", textAlign: "center" }}>
+                            <p style={{ margin: 0, fontSize: 12.5, color: "rgba(255,255,255,0.35)" }}>No saved payment method yet</p>
+                            <p style={{ margin: "3px 0 0", fontSize: 10.5, color: "rgba(255,255,255,0.25)" }}>Added automatically when you book</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Booking payment history */}
+                      <p style={{ margin: "0 0 8px", fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.40)", letterSpacing: 0.5, textTransform: "uppercase" }}>Payment History</p>
+                      {customerBookings.length === 0 ? (
+                        <div style={{ textAlign: "center", padding: "24px 0", color: "rgba(255,255,255,0.30)", fontSize: 13 }}>
+                          No payments yet.<br/><span style={{ fontSize: 11 }}>Book a spot to see it here.</span>
+                        </div>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                          {customerBookings.map(b => {
+                            const isPaid = b.status === "confirmed" && !!b.payment_intent_id;
+                            const isRecent = b.start_ts && new Date(b.start_ts).getTime() > sevenDaysAgo;
+                            const canRefund = isPaid && !b.refund_status && isRecent;
+                            return (
+                              <div key={b.id} style={{ padding: "11px 14px", borderRadius: 12, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                                <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <p style={{ margin: 0, fontSize: 12.5, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{b.addr || "Booking"}</p>
+                                    <p style={{ margin: "2px 0 0", fontSize: 11, color: "rgba(255,255,255,0.40)" }}>
+                                      {b.start_ts ? new Date(b.start_ts).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}
+                                    </p>
+                                  </div>
+                                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                                    <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: "#fff" }}>${Number(b.total_price).toFixed(2)}</p>
+                                    <span style={{ fontSize: 9.5, fontWeight: 700, color: b.status === "confirmed" ? "#8DD63F" : b.status === "cancelled" ? "rgba(239,68,68,0.8)" : "#F59E0B", background: b.status === "confirmed" ? "rgba(141,214,63,0.12)" : b.status === "cancelled" ? "rgba(239,68,68,0.08)" : "rgba(245,158,11,0.12)", borderRadius: 5, padding: "2px 6px", textTransform: "uppercase", letterSpacing: 0.3 }}>
+                                      {b.status}
+                                    </span>
+                                  </div>
+                                </div>
+                                {b.refund_status && (
+                                  <p style={{ margin: "5px 0 0", fontSize: 10.5, fontWeight: 700, color: b.refund_status === "requested" ? "#F59E0B" : b.refund_status === "approved" ? "#ef4444" : "rgba(255,255,255,0.40)" }}>
+                                    Refund {b.refund_status}
+                                  </p>
+                                )}
+                                {canRefund && (
+                                  <button
+                                    onClick={() => { setRefundModalBookingId(b.id); setRefundReason(""); setRefundDone(null); }}
+                                    style={{ marginTop: 7, background: "none", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 100, padding: "4px 12px", fontSize: 10.5, fontWeight: 600, color: "rgba(255,255,255,0.55)", cursor: "pointer", fontFamily: '"DM Sans", sans-serif' }}
+                                  >
+                                    Request Refund
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })()
           ) : acctView === "saved" ? (
             /* ── Saved pads view ── */
             <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>

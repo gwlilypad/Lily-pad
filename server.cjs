@@ -2364,10 +2364,14 @@ app.post('/api/customer/setup-intent', async (req, res) => {
     }
     const setupIntent = await stripe.setupIntents.create({
       customer: customerId,
-      automatic_payment_methods: { enabled: true },
+      payment_method_types: ['card'],
     });
+    console.log(`[Setup] Created setupIntent ${setupIntent.id} for customer ${customerId}`);
     res.json({ clientSecret: setupIntent.client_secret, publishableKey: STRIPE_PUBLISHABLE_KEY });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('[Setup] setup-intent error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // GET /api/customer/receipt/:bookingId — Stripe receipt URL

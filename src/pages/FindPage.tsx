@@ -4141,20 +4141,28 @@ export default function FindPage() {
                                 try {
                                   const { data: sess } = await supabase.auth.getSession();
                                   const tok = sess.session?.access_token;
-                                  const hdrs2 = tok ? { "Authorization": `Bearer ${tok}`, "Content-Type": "application/json" } : { "Content-Type": "application/json" };
-                                  const r = await fetch("/api/customer/setup-intent", { method: "POST", headers: hdrs2 });
+                                  if (!tok) throw new Error("Please sign in again to add a card.");
+                                  const r = await fetch("/api/customer/setup-intent", {
+                                    method: "POST",
+                                    headers: { "Authorization": `Bearer ${tok}`, "Content-Type": "application/json" },
+                                  });
                                   const d = await r.json();
-                                  if (!r.ok) throw new Error(d.error || "Could not start card setup.");
+                                  if (!r.ok) throw new Error(d.error || `Server error (${r.status})`);
+                                  if (!d.clientSecret) throw new Error("No client secret returned from server.");
                                   setAddCardSetup({ clientSecret: d.clientSecret, publishableKey: d.publishableKey });
                                 } catch (err: any) {
-                                  setAddCardError(err.message);
+                                  setAddCardError(err.message || "Something went wrong. Try again.");
                                 } finally { setAddCardLoading(false); }
                               }}
-                              style={{ background: "#8DD63F", color: "#0E1F40", border: "none", borderRadius: 100, padding: "9px 22px", fontSize: 13, fontWeight: 700, cursor: addCardLoading ? "not-allowed" : "pointer", fontFamily: '"DM Sans", sans-serif' }}
+                              style={{ background: "#8DD63F", color: "#0E1F40", border: "none", borderRadius: 100, padding: "10px 24px", fontSize: 13, fontWeight: 700, cursor: addCardLoading ? "not-allowed" : "pointer", fontFamily: '"DM Sans", sans-serif', opacity: addCardLoading ? 0.6 : 1 }}
                             >
-                              {addCardLoading ? "Loading…" : "+ Add Card"}
+                              {addCardLoading ? "Setting up…" : "+ Add Card"}
                             </button>
-                            {addCardError && <p style={{ margin: 0, fontSize: 11, color: "#fca5a5" }}>{addCardError}</p>}
+                            {addCardError && (
+                              <div style={{ background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.30)", borderRadius: 10, padding: "10px 14px", width: "100%", boxSizing: "border-box" }}>
+                                <p style={{ margin: 0, fontSize: 12.5, color: "#fca5a5", lineHeight: 1.4 }}>{addCardError}</p>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>

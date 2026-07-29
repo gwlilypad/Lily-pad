@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -998,6 +999,7 @@ try {
 export default function FindPage() {
   const { goTo, state, setState: setAppState } = useApp();
   const { user, profile, role, signOut: authSignOut } = useAuth();
+  const navigate = useNavigate();
   // Non-admin/staff users see a Coming Soon screen instead of the live map
   const comingSoon = role !== "admin" && role !== "staff" && !state.adminPreview;
   const [spots, setSpots] = useState<SpotRecord[]>([]);
@@ -4309,7 +4311,7 @@ export default function FindPage() {
         type HostPageId = "paddashboard" | "listerbookings" | "padtype" | "customerservice";
         type HostAction = { label: string; sub: string; icon: React.ReactNode; page?: HostPageId; onPress?: () => void; accent: boolean };
         const actions: HostAction[] = [
-          { label: "Earnings", sub: `$${allTimeTotal.toFixed(2)} all time`, onPress: () => setHostDashView('earnings'), accent: true, icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> },
+          { label: "Earnings", sub: `$${allTimeTotal.toFixed(2)} all time`, onPress: () => navigate('/payment'), accent: true, icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> },
           { label: "My Pads", sub: myHostSpots.length > 0 ? `${myHostSpots.length} listing${myHostSpots.length !== 1 ? 's' : ''}` : "Manage listings", page: "paddashboard", accent: false, icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
           { label: "Reservations", sub: "Requests & bookings", page: "listerbookings", accent: false, icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> },
           { label: "List New Spot", sub: "Add a parking space", page: "padtype", accent: false, icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg> },
@@ -4393,86 +4395,7 @@ export default function FindPage() {
             fontFamily: "'DM Sans',sans-serif",
           }}>
 
-            {hostDashView === 'earnings' ? (
-              // ════════════════════════════════
-              // EARNINGS DETAIL VIEW
-              // ════════════════════════════════
-              <>
-                <div style={{ flexShrink: 0, padding: "calc(env(safe-area-inset-top) + 14px) 20px 18px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                    {backBtn(() => setHostDashView('main'))}
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 21, fontWeight: 800, color: "#fff", letterSpacing: -0.5 }}>Earnings</div>
-                      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.40)", marginTop: 1 }}>Revenue overview · {allTimeCount} booking{allTimeCount !== 1 ? 's' : ''} total</div>
-                    </div>
-                  </div>
-                </div>
-
-                {chartBlock}
-
-                {/* White card — metrics */}
-                <div style={{ flex: 1, overflowY: "auto", background: "#F4F6FA", borderRadius: "26px 26px 0 0", WebkitOverflowScrolling: "touch" as any, paddingBottom: "calc(env(safe-area-inset-bottom) + 24px)" }}>
-                  {sheetHandle}
-
-                  {/* 2×2 breakdown grid */}
-                  <div style={{ padding: "0 16px 14px" }}>
-                    <div style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(14,31,64,0.38)", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Breakdown</div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                      {([
-                        { label: "Today",      value: todayEarn,   dark: false },
-                        { label: "This Week",  value: weekEarn,    dark: false },
-                        { label: "This Month", value: monthEarn,   dark: false },
-                        { label: "All Time",   value: allTimeTotal, dark: true  },
-                      ] as const).map(s => (
-                        <div key={s.label} style={{ background: s.dark ? DASH_NAVY : "#fff", borderRadius: 14, padding: "14px", border: s.dark ? "none" : "1px solid rgba(14,31,64,0.07)" }}>
-                          <div style={{ fontSize: 10, fontWeight: 700, color: s.dark ? "rgba(255,255,255,0.40)" : "rgba(14,31,64,0.38)", letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 6 }}>{s.label}</div>
-                          <div style={{ fontSize: 22, fontWeight: 800, color: s.dark ? "#fff" : DASH_NAVY, letterSpacing: -0.8 }}>${s.value.toFixed(2)}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Per booking */}
-                  <div style={{ margin: "0 16px 12px", background: "#fff", borderRadius: 14, border: "1px solid rgba(14,31,64,0.07)", padding: "14px 16px" }}>
-                    <div style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(14,31,64,0.38)", letterSpacing: 1, textTransform: "uppercase", marginBottom: 12 }}>Per Booking</div>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <div>
-                        <div style={{ fontSize: 11, color: "rgba(14,31,64,0.42)", fontWeight: 500, marginBottom: 3 }}>Avg earnings</div>
-                        <div style={{ fontSize: 24, fontWeight: 800, color: DASH_NAVY, letterSpacing: -1 }}>${avgPerBooking.toFixed(2)}</div>
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <div style={{ fontSize: 11, color: "rgba(14,31,64,0.42)", fontWeight: 500, marginBottom: 3 }}>Total bookings</div>
-                        <div style={{ fontSize: 24, fontWeight: 800, color: DASH_NAVY, letterSpacing: -1 }}>{allTimeCount}</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* By status */}
-                  <div style={{ margin: "0 16px", background: "#fff", borderRadius: 14, border: "1px solid rgba(14,31,64,0.07)", overflow: "hidden" }}>
-                    <div style={{ padding: "12px 16px 6px" }}>
-                      <div style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(14,31,64,0.38)", letterSpacing: 1, textTransform: "uppercase" }}>By Status</div>
-                    </div>
-                    {([
-                      { label: "Confirmed", count: confirmedCount, total: confirmedTotal, dot: DASH_GREEN,  color: "#3a6b0f"  },
-                      { label: "Pending",   count: pendingCount,   total: pendingTotal,   dot: "#f59e0b",   color: "#92400e"  },
-                      { label: "Denied",    count: allTimeCount - confirmedCount - pendingCount, total: allTimeTotal - confirmedTotal - pendingTotal, dot: "rgba(14,31,64,0.20)", color: "rgba(14,31,64,0.35)" },
-                    ]).map((s, i) => (
-                      <div key={s.label}>
-                        {i > 0 && <div style={{ height: 1, background: "rgba(14,31,64,0.05)", marginLeft: 16 }}/>}
-                        <div style={{ display: "flex", alignItems: "center", padding: "12px 16px", gap: 12 }}>
-                          <div style={{ width: 8, height: 8, borderRadius: "50%", background: s.dot, flexShrink: 0 }}/>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 13.5, fontWeight: 600, color: DASH_NAVY }}>{s.label}</div>
-                            <div style={{ fontSize: 11, color: "rgba(14,31,64,0.38)", marginTop: 1 }}>{s.count} booking{s.count !== 1 ? 's' : ''}</div>
-                          </div>
-                          <div style={{ fontSize: 15, fontWeight: 800, color: s.color }}>${Math.max(0, s.total).toFixed(2)}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </>
-            ) : (
+            {(
               // ════════════════════════════════
               // MAIN DASHBOARD VIEW
               // ════════════════════════════════

@@ -39,3 +39,7 @@ externalPort = 80
 ADMIN_EMAILS = "gavin@lilypadparking.com"
 SITE_URL = "https://lily-pad-production.up.railway.app"
 EARLY_ACCESS = "true"
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 180000

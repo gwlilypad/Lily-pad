@@ -2315,6 +2315,50 @@ app.get('/api/customer/payment-method/:userId', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// DELETE /api/customer/payment-method/:userId — detach saved card
+app.delete('/api/customer/payment-method/:userId', async (req, res) => {
+  if (!stripe) return res.status(503).json({ error: 'Stripe is not configured.' });
+  const caller = await verifyBearerToken(req);
+  if (!caller) return res.status(401).json({ error: 'Authentication required' });
+  const { userId } = req.params;
+  if (caller.id !== userId) return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const bRes = await fetch(`${SUPABASE_URL}/rest/v1/bookings?user_id=eq.${userId}&status=eq.confirmed&order=created_at.desc&limit=10&select=booking_data`, { headers: SVC_HEADERS });
+    const bData = await bRes.json();
+    let piId = '';
+    for (const b of (Array.isArray(bData) ? bData : [])) {
+      const bd = b.booking_data || {};
+      if (bd.stripe_payment_intent_id) { piId = bd.stripe_payment_intent_id; break; }
+    }
+    if (!piId) return res.json({ removed: false, reason: 'No saved card found.' });
+    const pi = await stripe.paymentIntents.retrieve(piId, { expand: ['payment_method'] });
+    const pm = pi.payment_method;
+    if (!pm || typeof pm !== 'object') return res.json({ removed: false, reason: 'No payment method found.' });
+    await stripe.paymentMethods.detach(pm.id);
+    res.json({ removed: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/customer/receipt/:bookingId — Stripe receipt URL
+app.get('/api/customer/receipt/:bookingId', async (req, res) => {
+  if (!stripe) return res.status(503).json({ error: 'Stripe is not configured.' });
+  const caller = await verifyBearerToken(req);
+  if (!caller) return res.status(401).json({ error: 'Authentication required' });
+  try {
+    const bRes = await fetch(`${SUPABASE_URL}/rest/v1/bookings?id=eq.${req.params.bookingId}&select=*`, { headers: SVC_HEADERS });
+    const bData = await bRes.json();
+    const booking = Array.isArray(bData) ? bData[0] : null;
+    if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+    if (booking.user_id !== caller.id) return res.status(403).json({ error: 'Forbidden' });
+    const piId = (booking.booking_data || {}).stripe_payment_intent_id;
+    if (!piId) return res.json({ receiptUrl: null });
+    const pi = await stripe.paymentIntents.retrieve(piId, { expand: ['latest_charge'] });
+    const charge = pi.latest_charge;
+    const receiptUrl = (charge && typeof charge === 'object') ? charge.receipt_url : null;
+    res.json({ receiptUrl: receiptUrl || null });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // GET /api/customer/bookings/:userId
 app.get('/api/customer/bookings/:userId', async (req, res) => {
   const caller = await verifyBearerToken(req);

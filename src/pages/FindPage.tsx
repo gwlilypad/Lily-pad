@@ -1095,13 +1095,16 @@ export default function FindPage() {
   const [paymentMethod, setPaymentMethod] = useState<{ last4: string; brand: string } | null | undefined>(undefined);
   const [customerBookings, setCustomerBookings] = useState<Array<{
     id: string; status: string; addr: string; start_ts: string | null; total_price: number;
-    payment_intent_id: string; refund_status: string | null; created_at: string;
+    payment_intent_id: string; payment_method_last4: string; payment_method_brand: string;
+    refund_status: string | null; created_at: string;
   }>>([]);
   const [loadingPayments, setLoadingPayments] = useState(false);
   const [refundModalBookingId, setRefundModalBookingId] = useState<string | null>(null);
   const [refundReason, setRefundReason] = useState("");
   const [refundSubmitting, setRefundSubmitting] = useState(false);
   const [refundDone, setRefundDone] = useState<string | null>(null);
+  const [removingCard, setRemovingCard] = useState(false);
+  const [receiptLoading, setReceiptLoading] = useState<string | null>(null);
   const [supportView, setSupportView] = useState<"menu" | "thread">("menu");
   const [supportTickets, setSupportTickets] = useState<SupportTicket[]>(() => loadTickets());
   const supportUserId = useRef<string>(getOrCreateUserId());
@@ -4075,6 +4078,23 @@ export default function FindPage() {
                               </p>
                               <p style={{ margin: 0, fontSize: 10.5, color: "rgba(255,255,255,0.40)" }}>Used for payments</p>
                             </div>
+                            <button
+                              disabled={removingCard}
+                              onClick={async () => {
+                                if (!user?.id || removingCard) return;
+                                setRemovingCard(true);
+                                try {
+                                  const { data: sess } = await supabase.auth.getSession();
+                                  const tok = sess.session?.access_token;
+                                  const hdrs2 = tok ? { "Authorization": `Bearer ${tok}` } : {};
+                                  await fetch(`/api/customer/payment-method/${user.id}`, { method: "DELETE", headers: hdrs2 });
+                                  setPaymentMethod(null);
+                                } catch { /* silent */ } finally { setRemovingCard(false); }
+                              }}
+                              style={{ background: "none", border: "1px solid rgba(239,68,68,0.35)", borderRadius: 100, padding: "4px 11px", fontSize: 11, fontWeight: 600, color: "rgba(239,68,68,0.75)", cursor: removingCard ? "not-allowed" : "pointer", fontFamily: '"DM Sans", sans-serif', flexShrink: 0 }}
+                            >
+                              {removingCard ? "…" : "Remove"}
+                            </button>
                           </div>
                         ) : (
                           <div style={{ padding: "12px 14px", borderRadius: 12, background: "rgba(255,255,255,0.04)", border: "1px dashed rgba(255,255,255,0.12)", textAlign: "center" }}>
@@ -4117,14 +4137,38 @@ export default function FindPage() {
                                     Refund {b.refund_status}
                                   </p>
                                 )}
-                                {canRefund && (
-                                  <button
-                                    onClick={() => { setRefundModalBookingId(b.id); setRefundReason(""); setRefundDone(null); }}
-                                    style={{ marginTop: 7, background: "none", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 100, padding: "4px 12px", fontSize: 10.5, fontWeight: 600, color: "rgba(255,255,255,0.55)", cursor: "pointer", fontFamily: '"DM Sans", sans-serif' }}
-                                  >
-                                    Request Refund
-                                  </button>
-                                )}
+                                <div style={{ display: "flex", gap: 6, marginTop: 7, flexWrap: "wrap" }}>
+                                  {canRefund && (
+                                    <button
+                                      onClick={() => { setRefundModalBookingId(b.id); setRefundReason(""); setRefundDone(null); }}
+                                      style={{ background: "none", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 100, padding: "4px 12px", fontSize: 10.5, fontWeight: 600, color: "rgba(255,255,255,0.55)", cursor: "pointer", fontFamily: '"DM Sans", sans-serif' }}
+                                    >
+                                      Request Refund
+                                    </button>
+                                  )}
+                                  {b.payment_intent_id && (
+                                    <button
+                                      disabled={receiptLoading === b.id}
+                                      onClick={async () => {
+                                        if (receiptLoading === b.id || !user?.id) return;
+                                        setReceiptLoading(b.id);
+                                        try {
+                                          const { data: sess } = await supabase.auth.getSession();
+                                          const tok = sess.session?.access_token;
+                                          const hdrs2 = tok ? { "Authorization": `Bearer ${tok}` } : {};
+                                          const r = await fetch(`/api/customer/receipt/${b.id}`, { headers: hdrs2 });
+                                          const d = await r.json();
+                                          if (d.receiptUrl) window.open(d.receiptUrl, "_blank");
+                                          else alert("Receipt not available yet.");
+                                        } catch { alert("Could not load receipt."); }
+                                        finally { setReceiptLoading(null); }
+                                      }}
+                                      style={{ background: "none", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 100, padding: "4px 12px", fontSize: 10.5, fontWeight: 600, color: "rgba(255,255,255,0.55)", cursor: receiptLoading === b.id ? "not-allowed" : "pointer", fontFamily: '"DM Sans", sans-serif' }}
+                                    >
+                                      {receiptLoading === b.id ? "…" : "Receipt ↗"}
+                                    </button>
+                                  )}
+                                </div>
                               </div>
                             );
                           })}

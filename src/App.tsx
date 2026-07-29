@@ -65,7 +65,7 @@ function AppInner() {
   const [state, setState] = useState<AppState>(loadInitialState);
 
   // On first load, redirect away from mid-flow pages so the app always starts fresh
-  const FLOW_PATHS = ["/bizsignup", "/addpad", "/padtype", "/photointro", "/photo", "/availability", "/payment", "/signup", "/driversignup", "/listingsuccess"];
+  const FLOW_PATHS = ["/bizsignup", "/addpad", "/padtype", "/photointro", "/photo", "/availability", "/signup", "/driversignup", "/listingsuccess"];
   useEffect(() => {
     if (FLOW_PATHS.some(p => location.pathname.startsWith(p))) {
       navigate("/", { replace: true });

@@ -2341,7 +2341,8 @@ app.delete('/api/customer/payment-method/:userId', async (req, res) => {
 
 // POST /api/customer/setup-intent — save card without booking (SetupIntent)
 app.post('/api/customer/setup-intent', async (req, res) => {
-  if (!stripe) return res.status(503).json({ error: 'Stripe is not configured.' });
+  if (!stripe) return res.status(503).json({ error: 'Stripe is not configured. Set STRIPE_SECRET_KEY on the server.' });
+  if (!STRIPE_PUBLISHABLE_KEY) return res.status(503).json({ error: 'Stripe publishable key not configured. Set STRIPE_PUBLISHABLE_KEY on the server.' });
   const caller = await verifyBearerToken(req);
   if (!caller) return res.status(401).json({ error: 'Authentication required' });
   try {

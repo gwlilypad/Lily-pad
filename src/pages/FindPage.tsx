@@ -4149,6 +4149,7 @@ export default function FindPage() {
                                   const d = await r.json();
                                   if (!r.ok) throw new Error(d.error || `Server error (${r.status})`);
                                   if (!d.clientSecret) throw new Error("No client secret returned from server.");
+                                  if (!d.publishableKey) throw new Error("Stripe publishable key missing on server. Set STRIPE_PUBLISHABLE_KEY in Railway.");
                                   setAddCardSetup({ clientSecret: d.clientSecret, publishableKey: d.publishableKey });
                                 } catch (err: any) {
                                   setAddCardError(err.message || "Something went wrong. Try again.");

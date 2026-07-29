@@ -836,19 +836,11 @@ export default function PadDashboardPage() {
                     <div style={{ padding: "12px 14px" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                         <div style={{ minWidth: 0, flex: 1 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
-                            <div style={{ fontSize: 14.5, fontWeight: 700, color: NAVY, letterSpacing: -0.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                              {pad.name}
-                            </div>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); startRename(pad); }}
-                              style={{ flexShrink: 0, padding: "2px 8px", borderRadius: 100, background: "rgba(141,214,63,0.12)", border: "1px solid rgba(141,214,63,0.35)", color: "#5a9e1a", fontSize: 10, fontWeight: 800, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", letterSpacing: 0.2 }}
-                            >
-                              Rename
-                            </button>
+                          <div style={{ fontSize: 14.5, fontWeight: 700, color: NAVY, letterSpacing: -0.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: 2 }}>
+                            {pad.address}
                           </div>
                           <div style={{ fontSize: 11.5, color: "rgba(14,31,64,0.45)" }}>
-                            {pad.address} · {pad.type}{pad.spotCount > 1 ? ` · ${pad.spotCount} spots` : ""}
+                            {pad.type}{pad.spotCount > 1 ? ` · ${pad.spotCount} spots` : ""}
                           </div>
                         </div>
                         <div style={{ textAlign: "right", flexShrink: 0 }}>

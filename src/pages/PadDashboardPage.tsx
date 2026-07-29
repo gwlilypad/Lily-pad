@@ -797,13 +797,15 @@ export default function PadDashboardPage() {
               {/* Pending tab — under review banner */}
               {listTab === "pending" && (
                 <>
-                  <div style={{ display: "flex", alignItems: "flex-start", gap: 10, background: "rgba(251,191,36,0.10)", border: "1px solid rgba(251,191,36,0.30)", borderRadius: 14, padding: "12px 14px", marginBottom: 14 }}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a07800" strokeWidth="2.2" strokeLinecap="round" style={{ flexShrink: 0, marginTop: 1 }}><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
-                    <div>
-                      <div style={{ fontSize: 12.5, fontWeight: 700, color: "#7a5800", lineHeight: 1.3 }}>Under review</div>
-                      <div style={{ fontSize: 11.5, color: "rgba(120,88,0,0.70)", marginTop: 2, lineHeight: 1.4 }}>Your pad is being reviewed by our team. We'll notify you once it's approved and live.</div>
+                  {pendingPads.length > 0 && (
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: 10, background: "rgba(251,191,36,0.10)", border: "1px solid rgba(251,191,36,0.30)", borderRadius: 14, padding: "12px 14px", marginBottom: 14 }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a07800" strokeWidth="2.2" strokeLinecap="round" style={{ flexShrink: 0, marginTop: 1 }}><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+                      <div>
+                        <div style={{ fontSize: 12.5, fontWeight: 700, color: "#7a5800", lineHeight: 1.3 }}>Under review</div>
+                        <div style={{ fontSize: 11.5, color: "rgba(120,88,0,0.70)", marginTop: 2, lineHeight: 1.4 }}>Your pad is being reviewed by our team. We'll notify you once it's approved and live.</div>
+                      </div>
                     </div>
-                  </div>
+                  )}
                   {pendingPads.length === 0 ? (
                     <div style={{ background: "rgba(14,31,64,0.04)", borderRadius: 16, padding: "28px 20px", textAlign: "center", border: "1px dashed rgba(14,31,64,0.18)", color: "rgba(14,31,64,0.35)", fontSize: 13 }}>
                       No pads pending review.

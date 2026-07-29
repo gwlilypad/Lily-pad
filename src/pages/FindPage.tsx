@@ -9,6 +9,7 @@ import {
 } from "@/lib/support";
 import { supabase } from "@/lib/supabase";
 import StripePaymentForm from "@/components/StripePaymentForm";
+import StripeSetupForm from "@/components/StripeSetupForm";
 import { MapContainer, TileLayer, Marker, Pane, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -1105,6 +1106,9 @@ export default function FindPage() {
   const [refundDone, setRefundDone] = useState<string | null>(null);
   const [removingCard, setRemovingCard] = useState(false);
   const [receiptLoading, setReceiptLoading] = useState<string | null>(null);
+  const [addCardSetup, setAddCardSetup] = useState<{ clientSecret: string; publishableKey: string } | null>(null);
+  const [addCardLoading, setAddCardLoading] = useState(false);
+  const [addCardError, setAddCardError] = useState("");
   const [supportView, setSupportView] = useState<"menu" | "thread">("menu");
   const [supportTickets, setSupportTickets] = useState<SupportTicket[]>(() => loadTickets());
   const supportUserId = useRef<string>(getOrCreateUserId());
@@ -4006,6 +4010,35 @@ export default function FindPage() {
 
                   {loadingPayments ? (
                     <p style={{ fontSize: 13, color: "rgba(255,255,255,0.40)", textAlign: "center", padding: "24px 0" }}>Loading…</p>
+                  ) : addCardSetup ? (
+                    /* ── Add card form ── */
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                        <button onClick={() => { setAddCardSetup(null); setAddCardError(""); }} style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.10)", borderRadius: "50%", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "rgba(255,255,255,0.7)", flexShrink: 0 }}>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M15 18l-6-6 6-6"/></svg>
+                        </button>
+                        <span style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>Add Card</span>
+                      </div>
+                      {addCardError && <p style={{ fontSize: 12, color: "#fca5a5", margin: 0 }}>{addCardError}</p>}
+                      <StripeSetupForm
+                        clientSecret={addCardSetup.clientSecret}
+                        publishableKey={addCardSetup.publishableKey}
+                        onSuccess={async () => {
+                          setAddCardSetup(null);
+                          setAddCardError("");
+                          // Reload payment method
+                          if (user?.id) {
+                            const { data: sess } = await supabase.auth.getSession();
+                            const tok = sess.session?.access_token;
+                            const hdrs2 = tok ? { "Authorization": `Bearer ${tok}`, "Content-Type": "application/json" } : { "Content-Type": "application/json" };
+                            const r = await fetch(`/api/customer/payment-method/${user.id}`, { headers: hdrs2 });
+                            if (r.ok) setPaymentMethod(await r.json());
+                          }
+                        }}
+                        onError={(msg) => setAddCardError(msg)}
+                        onCancel={() => { setAddCardSetup(null); setAddCardError(""); }}
+                      />
+                    </div>
                   ) : refundModalBookingId && refundBk ? (
                     /* Refund request sub-view */
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -4097,9 +4130,31 @@ export default function FindPage() {
                             </button>
                           </div>
                         ) : (
-                          <div style={{ padding: "12px 14px", borderRadius: 12, background: "rgba(255,255,255,0.04)", border: "1px dashed rgba(255,255,255,0.12)", textAlign: "center" }}>
-                            <p style={{ margin: 0, fontSize: 12.5, color: "rgba(255,255,255,0.35)" }}>No saved payment method yet</p>
-                            <p style={{ margin: "3px 0 0", fontSize: 10.5, color: "rgba(255,255,255,0.25)" }}>Added automatically when you book</p>
+                          <div style={{ padding: "14px", borderRadius: 12, background: "rgba(255,255,255,0.04)", border: "1px dashed rgba(255,255,255,0.12)", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
+                            <p style={{ margin: 0, fontSize: 12.5, color: "rgba(255,255,255,0.45)" }}>No saved payment method yet</p>
+                            <button
+                              disabled={addCardLoading}
+                              onClick={async () => {
+                                if (!user?.id || addCardLoading) return;
+                                setAddCardLoading(true);
+                                setAddCardError("");
+                                try {
+                                  const { data: sess } = await supabase.auth.getSession();
+                                  const tok = sess.session?.access_token;
+                                  const hdrs2 = tok ? { "Authorization": `Bearer ${tok}`, "Content-Type": "application/json" } : { "Content-Type": "application/json" };
+                                  const r = await fetch("/api/customer/setup-intent", { method: "POST", headers: hdrs2 });
+                                  const d = await r.json();
+                                  if (!r.ok) throw new Error(d.error || "Could not start card setup.");
+                                  setAddCardSetup({ clientSecret: d.clientSecret, publishableKey: d.publishableKey });
+                                } catch (err: any) {
+                                  setAddCardError(err.message);
+                                } finally { setAddCardLoading(false); }
+                              }}
+                              style={{ background: "#8DD63F", color: "#0E1F40", border: "none", borderRadius: 100, padding: "9px 22px", fontSize: 13, fontWeight: 700, cursor: addCardLoading ? "not-allowed" : "pointer", fontFamily: '"DM Sans", sans-serif' }}
+                            >
+                              {addCardLoading ? "Loading…" : "+ Add Card"}
+                            </button>
+                            {addCardError && <p style={{ margin: 0, fontSize: 11, color: "#fca5a5" }}>{addCardError}</p>}
                           </div>
                         )}
                       </div>

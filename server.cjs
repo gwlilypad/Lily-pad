@@ -2339,6 +2339,37 @@ app.delete('/api/customer/payment-method/:userId', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// POST /api/customer/setup-intent — save card without booking (SetupIntent)
+app.post('/api/customer/setup-intent', async (req, res) => {
+  if (!stripe) return res.status(503).json({ error: 'Stripe is not configured.' });
+  const caller = await verifyBearerToken(req);
+  if (!caller) return res.status(401).json({ error: 'Authentication required' });
+  try {
+    // Find or create a Stripe Customer for this user
+    const CUSTOMERS_FILE = '/tmp/stripe_customers.json';
+    let customers = {};
+    try { customers = JSON.parse(require('fs').readFileSync(CUSTOMERS_FILE, 'utf8')); } catch {}
+    let customerId = customers[caller.id];
+    if (!customerId) {
+      // Check if a customer already exists with this email
+      const existing = await stripe.customers.list({ email: caller.email, limit: 1 });
+      if (existing.data.length > 0) {
+        customerId = existing.data[0].id;
+      } else {
+        const customer = await stripe.customers.create({ email: caller.email, metadata: { userId: caller.id } });
+        customerId = customer.id;
+      }
+      customers[caller.id] = customerId;
+      try { require('fs').writeFileSync(CUSTOMERS_FILE, JSON.stringify(customers)); } catch {}
+    }
+    const setupIntent = await stripe.setupIntents.create({
+      customer: customerId,
+      automatic_payment_methods: { enabled: true },
+    });
+    res.json({ clientSecret: setupIntent.client_secret, publishableKey: STRIPE_PUBLISHABLE_KEY });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // GET /api/customer/receipt/:bookingId — Stripe receipt URL
 app.get('/api/customer/receipt/:bookingId', async (req, res) => {
   if (!stripe) return res.status(503).json({ error: 'Stripe is not configured.' });

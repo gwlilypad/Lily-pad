@@ -9,7 +9,7 @@ import {
 } from "@/lib/support";
 import { supabase } from "@/lib/supabase";
 import StripePaymentForm from "@/components/StripePaymentForm";
-import StripeSetupForm from "@/components/StripeSetupForm";
+import StripeSetupForm, { getStripePromise } from "@/components/StripeSetupForm";
 import { MapContainer, TileLayer, Marker, Pane, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -3500,7 +3500,7 @@ export default function FindPage() {
         }}
       >
         {/* ── Content area (top of panel) ── */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "calc(env(safe-area-inset-top) + 48px) 24px 0", display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ flex: 1, overflowY: "auto", padding: "calc(env(safe-area-inset-top) + 48px) 24px 100px", display: "flex", flexDirection: "column", gap: 12 }}>
 
           {/* Avatar + name block */}
           <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "0 0 20px" }}>
@@ -3580,6 +3580,10 @@ export default function FindPage() {
                     accent: false,
                     onClick: () => {
                       setAcctView("payments");
+                      // Pre-warm Stripe.js so it's ready before the user taps Add Card
+                      fetch("/api/stripe/config").then(r => r.ok ? r.json() : null).then(cfg => {
+                        if (cfg?.publishableKey) getStripePromise(cfg.publishableKey);
+                      }).catch(() => {});
                       if (user?.id && loadingPayments === false && paymentMethod === undefined) {
                         setLoadingPayments(true);
                         supabase.auth.getSession().then(({ data: sess }) => {

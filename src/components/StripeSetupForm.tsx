@@ -7,7 +7,7 @@ const GREEN = "#8DD63F";
 
 let stripePromiseCache: Promise<Stripe | null> | null = null;
 let stripePromiseKey: string | null = null;
-function getStripePromise(publishableKey: string) {
+export function getStripePromise(publishableKey: string) {
   if (!stripePromiseCache || stripePromiseKey !== publishableKey) {
     stripePromiseCache = loadStripe(publishableKey);
     stripePromiseKey = publishableKey;
@@ -47,11 +47,24 @@ function SetupForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!stripe || !elements || submitting) return;
-    const card = elements.getElement(CardElement);
-    if (!card) return;
-    setSubmitting(true);
     setError("");
+
+    if (!stripe) {
+      setError("Payment system still loading — please wait a moment and try again.");
+      return;
+    }
+    if (!elements) {
+      setError("Card form not ready. Please refresh and try again.");
+      return;
+    }
+    const card = elements.getElement(CardElement);
+    if (!card) {
+      setError("Card input not found. Please refresh and try again.");
+      return;
+    }
+    if (submitting) return;
+
+    setSubmitting(true);
 
     const { error: confirmError, setupIntent } = await stripe.confirmCardSetup(
       clientSecret,
@@ -69,7 +82,7 @@ function SetupForm({
     if (setupIntent?.status === "succeeded") {
       onSuccess();
     } else {
-      const msg = `Unexpected status: ${setupIntent?.status}. Please try again.`;
+      const msg = `Setup did not complete (status: ${setupIntent?.status ?? "unknown"}). Please try again.`;
       setError(msg);
       onError(msg);
       setSubmitting(false);
@@ -78,40 +91,47 @@ function SetupForm({
 
   return (
     <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      {/* Card input field */}
+      {/* Card input */}
       <div style={{
         padding: "14px 16px",
         borderRadius: 12,
         background: "rgba(255,255,255,0.07)",
         border: "1px solid rgba(255,255,255,0.15)",
+        minHeight: 46,
       }}>
         <CardElement options={CARD_STYLE} />
       </div>
 
       {error && (
         <div style={{
-          fontSize: 12, color: "#fca5a5",
-          background: "rgba(255,80,80,0.08)",
-          border: "1px solid rgba(255,80,80,0.20)",
-          borderRadius: 10, padding: "10px 12px", lineHeight: 1.5,
+          fontSize: 12.5, color: "#fca5a5",
+          background: "rgba(255,80,80,0.10)",
+          border: "1px solid rgba(255,80,80,0.25)",
+          borderRadius: 10, padding: "11px 14px", lineHeight: 1.5,
         }}>
           {error}
         </div>
       )}
 
-      <button
-        type="submit"
-        disabled={!stripe || submitting}
-        style={{
-          width: "100%", padding: "14px", borderRadius: 100, border: "none",
-          background: submitting ? "rgba(141,214,63,0.45)" : GREEN,
-          color: NAVY, fontSize: 14, fontWeight: 700, fontFamily: "'DM Sans', sans-serif",
-          cursor: submitting ? "not-allowed" : "pointer",
-          opacity: !stripe ? 0.5 : 1,
-        }}
-      >
-        {submitting ? "Saving…" : "Save Card"}
-      </button>
+      {/* Show loading state while Stripe JS initialises */}
+      {!stripe ? (
+        <div style={{ textAlign: "center", padding: "10px 0", fontSize: 13, color: "rgba(255,255,255,0.45)" }}>
+          Loading payment form…
+        </div>
+      ) : (
+        <button
+          type="submit"
+          disabled={submitting}
+          style={{
+            width: "100%", padding: "14px", borderRadius: 100, border: "none",
+            background: submitting ? "rgba(141,214,63,0.45)" : GREEN,
+            color: NAVY, fontSize: 14, fontWeight: 700, fontFamily: "'DM Sans', sans-serif",
+            cursor: submitting ? "not-allowed" : "pointer",
+          }}
+        >
+          {submitting ? "Saving…" : "Save Card"}
+        </button>
+      )}
 
       <button
         type="button"

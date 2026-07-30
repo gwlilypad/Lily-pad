@@ -35,12 +35,16 @@ if (!STRIPE_SECRET_KEY) {
   console.warn('[Stripe] STRIPE_SECRET_KEY is not set — payment endpoints will return 503.');
 } else {
   try {
-    stripe = new StripeClass(STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
+    stripe = new StripeClass(STRIPE_SECRET_KEY);
     console.log(`[Stripe] Initialised OK (key prefix: ${STRIPE_SECRET_KEY.slice(0, 8)}…)`);
   } catch (err) {
     console.error('[Stripe] Failed to initialise:', err.message);
   }
 }
+
+// ── Diagnostic endpoint — hit /api/stripe-check on Railway to confirm env vars ──
+// Returns which variable names were found (never the values themselves).
+// Delete this route once Stripe is confirmed working in production.
 
 // Comma-separated list of emails allowed to register as staff/admin
 // Set this in Replit Secrets as ADMIN_EMAILS=alice@co.com,bob@co.com
@@ -519,12 +523,32 @@ app.get('/api/health', (req, res) => {
     const p = JSON.parse(Buffer.from(SVC_KEY.split('.')[1], 'base64url').toString());
     svcRole = p.role;
   } catch {}
+
+  // Stripe diagnostics — which variable name was found and whether init succeeded.
+  // Values are never returned; only which env var name held the key.
+  const stripeSecretSource =
+    process.env.STRIPE_SECRET_KEY     ? 'STRIPE_SECRET_KEY'     :
+    process.env.STRIPE_SECRET         ? 'STRIPE_SECRET'         :
+    process.env.STRIPE_API_KEY        ? 'STRIPE_API_KEY'        : null;
+  const stripePubSource =
+    process.env.STRIPE_PUBLISHABLE_KEY    ? 'STRIPE_PUBLISHABLE_KEY'    :
+    process.env.STRIPE_PUBLIC_KEY         ? 'STRIPE_PUBLIC_KEY'         :
+    process.env.VITE_STRIPE_PUBLISHABLE_KEY ? 'VITE_STRIPE_PUBLISHABLE_KEY' :
+    process.env.VITE_STRIPE_PUBLIC_KEY    ? 'VITE_STRIPE_PUBLIC_KEY'    : null;
+
   res.json({
     ok: true,
     anon_key_set: anonOk,
     anon_key_len: SUPABASE_ANON.length,
     svc_role: svcRole,
     supabase_url: SUPABASE_URL,
+    stripe: {
+      initialised: !!stripe,
+      secret_key_source: stripeSecretSource || 'NOT FOUND — check Railway variable names',
+      secret_key_prefix: STRIPE_SECRET_KEY ? STRIPE_SECRET_KEY.slice(0, 8) + '…' : null,
+      publishable_key_source: stripePubSource || 'NOT FOUND',
+      publishable_key_prefix: STRIPE_PUBLISHABLE_KEY ? STRIPE_PUBLISHABLE_KEY.slice(0, 8) + '…' : null,
+    },
   });
 });
 

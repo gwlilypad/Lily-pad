@@ -1,7 +1,12 @@
 const express = require('express');
 const path    = require('path');
 const fs      = require('fs');
-const Stripe  = require('stripe');
+// stripe v10+ ships as a dual ESM/CJS package; in some Node CJS environments
+// require('stripe') returns { default: StripeConstructor } instead of the class
+// directly.  Always unwrap .default when present.
+const _stripeImport = require('stripe');
+const StripeClass   = (typeof _stripeImport === 'function') ? _stripeImport
+                    : (_stripeImport.default || _stripeImport);
 
 const app  = express();
 const PORT = process.env.PORT || 5000;
@@ -10,12 +15,32 @@ const SUPABASE_URL  = 'https://mcfxoimaqgpyntvasbsw.supabase.co';
 const SUPABASE_ANON = process.env.VITE_SUPABASE_ANON_KEY    || '';
 const SVC_KEY       = process.env.SUPABASE_SERVICE_ROLE_KEY  || '';
 
-// Accept either naming convention (Railway/production commonly uses unprefixed
-// STRIPE_*, Replit dev/preview may use VITE_-prefixed for the publishable key).
-const STRIPE_SECRET_KEY      = process.env.STRIPE_SECRET_KEY || '';
-const STRIPE_PUBLISHABLE_KEY = process.env.STRIPE_PUBLISHABLE_KEY || process.env.VITE_STRIPE_PUBLISHABLE_KEY || '';
-const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
-if (!stripe) console.warn('[Stripe] STRIPE_SECRET_KEY not set — payment endpoints will return 503.');
+// Accept either naming convention (Railway uses unprefixed; Replit dev may use
+// VITE_-prefixed for the publishable key).
+// Support common naming variations people use in Railway
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY
+                       || process.env.STRIPE_SECRET
+                       || process.env.STRIPE_API_KEY
+                       || '';
+const STRIPE_PUBLISHABLE_KEY = process.env.STRIPE_PUBLISHABLE_KEY
+                             || process.env.STRIPE_PUBLIC_KEY
+                             || process.env.VITE_STRIPE_PUBLISHABLE_KEY
+                             || process.env.VITE_STRIPE_PUBLIC_KEY
+                             || '';
+
+// Initialise Stripe — wrap in try/catch so a bad key surfaces in logs instead
+// of silently producing null and returning 503 to every payment endpoint.
+let stripe = null;
+if (!STRIPE_SECRET_KEY) {
+  console.warn('[Stripe] STRIPE_SECRET_KEY is not set — payment endpoints will return 503.');
+} else {
+  try {
+    stripe = new StripeClass(STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
+    console.log(`[Stripe] Initialised OK (key prefix: ${STRIPE_SECRET_KEY.slice(0, 8)}…)`);
+  } catch (err) {
+    console.error('[Stripe] Failed to initialise:', err.message);
+  }
+}
 
 // Comma-separated list of emails allowed to register as staff/admin
 // Set this in Replit Secrets as ADMIN_EMAILS=alice@co.com,bob@co.com

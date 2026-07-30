@@ -15,32 +15,57 @@ const SUPABASE_URL  = 'https://mcfxoimaqgpyntvasbsw.supabase.co';
 const SUPABASE_ANON = process.env.VITE_SUPABASE_ANON_KEY    || '';
 const SVC_KEY       = process.env.SUPABASE_SERVICE_ROLE_KEY  || '';
 
-// Accept either naming convention (Railway uses unprefixed; Replit dev may use
-// VITE_-prefixed for the publishable key).
-// Support common naming variations people use in Railway
-const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY
-                       || process.env.STRIPE_SECRET
-                       || process.env.STRIPE_API_KEY
-                       || '';
-const STRIPE_PUBLISHABLE_KEY = process.env.STRIPE_PUBLISHABLE_KEY
-                             || process.env.STRIPE_PUBLIC_KEY
-                             || process.env.VITE_STRIPE_PUBLISHABLE_KEY
-                             || process.env.VITE_STRIPE_PUBLIC_KEY
-                             || '';
+// ── Stripe: lazy singleton ────────────────────────────────────────────────────
+// Keys are read at call time (not module load) so that Railway env-var injection
+// timing can never be the cause of a missing key.
+// Supports multiple naming conventions used across hosting platforms.
+let _stripe = null;
+let _stripePubKey = '';
 
-// Initialise Stripe — wrap in try/catch so a bad key surfaces in logs instead
-// of silently producing null and returning 503 to every payment endpoint.
-let stripe = null;
-if (!STRIPE_SECRET_KEY) {
-  console.warn('[Stripe] STRIPE_SECRET_KEY is not set — payment endpoints will return 503.');
-} else {
+function getStripeKeys() {
+  const secret = process.env.STRIPE_SECRET_KEY
+              || process.env.STRIPE_SECRET
+              || process.env.STRIPE_API_KEY
+              || '';
+  const pub    = process.env.STRIPE_PUBLISHABLE_KEY
+              || process.env.STRIPE_PUBLIC_KEY
+              || process.env.VITE_STRIPE_PUBLISHABLE_KEY
+              || process.env.VITE_STRIPE_PUBLIC_KEY
+              || '';
+  return { secret, pub };
+}
+
+function getStripe() {
+  if (_stripe) return _stripe;
+  const { secret } = getStripeKeys();
+  if (!secret) return null;
   try {
-    stripe = new StripeClass(STRIPE_SECRET_KEY);
-    console.log(`[Stripe] Initialised OK (key prefix: ${STRIPE_SECRET_KEY.slice(0, 8)}…)`);
+    _stripe = new StripeClass(secret);
+    console.log(`[Stripe] Initialised OK (key prefix: ${secret.slice(0, 8)}…)`);
   } catch (err) {
     console.error('[Stripe] Failed to initialise:', err.message);
   }
+  return _stripe;
 }
+
+function getStripePubKey() {
+  if (_stripePubKey) return _stripePubKey;
+  _stripePubKey = getStripeKeys().pub;
+  return _stripePubKey;
+}
+
+// Eagerly attempt init so startup logs reflect current env state.
+// If it fails here (key missing), getStripe() will retry on every request.
+(() => {
+  const { secret } = getStripeKeys();
+  if (!secret) {
+    console.warn('[Stripe] STRIPE_SECRET_KEY is not set — will retry on each request.');
+  } else {
+    getStripe();
+  }
+})();
+
+// No module-level `stripe` const — use getStripe() in every endpoint handler.
 
 // ── Diagnostic endpoint — hit /api/stripe-check on Railway to confirm env vars ──
 // Returns which variable names were found (never the values themselves).
@@ -531,7 +556,7 @@ app.get('/api/health', (req, res) => {
     process.env.STRIPE_SECRET         ? 'STRIPE_SECRET'         :
     process.env.STRIPE_API_KEY        ? 'STRIPE_API_KEY'        : null;
   const stripePubSource =
-    process.env.STRIPE_PUBLISHABLE_KEY    ? 'STRIPE_PUBLISHABLE_KEY'    :
+    process.env.getStripePubKey()    ? 'STRIPE_PUBLISHABLE_KEY'    :
     process.env.STRIPE_PUBLIC_KEY         ? 'STRIPE_PUBLIC_KEY'         :
     process.env.VITE_STRIPE_PUBLISHABLE_KEY ? 'VITE_STRIPE_PUBLISHABLE_KEY' :
     process.env.VITE_STRIPE_PUBLIC_KEY    ? 'VITE_STRIPE_PUBLIC_KEY'    : null;
@@ -547,7 +572,7 @@ app.get('/api/health', (req, res) => {
       secret_key_source: stripeSecretSource || 'NOT FOUND — check Railway variable names',
       secret_key_prefix: STRIPE_SECRET_KEY ? STRIPE_SECRET_KEY.slice(0, 8) + '…' : null,
       publishable_key_source: stripePubSource || 'NOT FOUND',
-      publishable_key_prefix: STRIPE_PUBLISHABLE_KEY ? STRIPE_PUBLISHABLE_KEY.slice(0, 8) + '…' : null,
+      publishable_key_prefix: getStripePubKey() ? getStripePubKey().slice(0, 8) + '…' : null,
     },
   });
 });
@@ -1971,8 +1996,8 @@ async function verifyAdminBearerToken(req) {
 // ── Stripe: expose publishable key to the client (avoids needing a VITE_-prefixed
 //    build-time var — works regardless of how the host platform names it) ──────
 app.get('/api/stripe-config', (req, res) => {
-  if (!STRIPE_PUBLISHABLE_KEY) return res.status(503).json({ error: 'Stripe is not configured on the server.' });
-  res.json({ publishableKey: STRIPE_PUBLISHABLE_KEY });
+  if (!getStripePubKey()) return res.status(503).json({ error: 'Stripe is not configured on the server.' });
+  res.json({ publishableKey: getStripePubKey() });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1983,7 +2008,7 @@ app.get('/api/stripe-config', (req, res) => {
 // Creates a Stripe Express Connect account for the host, stores account ID in profiles,
 // and returns an onboarding URL.
 app.post('/api/connect/create-account', async (req, res) => {
-  if (!stripe) return res.status(503).json({ error: 'Stripe is not configured.' });
+  if (!getStripe()) return res.status(503).json({ error: 'Stripe is not configured.' });
   const caller = await verifyBearerToken(req);
   if (!caller) return res.status(401).json({ error: 'Authentication required' });
   const { userId, email } = req.body || {};
@@ -2000,7 +2025,7 @@ app.post('/api/connect/create-account', async (req, res) => {
 
     // Create new account if none exists
     if (!accountId) {
-      const account = await stripe.accounts.create({
+      const account = await getStripe().accounts.create({
         type: 'express',
         email: email || prof?.email || undefined,
         capabilities: { transfers: { requested: true }, card_payments: { requested: true } },
@@ -2017,7 +2042,7 @@ app.post('/api/connect/create-account', async (req, res) => {
     }
 
     const baseUrl = req.headers.origin || `https://${req.headers.host}`;
-    const accountLink = await stripe.accountLinks.create({
+    const accountLink = await getStripe().accountLinks.create({
       account: accountId,
       refresh_url: `${baseUrl}/connect-refresh`,
       return_url: `${baseUrl}/connect-return`,
@@ -2047,7 +2072,7 @@ app.get('/api/connect/status/:userId', async (req, res) => {
     // Ask Stripe whether the account can accept charges
     if (stripe) {
       try {
-        const account = await stripe.accounts.retrieve(accountId);
+        const account = await getStripe().accounts.retrieve(accountId);
         const isActive = account.charges_enabled;
         const newStatus = isActive ? 'active' : 'pending';
         // Update status in DB if changed
@@ -2070,7 +2095,7 @@ app.get('/api/connect/status/:userId', async (req, res) => {
 // POST /api/connect/create-login-link/:accountId
 // Returns a Stripe dashboard login link for the host
 app.post('/api/connect/create-login-link/:accountId', async (req, res) => {
-  if (!stripe) return res.status(503).json({ error: 'Stripe is not configured.' });
+  if (!getStripe()) return res.status(503).json({ error: 'Stripe is not configured.' });
   const caller = await verifyBearerToken(req);
   if (!caller) return res.status(401).json({ error: 'Authentication required' });
   const { accountId } = req.params;
@@ -2080,7 +2105,7 @@ app.post('/api/connect/create-login-link/:accountId', async (req, res) => {
   const ownedAccountId = Array.isArray(profRows) ? profRows[0]?.stripe_connect_account_id : null;
   if (!ownedAccountId || ownedAccountId !== accountId) return res.status(403).json({ error: 'Forbidden' });
   try {
-    const link = await stripe.accounts.createLoginLink(accountId);
+    const link = await getStripe().accounts.createLoginLink(accountId);
     res.json({ url: link.url });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -2088,7 +2113,7 @@ app.post('/api/connect/create-login-link/:accountId', async (req, res) => {
 // GET /api/connect/payouts/:accountId
 // Lists recent payouts for the host's connected account
 app.get('/api/connect/payouts/:accountId', async (req, res) => {
-  if (!stripe) return res.status(503).json({ error: 'Stripe is not configured.' });
+  if (!getStripe()) return res.status(503).json({ error: 'Stripe is not configured.' });
   const caller = await verifyBearerToken(req);
   if (!caller) return res.status(401).json({ error: 'Authentication required' });
   const { accountId } = req.params;
@@ -2098,7 +2123,7 @@ app.get('/api/connect/payouts/:accountId', async (req, res) => {
   const ownedId = Array.isArray(profRows) ? profRows[0]?.stripe_connect_account_id : null;
   if (!ownedId || ownedId !== accountId) return res.status(403).json({ error: 'Forbidden' });
   try {
-    const payouts = await stripe.payouts.list(
+    const payouts = await getStripe().payouts.list(
       { limit: 20 },
       { stripeAccount: accountId }
     );
@@ -2116,7 +2141,7 @@ app.get('/api/connect/payouts/:accountId', async (req, res) => {
 // GET /api/connect/balance/:accountId
 // Returns available + pending balance for the host's connected account
 app.get('/api/connect/balance/:accountId', async (req, res) => {
-  if (!stripe) return res.status(503).json({ error: 'Stripe is not configured.' });
+  if (!getStripe()) return res.status(503).json({ error: 'Stripe is not configured.' });
   const caller = await verifyBearerToken(req);
   if (!caller) return res.status(401).json({ error: 'Authentication required' });
   const { accountId } = req.params;
@@ -2126,7 +2151,7 @@ app.get('/api/connect/balance/:accountId', async (req, res) => {
   const ownedId = Array.isArray(profRows) ? profRows[0]?.stripe_connect_account_id : null;
   if (!ownedId || ownedId !== accountId) return res.status(403).json({ error: 'Forbidden' });
   try {
-    const balance = await stripe.balance.retrieve({ stripeAccount: accountId });
+    const balance = await getStripe().balance.retrieve({ stripeAccount: accountId });
     const available = balance.available.reduce((s, b) => b.currency === 'usd' ? s + b.amount : s, 0) / 100;
     const pending   = balance.pending.reduce((s, b) => b.currency === 'usd' ? s + b.amount : s, 0) / 100;
     res.json({ available, pending });
@@ -2244,7 +2269,7 @@ app.get('/api/refunds/pending', async (req, res) => {
 
 // POST /api/refunds/approve/:bookingId  (admin only)
 app.post('/api/refunds/approve/:bookingId', async (req, res) => {
-  if (!stripe) return res.status(503).json({ error: 'Stripe is not configured.' });
+  if (!getStripe()) return res.status(503).json({ error: 'Stripe is not configured.' });
   const adminRole = await verifyAdminBearerToken(req);
   if (!adminRole || adminRole !== 'admin') return res.status(401).json({ error: 'Admin authentication required' });
   const { bookingId } = req.params;
@@ -2257,7 +2282,7 @@ app.post('/api/refunds/approve/:bookingId', async (req, res) => {
     const paymentIntentId = bd.stripe_payment_intent_id;
     if (!paymentIntentId) return res.status(400).json({ error: 'No payment intent on this booking' });
 
-    const refund = await stripe.refunds.create({ payment_intent: paymentIntentId });
+    const refund = await getStripe().refunds.create({ payment_intent: paymentIntentId });
     const updated = {
       ...bd,
       refund_status: 'approved',
@@ -2337,7 +2362,7 @@ app.get('/api/admin/transactions', async (req, res) => {
 
 // GET /api/customer/payment-method/:userId
 app.get('/api/customer/payment-method/:userId', async (req, res) => {
-  if (!stripe) return res.status(503).json({ error: 'Stripe is not configured.' });
+  if (!getStripe()) return res.status(503).json({ error: 'Stripe is not configured.' });
   const caller = await verifyBearerToken(req);
   if (!caller) return res.status(401).json({ error: 'Authentication required' });
   const { userId } = req.params;
@@ -2353,7 +2378,7 @@ app.get('/api/customer/payment-method/:userId', async (req, res) => {
       if (bd.stripe_payment_intent_id) { piId = bd.stripe_payment_intent_id; break; }
     }
     if (piId) {
-      const pi = await stripe.paymentIntents.retrieve(piId, { expand: ['payment_method'] });
+      const pi = await getStripe().paymentIntents.retrieve(piId, { expand: ['payment_method'] });
       const pm = pi.payment_method;
       if (pm && typeof pm === 'object' && pm.card) {
         last4 = pm.card.last4 || '';
@@ -2366,7 +2391,7 @@ app.get('/api/customer/payment-method/:userId', async (req, res) => {
 
 // DELETE /api/customer/payment-method/:userId — detach saved card
 app.delete('/api/customer/payment-method/:userId', async (req, res) => {
-  if (!stripe) return res.status(503).json({ error: 'Stripe is not configured.' });
+  if (!getStripe()) return res.status(503).json({ error: 'Stripe is not configured.' });
   const caller = await verifyBearerToken(req);
   if (!caller) return res.status(401).json({ error: 'Authentication required' });
   const { userId } = req.params;
@@ -2380,18 +2405,18 @@ app.delete('/api/customer/payment-method/:userId', async (req, res) => {
       if (bd.stripe_payment_intent_id) { piId = bd.stripe_payment_intent_id; break; }
     }
     if (!piId) return res.json({ removed: false, reason: 'No saved card found.' });
-    const pi = await stripe.paymentIntents.retrieve(piId, { expand: ['payment_method'] });
+    const pi = await getStripe().paymentIntents.retrieve(piId, { expand: ['payment_method'] });
     const pm = pi.payment_method;
     if (!pm || typeof pm !== 'object') return res.json({ removed: false, reason: 'No payment method found.' });
-    await stripe.paymentMethods.detach(pm.id);
+    await getStripe().paymentMethods.detach(pm.id);
     res.json({ removed: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // POST /api/customer/setup-intent — save card without booking (SetupIntent)
 app.post('/api/customer/setup-intent', async (req, res) => {
-  if (!stripe) return res.status(503).json({ error: 'Stripe is not configured. Set STRIPE_SECRET_KEY on the server.' });
-  if (!STRIPE_PUBLISHABLE_KEY) return res.status(503).json({ error: 'Stripe publishable key not configured. Set STRIPE_PUBLISHABLE_KEY on the server.' });
+  if (!getStripe()) return res.status(503).json({ error: 'Stripe is not configured. Set STRIPE_SECRET_KEY on the server.' });
+  if (!getStripePubKey()) return res.status(503).json({ error: 'Stripe publishable key not configured. Set STRIPE_PUBLISHABLE_KEY on the server.' });
   const caller = await verifyBearerToken(req);
   if (!caller) return res.status(401).json({ error: 'Authentication required' });
   try {
@@ -2402,22 +2427,22 @@ app.post('/api/customer/setup-intent', async (req, res) => {
     let customerId = customers[caller.id];
     if (!customerId) {
       // Check if a customer already exists with this email
-      const existing = await stripe.customers.list({ email: caller.email, limit: 1 });
+      const existing = await getStripe().customers.list({ email: caller.email, limit: 1 });
       if (existing.data.length > 0) {
         customerId = existing.data[0].id;
       } else {
-        const customer = await stripe.customers.create({ email: caller.email, metadata: { userId: caller.id } });
+        const customer = await getStripe().customers.create({ email: caller.email, metadata: { userId: caller.id } });
         customerId = customer.id;
       }
       customers[caller.id] = customerId;
       try { require('fs').writeFileSync(CUSTOMERS_FILE, JSON.stringify(customers)); } catch {}
     }
-    const setupIntent = await stripe.setupIntents.create({
+    const setupIntent = await getStripe().setupIntents.create({
       customer: customerId,
       payment_method_types: ['card'],
     });
     console.log(`[Setup] Created setupIntent ${setupIntent.id} for customer ${customerId}`);
-    res.json({ clientSecret: setupIntent.client_secret, publishableKey: STRIPE_PUBLISHABLE_KEY });
+    res.json({ clientSecret: setupIntent.client_secret, publishableKey: getStripePubKey() });
   } catch (e) {
     console.error('[Setup] setup-intent error:', e.message);
     res.status(500).json({ error: e.message });
@@ -2426,7 +2451,7 @@ app.post('/api/customer/setup-intent', async (req, res) => {
 
 // GET /api/customer/receipt/:bookingId — Stripe receipt URL
 app.get('/api/customer/receipt/:bookingId', async (req, res) => {
-  if (!stripe) return res.status(503).json({ error: 'Stripe is not configured.' });
+  if (!getStripe()) return res.status(503).json({ error: 'Stripe is not configured.' });
   const caller = await verifyBearerToken(req);
   if (!caller) return res.status(401).json({ error: 'Authentication required' });
   try {
@@ -2437,7 +2462,7 @@ app.get('/api/customer/receipt/:bookingId', async (req, res) => {
     if (booking.user_id !== caller.id) return res.status(403).json({ error: 'Forbidden' });
     const piId = (booking.booking_data || {}).stripe_payment_intent_id;
     if (!piId) return res.json({ receiptUrl: null });
-    const pi = await stripe.paymentIntents.retrieve(piId, { expand: ['latest_charge'] });
+    const pi = await getStripe().paymentIntents.retrieve(piId, { expand: ['latest_charge'] });
     const charge = pi.latest_charge;
     const receiptUrl = (charge && typeof charge === 'object') ? charge.receipt_url : null;
     res.json({ receiptUrl: receiptUrl || null });
@@ -2477,7 +2502,7 @@ app.get('/api/customer/bookings/:userId', async (req, res) => {
 // Amount is always recalculated server-side from the spot's real price_per_hr —
 // never trust a client-supplied amount.
 app.post('/api/create-payment-intent', async (req, res) => {
-  if (!stripe) return res.status(503).json({ error: 'Stripe is not configured on the server.' });
+  if (!getStripe()) return res.status(503).json({ error: 'Stripe is not configured on the server.' });
   const caller = await verifyBearerToken(req);
   if (!caller) return res.status(401).json({ error: 'Authentication required' });
   const { spot_id, start_ts, end_ts, user_id } = req.body || {};
@@ -2536,7 +2561,7 @@ app.post('/api/create-payment-intent', async (req, res) => {
       piParams.transfer_data = { destination: hostConnectAccountId };
     }
 
-    const paymentIntent = await stripe.paymentIntents.create(piParams);
+    const paymentIntent = await getStripe().paymentIntents.create(piParams);
     const platformFee = Math.round(platformFeeCents) / 100;
 
     res.json({
@@ -2565,7 +2590,7 @@ app.post('/api/bookings', async (req, res) => {
     let bookingStatus = 'pending';
     let verifiedPaymentIntentId = null;
     if (payment_intent_id) {
-      if (!stripe) return res.status(503).json({ error: 'Stripe is not configured on the server.' });
+      if (!getStripe()) return res.status(503).json({ error: 'Stripe is not configured on the server.' });
 
       // All booking fields are required when confirming via a payment intent
       if (!spot_id)     return res.status(400).json({ error: 'spot_id required for payment confirmation' });
@@ -2573,7 +2598,7 @@ app.post('/api/bookings', async (req, res) => {
       if (!end_ts)      return res.status(400).json({ error: 'end_ts required for payment confirmation' });
       if (!total_price) return res.status(400).json({ error: 'total_price required for payment confirmation' });
 
-      const pi = await stripe.paymentIntents.retrieve(payment_intent_id);
+      const pi = await getStripe().paymentIntents.retrieve(payment_intent_id);
       if (pi.status !== 'succeeded') {
         return res.status(402).json({ error: `Payment not completed (status: ${pi.status})` });
       }
@@ -2628,7 +2653,7 @@ app.post('/api/bookings', async (req, res) => {
       var piLast4 = '', piBrand = '';
       try {
         if (pi.payment_method && typeof pi.payment_method === 'string') {
-          const pmObj = await stripe.paymentMethods.retrieve(pi.payment_method);
+          const pmObj = await getStripe().paymentMethods.retrieve(pi.payment_method);
           piLast4 = pmObj?.card?.last4 || '';
           piBrand = pmObj?.card?.brand || '';
         }

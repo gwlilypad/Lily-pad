@@ -5,7 +5,6 @@ import SharedHeader from "@/components/SharedHeader";
 import NavBar from "@/components/NavBar";
 
 const DOW = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
-const DOW_FULL = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
@@ -42,25 +41,20 @@ function groupDatePills(sorted: string[]): { label: string; keys: string[] }[] {
   });
 }
 
-function scheduleLabel(days: Set<number>) {
-  if (days.size === 0) return "No days";
-  if (days.size === 7) return "Every day";
-  if ([1,2,3,4,5].every(d => days.has(d)) && days.size === 5) return "Mon–Fri";
-  if ([0,6].every(d => days.has(d)) && days.size === 2) return "Weekends";
-  const order = [0,1,2,3,4,5,6].filter(d => days.has(d));
-  if (order.length <= 3) return order.map(d => DOW_FULL[d]).join(", ");
-  return `${DOW_FULL[order[0]]}–${DOW_FULL[order[order.length - 1]]}`;
-}
-
 function ToggleSwitch({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
   return (
-    <div onClick={() => onChange(!on)} style={{
-      width: 52, height: 30, borderRadius: 15, flexShrink: 0,
-      background: on ? "#8DD63F" : "rgba(14,31,64,0.15)",
-      position: "relative", cursor: "pointer",
-      transition: "background 0.22s cubic-bezier(0.34,1.56,0.64,1)",
-      boxShadow: on ? "0 2px 8px rgba(141,214,63,0.35)" : "none",
-    }}>
+    <div
+      onClick={() => onChange(!on)}
+      role="switch"
+      aria-checked={on}
+      style={{
+        width: 52, height: 30, borderRadius: 15, flexShrink: 0,
+        background: on ? "#8DD63F" : "rgba(200,55,55,0.18)",
+        position: "relative", cursor: "pointer",
+        transition: "background 0.22s cubic-bezier(0.34,1.56,0.64,1)",
+        boxShadow: on ? "0 2px 8px rgba(141,214,63,0.35)" : "0 2px 8px rgba(200,55,55,0.15)",
+      }}
+    >
       <div style={{
         position: "absolute", top: 3, left: on ? 24 : 3,
         width: 24, height: 24, borderRadius: "50%", background: "#fff",
@@ -117,21 +111,20 @@ export default function AvailabilityPage() {
   const { goTo, state, setState } = useApp();
   const navigate = useNavigate();
 
-  const [alwaysOn, setAlwaysOn] = useState(true);
+  // ── Pad active / inactive ──────────────────────────────
+  const [padActive, setPadActive] = useState(true);
+  const [resetTomorrow, setResetTomorrow] = useState(false);
 
-  // Custom schedule
-  const [activeDays, setActiveDays] = useState<Set<number>>(new Set([1, 2, 3, 4, 5]));
-  const [schedHours, setSchedHours] = useState<"All day" | "Set hours">("All day");
-  const [fromHour, setFromHour] = useState(7);
-  const [toHour, setToHour] = useState(18);
-
-  // Block off dates
+  // ── Blocked dates (used when pad is active) ───────────
   const [blockedDates, setBlockedDates] = useState<Set<string>>(new Set());
   const [blockHours, setBlockHours] = useState<"All day" | "Certain hours">("All day");
   const [blockFrom, setBlockFrom] = useState(9);
   const [blockTo, setBlockTo] = useState(17);
   const [calOpen, setCalOpen] = useState(false);
-  const [calMonth, setCalMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
+  const [calMonth, setCalMonth] = useState(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
 
   const today = new Date();
   const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
@@ -144,9 +137,6 @@ export default function AvailabilityPage() {
     return `${year}-${String(month+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
   }
   function isPast(day: number) { return dateKey(day) < todayStr; }
-  function toggleDay(i: number) {
-    setActiveDays(prev => { const s = new Set(prev); s.has(i) ? s.delete(i) : s.add(i); return s; });
-  }
   function toggleBlocked(day: number) {
     if (isPast(day)) return;
     const k = dateKey(day);
@@ -160,15 +150,6 @@ export default function AvailabilityPage() {
   const pills = groupDatePills(sortedBlocked);
   const blockedCount = blockedDates.size;
   const availableDays = 365 - blockedCount;
-
-  const activeHours = schedHours === "All day" ? 24 : (toHour > fromHour ? toHour - fromHour : 0);
-  const hoursPerWeek = activeDays.size * activeHours;
-  const sched = scheduleLabel(activeDays);
-  const schedDetail = activeDays.size === 0 ? "No days" :
-    schedHours === "All day"
-      ? `${sched}, all day`
-      : `${sched}, ${fmtShort(fromHour)}–${fmtShort(toHour)}`;
-
   const blockHoursLabel = blockHours === "Certain hours" ? ` · ${fmtShort(blockFrom)}–${fmtShort(blockTo)}` : "";
 
   const selectStyle: React.CSSProperties = {
@@ -188,6 +169,11 @@ export default function AvailabilityPage() {
     </div>
   );
 
+  // Tomorrow at 9am label
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowLabel = tomorrow.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
+
   return (
     <div className="page active">
       <SharedHeader step="Step 4 of 6" title="When is your spot open?" progress={50} label="Profile 50% complete" />
@@ -199,20 +185,149 @@ export default function AvailabilityPage() {
 
         <div style={{ flex: 1, overflowY: "auto", padding: "24px 16px 32px", display: "flex", flexDirection: "column", gap: 0 }}>
 
-          {/* ── Always Available toggle ── */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+          {/* ── Pad active toggle ── */}
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "16px 18px", borderRadius: 16,
+            background: padActive ? "rgba(141,214,63,0.07)" : "rgba(220,60,60,0.06)",
+            border: `1px solid ${padActive ? "rgba(141,214,63,0.22)" : "rgba(220,60,60,0.18)"}`,
+            marginBottom: 20,
+            transition: "background 0.25s, border-color 0.25s",
+          }}>
             <div>
-              <div style={{ fontSize: 17, fontWeight: 700, color: "#0E1F40", letterSpacing: -0.3 }}>Always available</div>
-              <div style={{ fontSize: 12.5, color: "rgba(14,31,64,0.42)", marginTop: 3 }}>Open every day by default</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "#0E1F40", letterSpacing: -0.3, display: "flex", alignItems: "center", gap: 8 }}>
+                {/* Status dot */}
+                <div style={{
+                  width: 8, height: 8, borderRadius: "50%",
+                  background: padActive ? "#8DD63F" : "rgba(220,60,60,0.7)",
+                  boxShadow: padActive ? "0 0 6px rgba(141,214,63,0.6)" : "0 0 6px rgba(220,60,60,0.4)",
+                  flexShrink: 0,
+                }} />
+                {padActive ? "Pad is open" : "Pad is closed"}
+              </div>
+              <div style={{ fontSize: 12.5, color: "rgba(14,31,64,0.42)", marginTop: 3 }}>
+                {padActive ? "Accepting bookings" : "Not accepting bookings"}
+              </div>
             </div>
-            <ToggleSwitch on={alwaysOn} onChange={setAlwaysOn} />
+            <ToggleSwitch on={padActive} onChange={v => { setPadActive(v); if (v) setResetTomorrow(false); }} />
           </div>
 
-          <div style={{ height: 1, background: "rgba(14,31,64,0.07)", marginBottom: 22 }} />
+          {/* ── PAD OFF state ── */}
+          {!padActive && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 24 }}>
 
-          {alwaysOn ? (
-            /* ══ ALWAYS-ON MODE ══ */
+              {/* Warning note */}
+              <div style={{
+                display: "flex", gap: 12, padding: "14px 16px", borderRadius: 14,
+                background: "rgba(255,185,0,0.07)", border: "1px solid rgba(255,185,0,0.22)",
+              }}>
+                <div style={{ flexShrink: 0, width: 20, height: 20, marginTop: 1 }}>
+                  <svg viewBox="0 0 24 24" fill="none" width="20" height="20">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" fill="rgba(255,185,0,0.18)" stroke="#d4900a" strokeWidth="1.5" strokeLinejoin="round"/>
+                    <line x1="12" y1="9" x2="12" y2="13" stroke="#d4900a" strokeWidth="1.75" strokeLinecap="round"/>
+                    <circle cx="12" cy="17" r="0.8" fill="#d4900a"/>
+                  </svg>
+                </div>
+                <div>
+                  <div style={{ fontSize: 13.5, fontWeight: 700, color: "#7a5400", marginBottom: 3 }}>Active bookings won't be affected</div>
+                  <div style={{ fontSize: 12.5, color: "rgba(122,84,0,0.75)", lineHeight: 1.45 }}>
+                    If you have a booking in progress, it will complete normally. Your pad will then close and stop accepting new bookings.
+                  </div>
+                </div>
+              </div>
+
+              {/* Re-open options */}
+              <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(14,31,64,0.38)", letterSpacing: 0.6, textTransform: "uppercase", marginBottom: 2 }}>
+                When should it reopen?
+              </div>
+
+              {/* Option A — reset tomorrow at 9am */}
+              <button
+                onClick={() => setResetTomorrow(v => !v)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 14,
+                  padding: "14px 16px", borderRadius: 14, border: "none", cursor: "pointer",
+                  background: resetTomorrow ? "rgba(141,214,63,0.10)" : "#fff",
+                  outline: resetTomorrow ? "2px solid #8DD63F" : "1.5px solid rgba(14,31,64,0.12)",
+                  outlineOffset: -1,
+                  fontFamily: "'DM Sans', sans-serif",
+                  textAlign: "left", transition: "all 0.18s",
+                  width: "100%",
+                }}
+              >
+                {/* Check circle */}
+                <div style={{
+                  width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
+                  background: resetTomorrow ? "#8DD63F" : "rgba(14,31,64,0.08)",
+                  border: `2px solid ${resetTomorrow ? "#8DD63F" : "rgba(14,31,64,0.15)"}`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  transition: "all 0.18s",
+                }}>
+                  {resetTomorrow && (
+                    <svg width="11" height="9" viewBox="0 0 11 9" fill="none">
+                      <path d="M1 4.5L4 7.5L10 1" stroke="#0E1F40" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  )}
+                </div>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#0E1F40", letterSpacing: -0.2 }}>
+                    Reset to ON at 9am tomorrow
+                  </div>
+                  <div style={{ fontSize: 12, color: "rgba(14,31,64,0.45)", marginTop: 2 }}>
+                    {tomorrowLabel} · Reopens automatically
+                  </div>
+                </div>
+                {resetTomorrow && (
+                  <div style={{ marginLeft: "auto", flexShrink: 0, background: "#8DD63F", borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 700, color: "#0E1F40" }}>
+                    Selected
+                  </div>
+                )}
+              </button>
+
+              {/* Option B — indefinite (always default, shown as a note) */}
+              <div style={{
+                display: "flex", alignItems: "center", gap: 14,
+                padding: "13px 16px", borderRadius: 14,
+                background: !resetTomorrow ? "rgba(14,31,64,0.04)" : "#fff",
+                border: `1.5px solid ${!resetTomorrow ? "rgba(14,31,64,0.18)" : "rgba(14,31,64,0.08)"}`,
+                transition: "all 0.18s",
+              }}>
+                <div style={{
+                  width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
+                  background: !resetTomorrow ? "#0E1F40" : "rgba(14,31,64,0.08)",
+                  border: `2px solid ${!resetTomorrow ? "#0E1F40" : "rgba(14,31,64,0.15)"}`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  transition: "all 0.18s",
+                }}>
+                  {!resetTomorrow && (
+                    <svg width="11" height="9" viewBox="0 0 11 9" fill="none">
+                      <path d="M1 4.5L4 7.5L10 1" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  )}
+                </div>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#0E1F40", letterSpacing: -0.2 }}>
+                    Stay off indefinitely
+                  </div>
+                  <div style={{ fontSize: 12, color: "rgba(14,31,64,0.45)", marginTop: 2 }}>
+                    You'll need to turn it back on manually
+                  </div>
+                </div>
+                {!resetTomorrow && (
+                  <div style={{ marginLeft: "auto", flexShrink: 0, background: "#0E1F40", borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 700, color: "#fff" }}>
+                    Selected
+                  </div>
+                )}
+              </div>
+
+            </div>
+          )}
+
+          {/* ── PAD ON state — blocked dates ── */}
+          {padActive && (
             <>
+              <div style={{ height: 1, background: "rgba(14,31,64,0.07)", marginBottom: 22 }} />
+
               {sectionLabel("Block off dates you need your spot back")}
 
               {/* Tap to open calendar */}
@@ -278,7 +393,7 @@ export default function AvailabilityPage() {
                 </div>
               )}
 
-              {/* ── Block hours ── */}
+              {/* Block hours */}
               {blockedCount > 0 && (
                 <div style={{ background: "#fff", borderRadius: 14, border: "1px solid rgba(14,31,64,0.10)", padding: "14px 14px", marginBottom: 16 }}>
                   {sectionLabel("Block hours")}
@@ -305,52 +420,6 @@ export default function AvailabilityPage() {
                 </div>
               </div>
             </>
-          ) : (
-            /* ══ CUSTOM SCHEDULE MODE ══ */
-            <>
-              {sectionLabel("Available days")}
-              <div style={{ display: "flex", gap: 7, marginBottom: 20 }}>
-                {DOW.map((d, i) => {
-                  const on = activeDays.has(i);
-                  return (
-                    <button key={d} onClick={() => toggleDay(i)} style={{
-                      flex: 1, padding: "12px 0", borderRadius: 12,
-                      background: on ? "#0E1F40" : "#fff",
-                      border: `1px solid ${on ? "#0E1F40" : "rgba(14,31,64,0.14)"}`,
-                      cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
-                      fontSize: 12, fontWeight: 700,
-                      color: on ? "#fff" : "rgba(14,31,64,0.40)",
-                      transition: "all 0.18s", letterSpacing: 0.2,
-                    }}>{d}</button>
-                  );
-                })}
-              </div>
-
-              {/* ── Schedule hours ── */}
-              <div style={{ background: "#fff", borderRadius: 14, border: "1px solid rgba(14,31,64,0.10)", padding: "14px 14px", marginBottom: 20 }}>
-                {sectionLabel("Available hours")}
-                <SegmentedControl
-                  options={["All day", "Set hours"]}
-                  value={schedHours}
-                  onChange={v => setSchedHours(v as "All day" | "Set hours")}
-                />
-                {schedHours === "Set hours" && (
-                  <HourPickers fromHour={fromHour} toHour={toHour} setFrom={setFromHour} setTo={setToHour} selectStyle={selectStyle} />
-                )}
-              </div>
-
-              {/* Stats */}
-              <div style={{ background: "rgba(141,214,63,0.08)", borderRadius: 14, border: "1px solid rgba(141,214,63,0.18)", padding: "14px 16px", marginBottom: 24 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                  <span style={{ fontSize: 13, color: "rgba(14,31,64,0.55)", fontWeight: 500 }}>Schedule</span>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: "#0E1F40" }}>{schedDetail}</span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: 13, color: "rgba(14,31,64,0.55)", fontWeight: 500 }}>Hours/week</span>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: "#0E1F40" }}>{hoursPerWeek} hrs</span>
-                </div>
-              </div>
-            </>
           )}
 
           {/* CTA */}
@@ -370,6 +439,7 @@ export default function AvailabilityPage() {
           }}>
             Looks good →
           </button>
+
         </div>
       </div>
     </div>

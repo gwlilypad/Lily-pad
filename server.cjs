@@ -2439,10 +2439,10 @@ app.post('/api/customer/setup-intent', async (req, res) => {
     }
     const setupIntent = await getStripe().setupIntents.create({
       customer: customerId,
-      payment_method_types: ['card'],
+      payment_method_types: ['card', 'link'],
     });
     console.log(`[Setup] Created setupIntent ${setupIntent.id} for customer ${customerId}`);
-    res.json({ clientSecret: setupIntent.client_secret, publishableKey: getStripePubKey() });
+    res.json({ clientSecret: setupIntent.client_secret, publishableKey: getStripePubKey(), customerEmail: caller.email });
   } catch (e) {
     console.error('[Setup] setup-intent error:', e.message);
     res.status(500).json({ error: e.message });

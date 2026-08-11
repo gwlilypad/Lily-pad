@@ -1106,7 +1106,7 @@ export default function FindPage() {
   const [refundDone, setRefundDone] = useState<string | null>(null);
   const [removingCard, setRemovingCard] = useState(false);
   const [receiptLoading, setReceiptLoading] = useState<string | null>(null);
-  const [addCardSetup, setAddCardSetup] = useState<{ clientSecret: string; publishableKey: string } | null>(null);
+  const [addCardSetup, setAddCardSetup] = useState<{ clientSecret: string; publishableKey: string; email?: string } | null>(null);
   const [addCardLoading, setAddCardLoading] = useState(false);
   const [addCardError, setAddCardError] = useState("");
   const [supportView, setSupportView] = useState<"menu" | "thread">("menu");
@@ -4021,12 +4021,13 @@ export default function FindPage() {
                         <button onClick={() => { setAddCardSetup(null); setAddCardError(""); }} style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.10)", borderRadius: "50%", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "rgba(255,255,255,0.7)", flexShrink: 0 }}>
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M15 18l-6-6 6-6"/></svg>
                         </button>
-                        <span style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>Add Card</span>
+                        <span style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>Add Payment Method</span>
                       </div>
                       {addCardError && <p style={{ fontSize: 12, color: "#fca5a5", margin: 0 }}>{addCardError}</p>}
                       <StripeSetupForm
                         clientSecret={addCardSetup.clientSecret}
                         publishableKey={addCardSetup.publishableKey}
+                        email={addCardSetup.email}
                         onSuccess={async () => {
                           setAddCardSetup(null);
                           setAddCardError("");
@@ -4154,7 +4155,7 @@ export default function FindPage() {
                                   if (!r.ok) throw new Error(d.error || `Server error (${r.status})`);
                                   if (!d.clientSecret) throw new Error("No client secret returned from server.");
                                   if (!d.publishableKey) throw new Error("Stripe publishable key missing on server. Set STRIPE_PUBLISHABLE_KEY in Railway.");
-                                  setAddCardSetup({ clientSecret: d.clientSecret, publishableKey: d.publishableKey });
+                                  setAddCardSetup({ clientSecret: d.clientSecret, publishableKey: d.publishableKey, email: d.customerEmail });
                                 } catch (err: any) {
                                   setAddCardError(err.message || "Something went wrong. Try again.");
                                 } finally { setAddCardLoading(false); }

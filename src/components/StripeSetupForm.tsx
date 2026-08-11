@@ -1,6 +1,12 @@
 import React, { useState } from "react";
 import { loadStripe, Stripe } from "@stripe/stripe-js";
-import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
+import {
+  Elements,
+  PaymentElement,
+  LinkAuthenticationElement,
+  useStripe,
+  useElements,
+} from "@stripe/react-stripe-js";
 
 const NAVY = "#0E1F40";
 const GREEN = "#8DD63F";
@@ -15,27 +21,13 @@ export function getStripePromise(publishableKey: string) {
   return stripePromiseCache;
 }
 
-const CARD_STYLE = {
-  style: {
-    base: {
-      color: "#ffffff",
-      fontFamily: "'DM Sans', sans-serif",
-      fontSize: "15px",
-      fontSmoothing: "antialiased",
-      "::placeholder": { color: "rgba(255,255,255,0.35)" },
-      iconColor: "rgba(255,255,255,0.55)",
-    },
-    invalid: { color: "#ff6060", iconColor: "#ff6060" },
-  },
-};
-
 function SetupForm({
-  clientSecret,
+  email,
   onSuccess,
   onError,
   onCancel,
 }: {
-  clientSecret: string;
+  email?: string;
   onSuccess: () => void;
   onError: (msg: string) => void;
   onCancel: () => void;
@@ -49,58 +41,42 @@ function SetupForm({
     e.preventDefault();
     setError("");
 
-    if (!stripe) {
+    if (!stripe || !elements) {
       setError("Payment system still loading — please wait a moment and try again.");
       return;
     }
-    if (!elements) {
-      setError("Card form not ready. Please refresh and try again.");
-      return;
-    }
-    const card = elements.getElement(CardElement);
-    if (!card) {
-      setError("Card input not found. Please refresh and try again.");
-      return;
-    }
     if (submitting) return;
-
     setSubmitting(true);
 
-    const { error: confirmError, setupIntent } = await stripe.confirmCardSetup(
-      clientSecret,
-      { payment_method: { card } }
-    );
+    const { error: confirmError } = await stripe.confirmSetup({
+      elements,
+      redirect: "if_required",
+    });
 
     if (confirmError) {
-      const msg = confirmError.message || "Could not save card. Please try again.";
+      const msg = confirmError.message || "Could not save payment method. Please try again.";
       setError(msg);
       onError(msg);
       setSubmitting(false);
       return;
     }
 
-    if (setupIntent?.status === "succeeded") {
-      onSuccess();
-    } else {
-      const msg = `Setup did not complete (status: ${setupIntent?.status ?? "unknown"}). Please try again.`;
-      setError(msg);
-      onError(msg);
-      setSubmitting(false);
-    }
+    onSuccess();
   };
 
   return (
     <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      {/* Card input */}
-      <div style={{
-        padding: "14px 16px",
-        borderRadius: 12,
-        background: "rgba(255,255,255,0.07)",
-        border: "1px solid rgba(255,255,255,0.15)",
-        minHeight: 46,
-      }}>
-        <CardElement options={CARD_STYLE} />
-      </div>
+      {/* Link authentication — pre-fills email for Stripe Link sign-in */}
+      <LinkAuthenticationElement
+        options={email ? { defaultValues: { email } } : undefined}
+      />
+
+      {/* Payment Element — shows Link sign-in + card fallback */}
+      <PaymentElement
+        options={{
+          layout: "tabs",
+        }}
+      />
 
       {error && (
         <div style={{
@@ -113,7 +89,6 @@ function SetupForm({
         </div>
       )}
 
-      {/* Show loading state while Stripe JS initialises */}
       {!stripe ? (
         <div style={{ textAlign: "center", padding: "10px 0", fontSize: 13, color: "rgba(255,255,255,0.45)" }}>
           Loading payment form…
@@ -129,7 +104,7 @@ function SetupForm({
             cursor: submitting ? "not-allowed" : "pointer",
           }}
         >
-          {submitting ? "Saving…" : "Save Card"}
+          {submitting ? "Saving…" : "Save Payment Method"}
         </button>
       )}
 
@@ -151,12 +126,14 @@ function SetupForm({
 export default function StripeSetupForm({
   clientSecret,
   publishableKey,
+  email,
   onSuccess,
   onError,
   onCancel,
 }: {
   clientSecret: string;
   publishableKey: string;
+  email?: string;
   onSuccess: () => void;
   onError: (msg: string) => void;
   onCancel: () => void;
@@ -166,6 +143,7 @@ export default function StripeSetupForm({
     <Elements
       stripe={stripePromise}
       options={{
+        clientSecret,
         appearance: {
           theme: "night",
           variables: {
@@ -181,7 +159,7 @@ export default function StripeSetupForm({
       }}
     >
       <SetupForm
-        clientSecret={clientSecret}
+        email={email}
         onSuccess={onSuccess}
         onError={onError}
         onCancel={onCancel}

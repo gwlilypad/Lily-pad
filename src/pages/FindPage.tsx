@@ -4162,7 +4162,7 @@ export default function FindPage() {
                               }}
                               style={{ background: "#8DD63F", color: "#0E1F40", border: "none", borderRadius: 100, padding: "10px 24px", fontSize: 13, fontWeight: 700, cursor: addCardLoading ? "not-allowed" : "pointer", fontFamily: '"DM Sans", sans-serif', opacity: addCardLoading ? 0.6 : 1 }}
                             >
-                              {addCardLoading ? "Setting up…" : "+ Add Card"}
+                              {addCardLoading ? "Setting up…" : "+ Add Payment Method"}
                             </button>
                             {addCardError && (
                               <div style={{ background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.30)", borderRadius: 10, padding: "10px 14px", width: "100%", boxSizing: "border-box" }}>

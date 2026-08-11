@@ -556,7 +556,7 @@ app.get('/api/health', (req, res) => {
     process.env.STRIPE_SECRET         ? 'STRIPE_SECRET'         :
     process.env.STRIPE_API_KEY        ? 'STRIPE_API_KEY'        : null;
   const stripePubSource =
-    process.env.getStripePubKey()    ? 'STRIPE_PUBLISHABLE_KEY'    :
+    process.env.STRIPE_PUBLISHABLE_KEY    ? 'STRIPE_PUBLISHABLE_KEY'    :
     process.env.STRIPE_PUBLIC_KEY         ? 'STRIPE_PUBLIC_KEY'         :
     process.env.VITE_STRIPE_PUBLISHABLE_KEY ? 'VITE_STRIPE_PUBLISHABLE_KEY' :
     process.env.VITE_STRIPE_PUBLIC_KEY    ? 'VITE_STRIPE_PUBLIC_KEY'    : null;

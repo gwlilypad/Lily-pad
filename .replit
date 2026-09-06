@@ -37,7 +37,7 @@ externalPort = 80
 
 [userenv.shared]
 ADMIN_EMAILS = "gavin@lilypadparking.com"
-SITE_URL = "https://lily-pad-production.up.railway.app"
+SITE_URL = "https://www.lilypadparking.com"
 EARLY_ACCESS = "true"
 
 [postMerge]

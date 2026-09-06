@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { authenticatedHeaders } from "@/lib/apiAuth";
 
 const NAVY = "#0E1F40";
 const GREEN = "#8DD63F";
@@ -42,7 +43,7 @@ export default function BookingChatDrawer({ bookingId, bookingAddr, myUserId, my
 
   const fetchMessages = useCallback(async (silent = false) => {
     try {
-      const r = await fetch(`/api/booking-chat/${bookingId}`);
+      const r = await fetch(`/api/booking-chat/${bookingId}`, { headers: await authenticatedHeaders() });
       if (!r.ok) return;
       const data = await r.json();
       if (Array.isArray(data)) setMessages(data);
@@ -67,7 +68,7 @@ export default function BookingChatDrawer({ bookingId, bookingAddr, myUserId, my
     try {
       const r = await fetch(`/api/booking-chat/${bookingId}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await authenticatedHeaders("application/json"),
         body: JSON.stringify({ sender_id: myUserId, sender_role: myRole, message: text }),
       });
       if (!r.ok) { setSendErr("Failed to send. Try again."); return; }

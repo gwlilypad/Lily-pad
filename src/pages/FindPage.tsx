@@ -1061,6 +1061,8 @@ export default function FindPage() {
   } | null>(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [paymentSetupError, setPaymentSetupError] = useState("");
+  const [acceptedCancellation, setAcceptedCancellation] = useState(false);
+  const [acceptedPaymentAuthorization, setAcceptedPaymentAuthorization] = useState(false);
   const [nearbyMode, setNearbyMode] = useState(false);
   const [mapSearchOrigin, setMapSearchOrigin] = useState<[number, number] | null>(null);
   const [showHotspots, setShowHotspots] = useState(false);
@@ -1160,7 +1162,9 @@ export default function FindPage() {
   // Fetch lister bookings for earnings chart when host mode is active
   useEffect(() => {
     if (drawerMode !== "lister" || !user) { setHostBookings([]); return; }
-    fetch(`/api/bookings/lister/${user.id}`)
+    supabase.auth.getSession().then(({ data }) => fetch(`/api/bookings/lister/${user.id}`, {
+      headers: data.session?.access_token ? { Authorization: `Bearer ${data.session.access_token}` } : {},
+    }))
       .then(r => r.json())
       .then(data => {
         if (Array.isArray(data)) {
@@ -3288,6 +3292,8 @@ export default function FindPage() {
                       if (!cfgRes.ok || !cfg.publishableKey) throw new Error(cfg.error || "Payments are not set up yet.");
                       if (!piRes.ok || !pi.clientSecret) throw new Error(pi.error || "Could not start payment.");
 
+                       setAcceptedCancellation(false);
+                       setAcceptedPaymentAuthorization(false);
                       setPaymentStep({
                         clientSecret: pi.clientSecret,
                         publishableKey: cfg.publishableKey,
@@ -3349,7 +3355,17 @@ export default function FindPage() {
                   <span>${paymentStep.amount.toFixed(2)}</span>
                 </div>
               </div>
-              <StripePaymentForm
+              <div style={{ color: "rgba(255,255,255,0.78)", fontSize: 12, lineHeight: 1.45, marginBottom: 16 }}>
+                <label style={{ display: "flex", alignItems: "flex-start", gap: 8, cursor: "pointer", marginBottom: 10 }}>
+                  <input type="checkbox" checked={acceptedCancellation} onChange={e => setAcceptedCancellation(e.target.checked)} style={{ marginTop: 2 }} />
+                  <span>I have read and agree to the <a href="/cancellation-policy" style={{ color: "#8DD63F" }}>Cancellation Policy</a>.</span>
+                </label>
+                <label style={{ display: "flex", alignItems: "flex-start", gap: 8, cursor: "pointer" }}>
+                  <input type="checkbox" checked={acceptedPaymentAuthorization} onChange={e => setAcceptedPaymentAuthorization(e.target.checked)} style={{ marginTop: 2 }} />
+                  <span>I authorize Lily Pad and its payment processor to charge the total shown for this booking.</span>
+                </label>
+              </div>
+              {acceptedCancellation && acceptedPaymentAuthorization ? <StripePaymentForm
                 clientSecret={paymentStep.clientSecret}
                 publishableKey={paymentStep.publishableKey}
                 amount={paymentStep.amount}
@@ -3406,7 +3422,11 @@ export default function FindPage() {
                   setPaymentStep(null);
                   setBookingConf({ addr: ps.addr, padType: ps.padType, startTs: ps.startTs, endTs: ps.endTs, totalPrice: ps.amount, confNum });
                 }}
-              />
+              /> : (
+                <div role="alert" style={{ border: "1px solid rgba(141,214,63,0.35)", color: "rgba(255,255,255,0.75)", borderRadius: 12, padding: "12px 14px", fontSize: 12, textAlign: "center" }}>
+                  Accept both acknowledgements to enter payment details and complete your booking.
+                </div>
+              )}
             </div>
           </div>
         );

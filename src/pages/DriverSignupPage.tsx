@@ -227,7 +227,18 @@ export default function DriverSignupPage() {
                 <button className="cta-btn" disabled={!acceptedTerms || !acceptedPrivacy} style={{ background: "#8DD63F", color: "#0E1F40", boxShadow: "0 2px 12px rgba(141,214,63,0.3)", ...(!acceptedTerms || !acceptedPrivacy ? { opacity: 0.45, cursor: "not-allowed" } : {}) }} onClick={async () => {
                   setLocked(true);
                   setSignupError("");
-                  const result = await signUp(ans[2] || "", ans[5] || "", `${ans[0] || ""} ${ans[1] || ""}`.trim(), "driver");
+                  if (!acceptedTerms || !acceptedPrivacy) {
+                    setSignupError("You must accept the Terms and Privacy Policy to continue.");
+                    setLocked(false);
+                    return;
+                  }
+                  const result = await signUp(
+                    ans[2] || "",
+                    ans[5] || "",
+                    `${ans[0] || ""} ${ans[1] || ""}`.trim(),
+                    "driver",
+                    { terms: acceptedTerms, privacy: acceptedPrivacy },
+                  );
                   if (result.error) { setSignupError(result.error); setLocked(false); return; }
                   if (result.confirmEmail) { setCheckEmail(true); return; }
                   goTo("find");

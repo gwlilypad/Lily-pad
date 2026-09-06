@@ -146,6 +146,8 @@ ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS status     TEXT    DEFAULT 
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS spend_total NUMERIC DEFAULT 0;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS phone      TEXT    DEFAULT '';
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS role       TEXT    DEFAULT 'driver';
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT;
+ALTER TABLE public.spots ADD COLUMN IF NOT EXISTS availability JSONB NOT NULL DEFAULT '{}'::jsonb;
 
 CREATE TABLE IF NOT EXISTS public.spots (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -156,6 +158,7 @@ CREATE TABLE IF NOT EXISTS public.spots (
   num_pads      INTEGER DEFAULT 1,
   price_per_hr  NUMERIC NOT NULL DEFAULT 4,
   description   TEXT DEFAULT '',
+  availability  JSONB NOT NULL DEFAULT '{}'::jsonb,
   lat           DOUBLE PRECISION DEFAULT 29.7604,
   lng           DOUBLE PRECISION DEFAULT -95.3698,
   featured      BOOLEAN DEFAULT FALSE,
@@ -194,6 +197,34 @@ CREATE TABLE IF NOT EXISTS public.bookings (
   status        TEXT DEFAULT 'pending',
   created_at    TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Prevent two actionable reservations from occupying one spot at the same time.
+-- The trigger keeps these indexed columns in sync with legacy booking_data JSON.
+CREATE EXTENSION IF NOT EXISTS btree_gist;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS booking_start_at TIMESTAMPTZ;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS booking_end_at TIMESTAMPTZ;
+CREATE OR REPLACE FUNCTION public.sync_booking_time_range()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+  NEW.booking_start_at := NULLIF(NEW.booking_data->>'start_ts', '')::timestamptz;
+  NEW.booking_end_at := NULLIF(NEW.booking_data->>'end_ts', '')::timestamptz;
+  RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS bookings_sync_time_range ON public.bookings;
+CREATE TRIGGER bookings_sync_time_range BEFORE INSERT OR UPDATE OF booking_data
+  ON public.bookings FOR EACH ROW EXECUTE FUNCTION public.sync_booking_time_range();
+UPDATE public.bookings SET booking_data = booking_data
+ WHERE booking_start_at IS NULL AND booking_data ? 'start_ts';
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'bookings_no_actionable_overlap') THEN
+    ALTER TABLE public.bookings ADD CONSTRAINT bookings_no_actionable_overlap
+      EXCLUDE USING gist (
+        spot_id WITH =,
+        tstzrange(booking_start_at, booking_end_at, '[)') WITH &&
+      ) WHERE (status IN ('pending', 'confirmed', 'approved')
+               AND booking_start_at IS NOT NULL AND booking_end_at IS NOT NULL);
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS public.booking_messages (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -366,6 +397,8 @@ async function checkDB() {
       // Always run safe column additions (idempotent), then reload PostgREST schema cache
       await runSQL(`ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS stripe_connect_account_id TEXT DEFAULT '';`).catch(()=>{});
       await runSQL(`ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS stripe_connect_status TEXT DEFAULT 'not_started';`).catch(()=>{});
+      await runSQL(`ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT;`).catch(()=>{});
+      await runSQL(`ALTER TABLE public.spots ADD COLUMN IF NOT EXISTS availability JSONB NOT NULL DEFAULT '{}'::jsonb;`).catch(()=>{});
       // Add a dedicated column for the Stripe PaymentIntent ID on bookings with a UNIQUE constraint
       // to prevent replay attacks (same PI used to create multiple confirmed bookings).
       await runSQL(`ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS stripe_payment_intent_id TEXT;`).catch(()=>{});
@@ -379,6 +412,28 @@ async function checkDB() {
             ALTER TABLE public.bookings
               ADD CONSTRAINT bookings_stripe_payment_intent_id_unique
               UNIQUE (stripe_payment_intent_id);
+          END IF;
+        END $$;
+      `).catch(()=>{});
+      await runSQL(`
+        CREATE EXTENSION IF NOT EXISTS btree_gist;
+        ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS booking_start_at TIMESTAMPTZ;
+        ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS booking_end_at TIMESTAMPTZ;
+        CREATE OR REPLACE FUNCTION public.sync_booking_time_range() RETURNS TRIGGER LANGUAGE plpgsql AS $$
+        BEGIN
+          NEW.booking_start_at := NULLIF(NEW.booking_data->>'start_ts', '')::timestamptz;
+          NEW.booking_end_at := NULLIF(NEW.booking_data->>'end_ts', '')::timestamptz;
+          RETURN NEW;
+        END $$;
+        DROP TRIGGER IF EXISTS bookings_sync_time_range ON public.bookings;
+        CREATE TRIGGER bookings_sync_time_range BEFORE INSERT OR UPDATE OF booking_data ON public.bookings
+          FOR EACH ROW EXECUTE FUNCTION public.sync_booking_time_range();
+        UPDATE public.bookings SET booking_data=booking_data WHERE booking_start_at IS NULL AND booking_data ? 'start_ts';
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='bookings_no_actionable_overlap') THEN
+            ALTER TABLE public.bookings ADD CONSTRAINT bookings_no_actionable_overlap
+            EXCLUDE USING gist (spot_id WITH =, tstzrange(booking_start_at,booking_end_at,'[)') WITH &&)
+            WHERE (status IN ('pending','confirmed','approved') AND booking_start_at IS NOT NULL AND booking_end_at IS NOT NULL);
           END IF;
         END $$;
       `).catch(()=>{});
@@ -475,6 +530,82 @@ CREATE TABLE IF NOT EXISTS public.early_access_signups (
   }
 }
 
+// Stripe signatures are calculated over the exact bytes received.  This route
+// must be registered before express.json(), which would otherwise consume and
+// alter the body.
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  const stripe = getStripe();
+  const secret = process.env.STRIPE_WEBHOOK_SECRET;
+  if (!stripe || !secret) return res.status(503).json({ error: 'Stripe webhook is not configured' });
+  const signature = req.headers['stripe-signature'];
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(req.body, signature, secret);
+  } catch (err) {
+    return res.status(400).json({ error: `Webhook signature verification failed: ${err.message}` });
+  }
+  try {
+    if (event.type === 'account.updated') {
+      const account = event.data.object;
+      const status = account.charges_enabled && account.payouts_enabled ? 'active' : 'pending';
+      await fetch(`${SUPABASE_URL}/rest/v1/profiles?stripe_connect_account_id=eq.${encodeURIComponent(account.id)}`, {
+        method: 'PATCH', headers: { ...SVC_HEADERS, 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ stripe_connect_status: status }),
+      });
+    }
+    if (event.type === 'payment_intent.payment_failed') {
+      const pi = event.data.object;
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/bookings?stripe_payment_intent_id=eq.${encodeURIComponent(pi.id)}&select=id,booking_data`, { headers: SVC_HEADERS });
+      const rows = await r.json();
+      await Promise.all((Array.isArray(rows) ? rows : []).map(b => fetch(`${SUPABASE_URL}/rest/v1/bookings?id=eq.${b.id}`, {
+        method: 'PATCH', headers: SVC_HEADERS,
+        body: JSON.stringify({ status: 'payment_failed', booking_data: { ...(b.booking_data || {}), payment_status: 'failed' } }),
+      })));
+    }
+    if (event.type === 'payment_intent.succeeded') {
+      const pi = event.data.object;
+      const existingR = await fetch(`${SUPABASE_URL}/rest/v1/bookings?stripe_payment_intent_id=eq.${encodeURIComponent(pi.id)}&select=id`, { headers: SVC_HEADERS });
+      const existing = await existingR.json();
+      // A client can disconnect after paying. Recover the reservation solely
+      // from server-created PI metadata; refund if recovery cannot be persisted.
+      if (!Array.isArray(existing) || !existing.length) {
+        const m = pi.metadata || {};
+        const valid = m.user_id && m.spot_id && m.start_ts && m.end_ts &&
+          Number.isFinite(new Date(m.start_ts).getTime()) && Number.isFinite(new Date(m.end_ts).getTime()) &&
+          new Date(m.end_ts) > new Date(m.start_ts);
+        let saved = false;
+        if (valid) {
+          const insert = await fetch(`${SUPABASE_URL}/rest/v1/bookings`, {
+            method: 'POST', headers: { ...SVC_HEADERS, 'Prefer': 'return=representation' },
+            body: JSON.stringify({
+              user_id: m.user_id, spot_id: String(m.spot_id), status: 'confirmed', stripe_payment_intent_id: pi.id,
+              booking_data: { spot_id: m.spot_id, start_ts: m.start_ts, end_ts: m.end_ts,
+                total_price: pi.amount / 100, stripe_payment_intent_id: pi.id,
+                platform_fee: (pi.application_fee_amount || 0) / 100,
+                connect_account_id: m.connect_account_id || '', payment_status: 'succeeded', recovered_by_webhook: true },
+            }),
+          });
+          saved = insert.ok;
+          if (!saved) {
+            // Another delivery/request may have won the unique PI insert race.
+            const retryRead = await fetch(`${SUPABASE_URL}/rest/v1/bookings?stripe_payment_intent_id=eq.${encodeURIComponent(pi.id)}&select=id&limit=1`, { headers: SVC_HEADERS });
+            const retryRows = await retryRead.json().catch(() => []);
+            saved = Array.isArray(retryRows) && retryRows.length > 0;
+          }
+        }
+        if (!saved) {
+          await stripe.refunds.create({ payment_intent: pi.id }, { idempotencyKey: `booking-recovery-refund-${pi.id}` });
+        }
+      }
+    }
+    res.json({ received: true });
+  } catch (err) {
+    // Return 500 so Stripe retries a transient DB/API failure.
+    console.error('[Stripe webhook]', err.message);
+    res.status(500).json({ error: 'Webhook processing failed' });
+  }
+});
+
 app.use(express.json());
 
 // ── SQL setup page ─────────────────────────────────────────────────────────────
@@ -568,7 +699,7 @@ app.get('/api/health', (req, res) => {
     svc_role: svcRole,
     supabase_url: SUPABASE_URL,
     stripe: {
-      initialised: !!stripe,
+       initialised: !!getStripe(),
       secret_key_source: stripeSecretSource || 'NOT FOUND — check Railway variable names',
       secret_key_prefix: STRIPE_SECRET_KEY ? STRIPE_SECRET_KEY.slice(0, 8) + '…' : null,
       publishable_key_source: stripePubSource || 'NOT FOUND',
@@ -1479,6 +1610,8 @@ app.post('/api/staff/signin', async (req, res) => {
 app.post('/api/profile', async (req, res) => {
   const { id, email, full_name, account_type } = req.body || {};
   if (!id) return res.status(400).json({ error: 'id required' });
+  const caller = await verifyBearerToken(req);
+  if (!caller || caller.id !== id) return res.status(401).json({ error: 'Authentication required' });
   try {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/profiles`, {
       method : 'POST',
@@ -1497,6 +1630,8 @@ app.post('/api/profile', async (req, res) => {
 
 // ── Profile: fetch by id ───────────────────────────────────────────────────────
 app.get('/api/profile/:id', async (req, res) => {
+  const caller = await verifyBearerToken(req);
+  if (!caller || (caller.id !== req.params.id && !await verifyAdminBearerToken(req))) return res.status(403).json({ error: 'Forbidden' });
   try {
     const r = await fetch(
       `${SUPABASE_URL}/rest/v1/profiles?id=eq.${req.params.id}&select=*`,
@@ -1510,7 +1645,11 @@ app.get('/api/profile/:id', async (req, res) => {
 
 // ── Profile: update fields ─────────────────────────────────────────────────────
 app.patch('/api/profile/:id', async (req, res) => {
-  const fields = { ...req.body, updated_at: new Date().toISOString() };
+  const caller = await verifyBearerToken(req);
+  const admin = caller && await verifyAdminBearerToken(req);
+  if (!caller || (caller.id !== req.params.id && !admin)) return res.status(403).json({ error: 'Forbidden' });
+  const allowed = admin ? req.body : (({ full_name, phone, avatar_url, account_type }) => ({ full_name, phone, avatar_url, account_type }))(req.body || {});
+  const fields = { ...allowed, updated_at: new Date().toISOString() };
   try {
     const r = await fetch(
       `${SUPABASE_URL}/rest/v1/profiles?id=eq.${req.params.id}`,
@@ -1562,7 +1701,9 @@ app.get('/api/spots', async (req, res) => {
 
 // ── Photo upload — server proxies to Supabase Storage with service role key ───
 app.post('/api/upload-photo', express.raw({ type: 'image/*', limit: '10mb' }), async (req, res) => {
-  const userId = req.headers['x-user-id'] || 'anon';
+  const caller = await verifyBearerToken(req);
+  if (!caller) return res.status(401).json({ error: 'Authentication required' });
+  const userId = caller.id;
   const mimeType = req.headers['content-type'] || 'image/jpeg';
   const ext = mimeType.includes('png') ? 'png' : 'jpg';
   const path = `${userId}/${Date.now()}.${ext}`;
@@ -1687,8 +1828,12 @@ app.get('/api/spots/check-name', async (req, res) => {
 
 // ── Spots: create a new pad listing ───────────────────────────────────────────
 app.post('/api/spots', async (req, res) => {
-  const { host_user_id, address, pad_type, surface, num_pads, price_per_hr, description, photo_url, photo_urls, spot_name: rawSpotName } = req.body || {};
+  const { host_user_id, address, pad_type, surface, num_pads, price_per_hr, description, photo_url, photo_urls, availability, spot_name: rawSpotName } = req.body || {};
   if (!host_user_id || !address) return res.status(400).json({ error: 'host_user_id and address required' });
+  const caller = await verifyBearerToken(req);
+  if (!caller || caller.id !== host_user_id) return res.status(403).json({ error: 'Forbidden' });
+  if (typeof address !== 'string' || !address.trim() || !Number.isFinite(Number(price_per_hr)) || Number(price_per_hr) <= 0 ||
+      !Number.isInteger(Number(num_pads || 1)) || Number(num_pads || 1) < 1) return res.status(400).json({ error: 'Invalid listing data' });
 
   // Use pre-validated lat/lng from client if provided, otherwise geocode with Google Maps
   let lat = parseFloat(req.body.lat) || 0;
@@ -1727,6 +1872,7 @@ app.post('/api/spots', async (req, res) => {
         num_pads: parseInt(num_pads) || 1,
         price_per_hr: parseFloat(price_per_hr) || 4,
         description: descPayload,
+        availability: availability && typeof availability === 'object' && !Array.isArray(availability) ? availability : {},
         lat, lng,
         status: 'pending',
       }),
@@ -1751,6 +1897,9 @@ app.post('/api/spots', async (req, res) => {
 app.patch('/api/spots/:id', async (req, res) => {
   const { id } = req.params;
   const body = req.body || {};
+  const access = await callerOwnsSpotOrIsAdmin(req, id);
+  if (!access.caller) return res.status(401).json({ error: 'Authentication required' });
+  if (!access.allowed) return res.status(403).json({ error: 'Forbidden' });
 
   // First fetch the current row so we can merge photo_url into description JSON
   try {
@@ -1814,6 +1963,8 @@ app.patch('/api/spots/:id', async (req, res) => {
 // ── Spots: host's own listings (any status) ───────────────────────────────────
 app.get('/api/spots/user/:userId', async (req, res) => {
   const { userId } = req.params;
+  const caller = await verifyBearerToken(req);
+  if (!caller || (caller.id !== userId && !await verifyAdminBearerToken(req))) return res.status(403).json({ error: 'Forbidden' });
   try {
     const r = await fetch(
       `${SUPABASE_URL}/rest/v1/spots?host_user_id=eq.${userId}&select=*&order=created_at.desc`,
@@ -1843,6 +1994,7 @@ app.get('/api/spots/user/:userId', async (req, res) => {
 
 // ── Spots: all pending — admin approval queue ──────────────────────────────────
 app.get('/api/spots/pending', async (req, res) => {
+  if (!await verifyAdminBearerToken(req)) return res.status(403).json({ error: 'Admin authentication required' });
   try {
     const r = await fetch(
       `${SUPABASE_URL}/rest/v1/spots?status=eq.pending&select=*,host:profiles!host_user_id(full_name,email)&order=created_at.desc`,
@@ -1872,6 +2024,7 @@ app.get('/api/spots/pending', async (req, res) => {
 // ── Spots: admin approve — set active + email host ────────────────────────────
 app.post('/api/spots/:id/approve', async (req, res) => {
   const { id } = req.params;
+  if (!await verifyAdminBearerToken(req)) return res.status(403).json({ error: 'Admin authentication required' });
   const RESEND_KEY = process.env.RESEND_API_KEY || '';
   try {
     // 1. Activate the spot
@@ -1945,6 +2098,7 @@ app.post('/api/spots/:id/approve', async (req, res) => {
 // ── Spots: admin reject — mark rejected ───────────────────────────────────────
 app.post('/api/spots/:id/reject', async (req, res) => {
   const { id } = req.params;
+  if (!await verifyAdminBearerToken(req)) return res.status(403).json({ error: 'Admin authentication required' });
   try {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/spots?id=eq.${id}`, {
       method: 'PATCH',
@@ -1991,6 +2145,40 @@ async function verifyAdminBearerToken(req) {
     if (rows[0].status === 'suspended') return null;
     return rows[0].role || 'staff'; // 'admin' | 'staff'
   } catch { return null; }
+}
+
+async function getOrCreateStripeCustomer(caller) {
+  const profileRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${caller.id}&select=stripe_customer_id,email`, { headers: SVC_HEADERS });
+  const profiles = await profileRes.json();
+  const profile = Array.isArray(profiles) ? profiles[0] : null;
+  if (profile?.stripe_customer_id) return profile.stripe_customer_id;
+  const stripe = getStripe();
+  if (!stripe) throw new Error('Stripe is not configured.');
+  const customer = await stripe.customers.create(
+    { email: caller.email || profile?.email || undefined, metadata: { user_id: caller.id } },
+    { idempotencyKey: `stripe-customer-${caller.id}` }
+  );
+  const patch = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${caller.id}&stripe_customer_id=is.null`, {
+    method: 'PATCH', headers: { ...SVC_HEADERS, 'Prefer': 'return=representation' },
+    body: JSON.stringify({ stripe_customer_id: customer.id }),
+  });
+  const rows = await patch.json().catch(() => []);
+  // A concurrent request may have written a customer; use that one rather than
+  // silently replacing it.
+  if (Array.isArray(rows) && rows[0]?.stripe_customer_id) return rows[0].stripe_customer_id;
+  const reread = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${caller.id}&select=stripe_customer_id`, { headers: SVC_HEADERS });
+  const finalRows = await reread.json().catch(() => []);
+  return finalRows?.[0]?.stripe_customer_id || customer.id;
+}
+
+async function callerOwnsSpotOrIsAdmin(req, spotId) {
+  const caller = await verifyBearerToken(req);
+  if (!caller) return { caller: null, allowed: false };
+  const admin = await verifyAdminBearerToken(req);
+  if (admin) return { caller, allowed: true };
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/spots?id=eq.${encodeURIComponent(spotId)}&select=host_user_id`, { headers: SVC_HEADERS });
+  const rows = await r.json().catch(() => []);
+  return { caller, allowed: rows?.[0]?.host_user_id === caller.id };
 }
 
 // ── Stripe: expose publishable key to the client (avoids needing a VITE_-prefixed
@@ -2070,7 +2258,7 @@ app.get('/api/connect/status/:userId', async (req, res) => {
 
     const accountId = prof.stripe_connect_account_id;
     // Ask Stripe whether the account can accept charges
-    if (stripe) {
+    if (getStripe()) {
       try {
         const account = await getStripe().accounts.retrieve(accountId);
         const isActive = account.charges_enabled;
@@ -2224,8 +2412,8 @@ app.post('/api/refunds/request', async (req, res) => {
       ...bd,
       refund_status: 'requested',
       refund_requested_at: new Date().toISOString(),
-      refund_requester_id: requesterId || null,
-      refund_requester_type: requesterType || 'driver',
+      refund_requester_id: caller.id,
+      refund_requester_type: isHost ? 'host' : 'driver',
       refund_reason: reason || '',
     };
     const pRes = await fetch(`${SUPABASE_URL}/rest/v1/bookings?id=eq.${bookingId}`, {
@@ -2282,7 +2470,8 @@ app.post('/api/refunds/approve/:bookingId', async (req, res) => {
     const paymentIntentId = bd.stripe_payment_intent_id;
     if (!paymentIntentId) return res.status(400).json({ error: 'No payment intent on this booking' });
 
-    const refund = await getStripe().refunds.create({ payment_intent: paymentIntentId });
+    const refund = await getStripe().refunds.create({ payment_intent: paymentIntentId },
+      { idempotencyKey: `admin-refund-${bookingId}` });
     const updated = {
       ...bd,
       refund_status: 'approved',
@@ -2420,27 +2609,11 @@ app.post('/api/customer/setup-intent', async (req, res) => {
   const caller = await verifyBearerToken(req);
   if (!caller) return res.status(401).json({ error: 'Authentication required' });
   try {
-    // Find or create a Stripe Customer for this user
-    const CUSTOMERS_FILE = '/tmp/stripe_customers.json';
-    let customers = {};
-    try { customers = JSON.parse(require('fs').readFileSync(CUSTOMERS_FILE, 'utf8')); } catch {}
-    let customerId = customers[caller.id];
-    if (!customerId) {
-      // Check if a customer already exists with this email
-      const existing = await getStripe().customers.list({ email: caller.email, limit: 1 });
-      if (existing.data.length > 0) {
-        customerId = existing.data[0].id;
-      } else {
-        const customer = await getStripe().customers.create({ email: caller.email, metadata: { userId: caller.id } });
-        customerId = customer.id;
-      }
-      customers[caller.id] = customerId;
-      try { require('fs').writeFileSync(CUSTOMERS_FILE, JSON.stringify(customers)); } catch {}
-    }
+    const customerId = await getOrCreateStripeCustomer(caller);
     const setupIntent = await getStripe().setupIntents.create({
       customer: customerId,
       payment_method_types: ['card', 'link'],
-    });
+    }, { idempotencyKey: `setup-intent-${caller.id}-${Math.floor(Date.now() / 60000)}` });
     console.log(`[Setup] Created setupIntent ${setupIntent.id} for customer ${customerId}`);
     res.json({ clientSecret: setupIntent.client_secret, publishableKey: getStripePubKey(), customerEmail: caller.email });
   } catch (e) {
@@ -2512,13 +2685,13 @@ app.post('/api/create-payment-intent', async (req, res) => {
 
   try {
     // Fetch spot info and host's connect account in parallel
-    const [spotRes, hostConnectRes] = await Promise.all([
-      fetch(`${SUPABASE_URL}/rest/v1/spots?id=eq.${spot_id}&select=price_per_hr,address,host_user_id`, { headers: SVC_HEADERS }),
-      fetch(`${SUPABASE_URL}/rest/v1/spots?id=eq.${spot_id}&select=host_user_id`, { headers: SVC_HEADERS }),
+    const [spotRes] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/spots?id=eq.${spot_id}&select=price_per_hr,address,host_user_id,status`, { headers: SVC_HEADERS }),
     ]);
     const spotRows = await spotRes.json();
     const spot     = Array.isArray(spotRows) ? spotRows[0] : null;
     if (!spot) return res.status(404).json({ error: 'Spot not found' });
+    if (spot.status && spot.status !== 'active') return res.status(409).json({ error: 'Spot is not available for booking' });
 
     // Look up host's Stripe Connect account
     let hostConnectAccountId = null;
@@ -2554,6 +2727,7 @@ app.post('/api/create-payment-intent', async (req, res) => {
         connect_account_id: hostConnectAccountId || '',
       },
     };
+    piParams.customer = await getOrCreateStripeCustomer(caller);
 
     // If host has a connected account, route payment through Connect
     if (hostConnectAccountId) {
@@ -2561,7 +2735,13 @@ app.post('/api/create-payment-intent', async (req, res) => {
       piParams.transfer_data = { destination: hostConnectAccountId };
     }
 
-    const paymentIntent = await getStripe().paymentIntents.create(piParams);
+    const start = new Date(start_ts).toISOString();
+    const end = new Date(end_ts).toISOString();
+    const paymentIntent = await getStripe().paymentIntents.create(piParams, {
+      // Same authenticated user + exact inventory interval always resolves to
+      // one intent, even when browsers retry a timed-out request.
+      idempotencyKey: `booking-pi-${caller.id}-${spot_id}-${Buffer.from(`${start}|${end}`).toString('base64url')}`,
+    });
     const platformFee = Math.round(platformFeeCents) / 100;
 
     res.json({
@@ -2642,6 +2822,9 @@ app.post('/api/bookings', async (req, res) => {
       );
       const replayRows = await replayRes.json().catch(() => []);
       if (Array.isArray(replayRows) && replayRows.length > 0) {
+        const existing = replayRows[0];
+        const existingDetail = await fetch(`${SUPABASE_URL}/rest/v1/bookings?id=eq.${existing.id}&select=*`, { headers: SVC_HEADERS }).then(x => x.json()).catch(() => []);
+        if (existingDetail?.[0]?.user_id === caller.id) return res.json(existingDetail[0]);
         return res.status(409).json({ error: 'This payment has already been used to create a booking' });
       }
 
@@ -2717,7 +2900,18 @@ app.post('/api/bookings', async (req, res) => {
       body   : JSON.stringify(bookingRow),
     });
     const data = await r.json();
-    if (!r.ok) return res.status(r.status).json({ error: data });
+    if (!r.ok) {
+      // Never leave a successful charge without a durable reservation.  The
+      // refund key makes this safe across client retries and webhook retries.
+      if (verifiedPaymentIntentId) {
+        try {
+          await getStripe().refunds.create({ payment_intent: verifiedPaymentIntentId },
+            { idempotencyKey: `booking-insert-refund-${verifiedPaymentIntentId}` });
+        } catch (refundErr) { console.error('[Booking] automatic refund failed:', refundErr.message); }
+      }
+      const overlap = JSON.stringify(data).includes('bookings_no_actionable_overlap');
+      return res.status(overlap ? 409 : r.status).json({ error: overlap ? 'This spot is no longer available for that time.' : data });
+    }
 
     // Email lister about the new booking (non-blocking)
     const addr   = booking_data?.addr || spot?.address || 'your spot';
@@ -2751,6 +2945,8 @@ app.post('/api/bookings', async (req, res) => {
 // ── Bookings: lister view — all bookings for spots owned by this user ───────────
 app.get('/api/bookings/lister/:listerId', async (req, res) => {
   const { listerId } = req.params;
+  const caller = await verifyBearerToken(req);
+  if (!caller || (caller.id !== listerId && !await verifyAdminBearerToken(req))) return res.status(403).json({ error: 'Forbidden' });
   try {
     // 1. Get all spot IDs for this lister
     const spotRes  = await fetch(`${SUPABASE_URL}/rest/v1/spots?host_user_id=eq.${listerId}&select=id,address,spot_data`, { headers: SVC_HEADERS });
@@ -2799,6 +2995,9 @@ app.patch('/api/bookings/:id/approve', async (req, res) => {
     const rows  = await getR.json();
     const b     = Array.isArray(rows) ? rows[0] : null;
     if (!b) return res.status(404).json({ error: 'Not found' });
+    const access = await callerOwnsSpotOrIsAdmin(req, b.spot_id);
+    if (!access.caller) return res.status(401).json({ error: 'Authentication required' });
+    if (!access.allowed) return res.status(403).json({ error: 'Forbidden' });
 
     const patchR = await fetch(`${SUPABASE_URL}/rest/v1/bookings?id=eq.${req.params.id}`,
       { method: 'PATCH', headers: { ...SVC_HEADERS, 'Prefer': 'return=minimal' }, body: JSON.stringify({ status: 'approved' }) }
@@ -2839,6 +3038,9 @@ app.patch('/api/bookings/:id/deny', async (req, res) => {
     const rows  = await getR.json();
     const b     = Array.isArray(rows) ? rows[0] : null;
     if (!b) return res.status(404).json({ error: 'Not found' });
+    const access = await callerOwnsSpotOrIsAdmin(req, b.spot_id);
+    if (!access.caller) return res.status(401).json({ error: 'Authentication required' });
+    if (!access.allowed) return res.status(403).json({ error: 'Forbidden' });
 
     const patchR = await fetch(`${SUPABASE_URL}/rest/v1/bookings?id=eq.${req.params.id}`,
       { method: 'PATCH', headers: { ...SVC_HEADERS, 'Prefer': 'return=minimal' }, body: JSON.stringify({ status: 'denied' }) }
@@ -2865,6 +3067,9 @@ app.patch('/api/bookings/:id/deny', async (req, res) => {
 // ── Spots: delete — cancels all active/pending bookings and emails drivers ─────
 app.delete('/api/spots/:id', async (req, res) => {
   const { id } = req.params;
+  const access = await callerOwnsSpotOrIsAdmin(req, id);
+  if (!access.caller) return res.status(401).json({ error: 'Authentication required' });
+  if (!access.allowed) return res.status(403).json({ error: 'Forbidden' });
   try {
     // 1. Find all non-cancelled bookings for this spot
     const bRes  = await fetch(`${SUPABASE_URL}/rest/v1/bookings?spot_id=eq.${id}&status=not.in.(cancelled,denied)&select=*`, { headers: SVC_HEADERS });
@@ -3095,6 +3300,8 @@ app.patch('/api/bookings/:id/extension-deny', async (req, res) => {
 
 // ── Saved spots: list ──────────────────────────────────────────────────────────
 app.get('/api/saved-spots/:userId', async (req, res) => {
+  const caller = await verifyBearerToken(req);
+  if (!caller || caller.id !== req.params.userId) return res.status(403).json({ error: 'Forbidden' });
   try {
     const r = await fetch(
       `${SUPABASE_URL}/rest/v1/saved_spots?user_id=eq.${req.params.userId}&select=*&order=saved_at.desc`,
@@ -3108,6 +3315,8 @@ app.get('/api/saved-spots/:userId', async (req, res) => {
 // ── Saved spots: add ───────────────────────────────────────────────────────────
 app.post('/api/saved-spots', async (req, res) => {
   const { user_id, spot_id, spot_data } = req.body || {};
+  const caller = await verifyBearerToken(req);
+  if (!caller || caller.id !== user_id) return res.status(403).json({ error: 'Forbidden' });
   if (!user_id || !spot_id) return res.status(400).json({ error: 'user_id and spot_id required' });
   try {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/saved_spots`, {
@@ -3123,6 +3332,8 @@ app.post('/api/saved-spots', async (req, res) => {
 // ── Saved spots: remove ────────────────────────────────────────────────────────
 app.delete('/api/saved-spots', async (req, res) => {
   const { user_id, spot_id } = req.body || {};
+  const caller = await verifyBearerToken(req);
+  if (!caller || caller.id !== user_id) return res.status(403).json({ error: 'Forbidden' });
   try {
     const r = await fetch(
       `${SUPABASE_URL}/rest/v1/saved_spots?user_id=eq.${user_id}&spot_id=eq.${spot_id}`,
@@ -3134,6 +3345,8 @@ app.delete('/api/saved-spots', async (req, res) => {
 
 // ── Bookings: list ─────────────────────────────────────────────────────────────
 app.get('/api/bookings/:userId', async (req, res) => {
+  const caller = await verifyBearerToken(req);
+  if (!caller || (caller.id !== req.params.userId && !await verifyAdminBearerToken(req))) return res.status(403).json({ error: 'Forbidden' });
   try {
     const r = await fetch(
       `${SUPABASE_URL}/rest/v1/bookings?user_id=eq.${req.params.userId}&select=*&order=created_at.desc`,
@@ -3263,6 +3476,7 @@ app.post('/api/booking-chat/:bookingId', async (req, res) => {
 // ── Admin: live stats from real Supabase data ─────────────────────────────────
 app.get('/api/admin/stats', async (req, res) => {
   if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });
+  if (!await verifyAdminBearerToken(req)) return res.status(403).json({ error: 'Admin authentication required' });
   try {
     const [spotsR, usersR, bookingsR] = await Promise.all([
       fetch(`${SUPABASE_URL}/rest/v1/spots?select=status`, { headers: SVC_HEADERS }),
@@ -3286,6 +3500,7 @@ app.get('/api/admin/stats', async (req, res) => {
 // ── Admin: list all real users with booking counts ────────────────────────────
 app.get('/api/admin/users', async (req, res) => {
   if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });
+  if (!await verifyAdminBearerToken(req)) return res.status(403).json({ error: 'Admin authentication required' });
   try {
     const [profRes, bookRes, authRes] = await Promise.all([
       fetch(`${SUPABASE_URL}/rest/v1/profiles?select=*&order=created_at.desc`, { headers: SVC_HEADERS }),
@@ -3333,6 +3548,7 @@ app.get('/api/admin/users', async (req, res) => {
 // ── Admin: update user (status, account_type, etc.) ──────────────────────────
 app.patch('/api/admin/users/:id', async (req, res) => {
   if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });
+  if (!await verifyAdminBearerToken(req)) return res.status(403).json({ error: 'Admin authentication required' });
   const fields = { ...req.body, updated_at: new Date().toISOString() };
   try {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${req.params.id}`,

@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { authenticatedHeaders } from "@/lib/apiAuth";
 import type { SupportTicket, SupportMessage, SupportResolution } from "@/lib/support";
 
 // ── Supabase row shapes ───────────────────────────────────────────────────────
@@ -83,9 +84,10 @@ function convToTicket(conv: ConvRow, msgs: MsgRow[]): SupportTicket {
 
 // ── API helpers ───────────────────────────────────────────────────────────────
 async function apiFetch(path: string, init?: RequestInit) {
+  const authHeaders = await authenticatedHeaders("application/json");
   const r = await fetch(path, {
     ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+    headers: { ...authHeaders, ...(init?.headers ?? {}) },
   });
   if (!r.ok) throw new Error(`API ${path} → ${r.status}`);
   if (r.status === 204) return null;
@@ -209,7 +211,7 @@ export async function updateConversationStatus(
 /** Delete a conversation (admin only). */
 export async function deleteConversation(id: string): Promise<boolean> {
   try {
-    await fetch(`/api/support/conversations/${id}`, { method: "DELETE" });
+    await apiFetch(`/api/support/conversations/${id}`, { method: "DELETE" });
     broadcastUpdate();
     return true;
   } catch {

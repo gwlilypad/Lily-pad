@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
+import { supabase } from "@/lib/supabase";
 import SharedHeader from "@/components/SharedHeader";
 import NavBar from "@/components/NavBar";
 
@@ -74,6 +75,8 @@ export default function AvailabilityPage() {
   const [blockFrom, setBlockFrom] = useState(9);
   const [blockTo, setBlockTo] = useState(17);
   const [calOpen, setCalOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
   const [calMonth, setCalMonth] = useState(() => {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -126,6 +129,56 @@ export default function AvailabilityPage() {
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
   const tomorrowLabel = tomorrow.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
+
+  async function submitListing() {
+    if (!state.apAns[0]) {
+      setSubmitError("Your listing address is missing. Please go back and add it.");
+      return;
+    }
+    setSubmitting(true);
+    setSubmitError("");
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) throw new Error("Please sign in before submitting your listing.");
+      const availability = {
+        active: padActive,
+        blockedDates: sortedBlocked,
+        blockHours,
+        blockFrom,
+        blockTo,
+        resetTomorrow,
+      };
+      const res = await fetch("/api/spots", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          host_user_id: data.session?.user.id,
+          address: state.apAns[0],
+          pad_type: state.apAns[1] || "Driveway",
+          surface: state.apAns[2] || "Concrete",
+          num_pads: Number(state.apAns[3] || state.apNumPads || 1),
+          price_per_hr: Number(state.apAns[4] || 0),
+          description: state.apAns[5] || "",
+          photo_url: state.apPhotoUrls[0] || state.apPhotoUrl || "",
+          photo_urls: state.apPhotoUrls,
+          lat: state.apLat,
+          lng: state.apLng,
+          availability,
+          status: "pending",
+        }),
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(payload?.error || "We couldn't save your listing. Please try again.");
+      if (!payload?.id) throw new Error("The listing was not saved. Please try again.");
+      setState(s => ({ ...s, apSpotId: String(payload.id), apAvailability: availability, addingExtraPad: false }));
+      goTo("listingsuccess");
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "We couldn't save your listing. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
     <div className="page active">
@@ -456,25 +509,20 @@ export default function AvailabilityPage() {
 
         {/* CTA */}
         <button
-          onClick={() => {
-            if (state.addingExtraPad) {
-              setState(s => ({ ...s, addingExtraPad: false }));
-              goTo("paddashboard");
-            } else {
-              goTo("listingsuccess");
-            }
-          }}
+          onClick={submitListing}
+          disabled={submitting}
           style={{
             width: "100%", padding: "16px 0", borderRadius: 100,
             background: GREEN, border: "none", cursor: "pointer",
             fontSize: 16, fontWeight: 700, color: "#fff",
             fontFamily: "'DM Sans',sans-serif", letterSpacing: -0.2,
-            boxShadow: "0 4px 16px rgba(141,214,63,0.30)",
+            boxShadow: "0 4px 16px rgba(141,214,63,0.30)", opacity: submitting ? 0.65 : 1,
             marginTop: "auto",
           }}
         >
-          Looks good →
+          {submitting ? "Submitting…" : "Submit listing →"}
         </button>
+        {submitError && <p role="alert" style={{ color: "#c53030", fontSize: 12.5, fontWeight: 600, textAlign: "center", margin: "10px 4px 0", lineHeight: 1.4 }}>{submitError}</p>}
 
       </div>
     </div>

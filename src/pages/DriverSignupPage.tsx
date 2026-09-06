@@ -41,6 +41,8 @@ export default function DriverSignupPage() {
   const [editFromDone, setEditFromDone] = useState(false);
   const [checkEmail, setCheckEmail] = useState(false);
   const [signupError, setSignupError] = useState("");
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [acceptedPrivacy, setAcceptedPrivacy] = useState(false);
   const [fieldError, setFieldError] = useState("");
   const [otpDigits, setOtpDigits] = useState(["","","","","",""]);
   const [otpError, setOtpError]   = useState("");
@@ -215,10 +217,14 @@ export default function DriverSignupPage() {
               </div>
               <div className="cta-area">
                 <p className="cta-nudge">Ready to park?</p>
+                <div style={{ textAlign: "left", fontSize: 12, color: "rgba(14,31,64,0.68)", lineHeight: 1.45, marginBottom: 12 }}>
+                  <label style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 8, cursor: "pointer" }}><input type="checkbox" checked={acceptedTerms} onChange={e => setAcceptedTerms(e.target.checked)} /> <span>I agree to the <a href="/terms">Terms of Service</a>.</span></label>
+                  <label style={{ display: "flex", gap: 8, alignItems: "flex-start", cursor: "pointer" }}><input type="checkbox" checked={acceptedPrivacy} onChange={e => setAcceptedPrivacy(e.target.checked)} /> <span>I acknowledge the <a href="/privacy">Privacy Policy</a>.</span></label>
+                </div>
                 {signupError && (
                   <p style={{ fontSize: 12.5, color: "#ef4444", fontWeight: 600, textAlign: "center", margin: "0 0 10px", lineHeight: 1.4 }}>{signupError}</p>
                 )}
-                <button className="cta-btn" style={{ background: "#8DD63F", color: "#0E1F40", boxShadow: "0 2px 12px rgba(141,214,63,0.3)" }} onClick={async () => {
+                <button className="cta-btn" disabled={!acceptedTerms || !acceptedPrivacy} style={{ background: "#8DD63F", color: "#0E1F40", boxShadow: "0 2px 12px rgba(141,214,63,0.3)", ...(!acceptedTerms || !acceptedPrivacy ? { opacity: 0.45, cursor: "not-allowed" } : {}) }} onClick={async () => {
                   setLocked(true);
                   setSignupError("");
                   const result = await signUp(ans[2] || "", ans[5] || "", `${ans[0] || ""} ${ans[1] || ""}`.trim(), "driver");

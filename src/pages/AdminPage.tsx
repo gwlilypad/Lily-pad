@@ -1006,7 +1006,7 @@ export default function AdminPage() {
     try {
       const r = await fetch("/api/staff/invite", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: adminAuthHeaders(),
         body: JSON.stringify({ email: em, role: inviteCardRole }),
       });
       const d = await r.json();
@@ -1021,7 +1021,7 @@ export default function AdminPage() {
     finally { setInviteCardLoading(false); }
   }
 
-  function refreshStaffList() { fetch("/api/staff/list").then(r => r.json()).then(d => { if (Array.isArray(d)) setStaffList(d); }).catch(() => {}); }
+  function refreshStaffList() { fetch("/api/staff/list", { headers: adminAuthHeaders() }).then(r => r.json()).then(d => { if (Array.isArray(d)) setStaffList(d); }).catch(() => {}); }
   useEffect(() => { refreshStaffList(); }, []);
 
   // Customer service — chat tickets + incoming email.
@@ -1138,7 +1138,7 @@ export default function AdminPage() {
   async function fetchEarlySignups() {
     setLoadingEarlySignups(true);
     try {
-      const r = await fetch("/api/admin/early-access-signups");
+      const r = await fetch("/api/admin/early-access-signups", { headers: adminAuthHeaders() });
       const d = await r.json();
       if (r.ok) {
         const signups = Array.isArray(d) ? d : (d.signups || []);
@@ -1158,7 +1158,7 @@ export default function AdminPage() {
     try {
       await fetch(`/api/admin/early-access-signups/${id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: adminAuthHeaders(),
         body: JSON.stringify({ status: "approved" }),
       });
       setEarlySignups(prev => prev.map(s => s.id === id ? { ...s, status: "approved" } : s));
@@ -1171,7 +1171,7 @@ export default function AdminPage() {
     try {
       await fetch(`/api/admin/early-access-signups/${id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: adminAuthHeaders(),
         body: JSON.stringify({ notes: signupNotes[id] || "" }),
       });
       setEarlySignups(prev => prev.map(s => s.id === id ? { ...s, notes: signupNotes[id] || "" } : s));
@@ -1206,7 +1206,7 @@ export default function AdminPage() {
   async function fetchPendingSpots() {
     setLoadingPending(true);
     try {
-      const r = await fetch("/api/spots/pending");
+      const r = await fetch("/api/spots/pending", { headers: adminAuthHeaders() });
       const d = await r.json();
       if (r.ok) setPendingSpots(Array.isArray(d) ? d : []);
     } catch {}
@@ -1216,7 +1216,7 @@ export default function AdminPage() {
   async function approveSpot(spotId: string) {
     setApprovingSpotId(spotId);
     try {
-      const r = await fetch(`/api/spots/${spotId}/approve`, { method: "POST" });
+      const r = await fetch(`/api/spots/${spotId}/approve`, { method: "POST", headers: adminAuthHeaders() });
       if (r.ok) { setPendingSpots(prev => prev.filter(s => s.id !== spotId)); setToast("Spot approved — host notified by email"); }
     } catch {}
     finally { setApprovingSpotId(null); }
@@ -1225,7 +1225,7 @@ export default function AdminPage() {
   async function rejectSpot(spotId: string) {
     setRejectingSpotId(spotId);
     try {
-      const r = await fetch(`/api/spots/${spotId}/reject`, { method: "POST" });
+      const r = await fetch(`/api/spots/${spotId}/reject`, { method: "POST", headers: adminAuthHeaders() });
       if (r.ok) { setPendingSpots(prev => prev.filter(s => s.id !== spotId)); setToast("Listing rejected"); }
     } catch {}
     finally { setRejectingSpotId(null); }
@@ -1436,7 +1436,7 @@ export default function AdminPage() {
   // Fetch real admin stats from Supabase.
   async function fetchAdminStats() {
     try {
-      const r = await fetch("/api/admin/stats");
+      const r = await fetch("/api/admin/stats", { headers: adminAuthHeaders() });
       if (r.ok) setAdminStats(await r.json());
     } catch {}
   }
@@ -1445,7 +1445,7 @@ export default function AdminPage() {
   async function fetchRealUsers() {
     setLoadingUsers(true);
     try {
-      const r = await fetch("/api/admin/users");
+      const r = await fetch("/api/admin/users", { headers: adminAuthHeaders() });
       if (!r.ok) return;
       const data = await r.json();
       if (!Array.isArray(data)) return;
@@ -1686,19 +1686,19 @@ export default function AdminPage() {
     if (Object.keys(apiPatch).length === 0) return;
     fetch(`/api/admin/users/${user.uuid}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: adminAuthHeaders(),
       body: JSON.stringify(apiPatch),
     }).catch(() => {});
   }
 
   function updateStaff(id: string, patch: Partial<StaffAccount>) {
     setStaffList(prev => prev.map(s => s.id === id ? { ...s, ...patch } : s));
-    if (patch.status) fetch("/api/staff/update-status", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, status: patch.status }) }).catch(() => {});
+    if (patch.status) fetch("/api/staff/update-status", { method: "POST", headers: adminAuthHeaders(), body: JSON.stringify({ id, status: patch.status }) }).catch(() => {});
   }
 
   async function removeStaff(id: string) {
     try {
-      await fetch("/api/staff/remove", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+      await fetch("/api/staff/remove", { method: "POST", headers: adminAuthHeaders(), body: JSON.stringify({ id }) });
       setStaffList(prev => prev.filter(s => s.id !== id));
     } catch {}
   }
@@ -2561,7 +2561,7 @@ export default function AdminPage() {
                         try {
                           const r = await fetch("/api/staff/invite", {
                             method: "POST",
-                            headers: { "Content-Type": "application/json" },
+                            headers: adminAuthHeaders(),
                             body: JSON.stringify({ email: em, role: inviteRole }),
                           });
                           const data = await r.json();

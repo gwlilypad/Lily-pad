@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/context/AuthContext";
 import type { BookingRec } from "@/context/AppContext";
+import { authenticatedHeaders } from "@/lib/apiAuth";
 import BookingChatDrawer from "@/components/BookingChatDrawer";
 
 type DerivedStatus = "pending" | "upcoming" | "active" | "completed" | "cancelled" | "denied";
@@ -75,7 +76,7 @@ export default function BookingsPage() {
 
   useEffect(() => {
     if (!user?.id) { setLoading(false); return; }
-    fetch(`/api/bookings/${user.id}`)
+    authenticatedHeaders().then(headers => fetch(`/api/bookings/${user.id}`, { headers }))
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (Array.isArray(data) && data.length > 0) {
@@ -156,7 +157,7 @@ export default function BookingsPage() {
       if (b.uuid) {
         const r = await fetch(`/api/bookings/${b.uuid}/reschedule`, {
           method: "PATCH",
-          headers: { "Content-Type": "application/json" },
+          headers: await authenticatedHeaders("application/json"),
           body: JSON.stringify({ start_ts: new Date(newStart).toISOString(), end_ts: new Date(newEnd).toISOString() }),
         });
         if (!r.ok) { const d = await r.json(); setAdjError(d.error || "Failed to update time."); return; }
@@ -182,7 +183,7 @@ export default function BookingsPage() {
     try {
       const r = await fetch(`/api/bookings/${b.uuid}/extension-request`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await authenticatedHeaders("application/json"),
         body: JSON.stringify({ new_end_ts: new Date(newEnd).toISOString() }),
       });
       const data = await r.json();
@@ -201,7 +202,7 @@ export default function BookingsPage() {
   async function doCancel(b: BookingRec) {
     setCancellingId(b.uuid!);
     try {
-      if (b.uuid) await fetch(`/api/bookings/${b.uuid}/cancel`, { method: "PATCH" });
+      if (b.uuid) await fetch(`/api/bookings/${b.uuid}/cancel`, { method: "PATCH", headers: await authenticatedHeaders() });
     } catch { /* non-blocking */ }
     setApiBookings(prev => prev.map(x => x.uuid === b.uuid ? { ...x, status: "cancelled" as const } : x));
     setState(s => ({ ...s, bookings: s.bookings.map(x => x.id === b.id ? { ...x, status: "cancelled" as const } : x) }));

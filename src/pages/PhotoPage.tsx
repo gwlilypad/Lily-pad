@@ -3,6 +3,7 @@ import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/context/AuthContext";
 import SharedHeader from "@/components/SharedHeader";
 import NavBar from "@/components/NavBar";
+import { authenticatedHeaders } from "@/lib/apiAuth";
 
 const PAD_COLORS = ["#8DD63F", "#F59E0B", "#4A6FA5"];
 const PAD_NAMES = ["Pad 1", "Pad 2", "Pad 3"];
@@ -98,7 +99,7 @@ async function compressAndUpload(dataUrl: string, userId: string): Promise<strin
   // Upload via server (uses service role key — no storage RLS issues)
   const res = await fetch("/api/upload-photo", {
     method: "POST",
-    headers: { "Content-Type": "image/jpeg", "X-User-Id": userId },
+    headers: { ...(await authenticatedHeaders("image/jpeg")), "X-User-Id": userId },
     body: blob,
   });
   if (!res.ok) throw new Error(await res.text());
@@ -631,52 +632,43 @@ export default function PhotoPage() {
               className="ghost-btn"
               style={{ background: "#0E1F40", color: "#fff", border: "none" }}
               onClick={async () => {
-                if (!user) { goTo("availability"); return; }
+                if (!user) {
+                  setUploadError("Please sign in before uploading listing photos.");
+                  return;
+                }
 
+                setUploadError("");
+                setUploadLoading(true);
                 // Build annotated versions of every photo uploaded
                 const uploadedUrls: string[] = [];
-                for (let i = 0; i < numPads; i++) {
-                  const rawPhoto = photos[i];
-                  if (!rawPhoto) continue;
-                  try {
+                try {
+                  for (let i = 0; i < numPads; i++) {
+                    const rawPhoto = photos[i];
+                    if (!rawPhoto) continue;
                     const annotated = await annotatePhoto(rawPhoto, allBoxes[i] || []);
                     const url = await compressAndUpload(annotated, `${user.id}-pad${i}`);
                     uploadedUrls.push(url);
-                  } catch {
-                    // Fallback: raw photo without annotation
-                    if (i === 0 && state.apPhotoUrl) uploadedUrls.push(state.apPhotoUrl);
                   }
+                } catch {
+                  setUploadError("We couldn't upload your photo. Check your connection and try again.");
+                  setUploadLoading(false);
+                  return;
                 }
 
-                if (!state.apSpotId) {
-                  try {
-                    const res = await fetch("/api/spots", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        host_user_id: user.id,
-                        address:      state.apAns[0] || "",
-                        pad_type:     state.apAns[1] || "Driveway",
-                        surface:      state.apAns[2] || "Concrete",
-                        num_pads:     parseInt(state.apAns[3] || "1"),
-                        price_per_hr: parseFloat(state.apAns[4] || "4"),
-                        description:  state.apAns[5] || "",
-                        photo_url:    uploadedUrls[0] || state.apPhotoUrl || "",
-                        photo_urls:   uploadedUrls.length > 0 ? uploadedUrls : undefined,
-                        lat:          state.apLat || 0,
-                        lng:          state.apLng || 0,
-                      }),
-                    });
-                    if (res.ok) {
-                      const spot = await res.json();
-                      if (spot?.id) setAppState(s => ({ ...s, apSpotId: spot.id }));
-                    }
-                  } catch { /* non-blocking */ }
-                }
+                // The listing is intentionally not created here. Availability is
+                // collected on the next screen and all listing data is saved together.
+                setAppState(s => ({
+                  ...s,
+                  apPhotoUrl: uploadedUrls[0] || s.apPhotoUrl,
+                  apPhotoUrls: uploadedUrls,
+                  apSpotId: "",
+                }));
+                setUploadLoading(false);
                 goTo("availability");
               }}
+              disabled={uploadLoading}
             >
-              Done — Next step →
+              {uploadLoading ? "Uploading photos…" : "Done — Next step →"}
             </button>
           )}
         </div>

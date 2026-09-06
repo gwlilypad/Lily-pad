@@ -29,6 +29,7 @@ import ListingSuccessPage from "@/pages/ListingSuccessPage";
 import SignInPage from "@/pages/SignInPage";
 import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
 import EmailVerifyPage from "@/pages/EmailVerifyPage";
+import { LegalPage } from "@/pages/LegalPages";
 import PWAInstallBanner from "@/components/PWAInstallBanner";
 
 const PAGE_ROUTES: Record<PageId, string> = {
@@ -197,6 +198,10 @@ function AppInner() {
           <Route path="/photo" element={<PhotoPage />} />
           <Route path="/availability" element={<AvailabilityPage />} />
           <Route path="/payment" element={<StripeConnectPage />} />
+           <Route path="/terms" element={<LegalPage kind="terms" />} />
+           <Route path="/privacy" element={<LegalPage kind="privacy" />} />
+           <Route path="/cancellation-policy" element={<LegalPage kind="cancellation" />} />
+           <Route path="/host-agreement" element={<LegalPage kind="host-agreement" />} />
           <Route path="/find" element={<AuthGuard><ErrorBoundary><FindPage /></ErrorBoundary></AuthGuard>} />
           <Route path="/bookings" element={<AuthGuard><BookingsPage /></AuthGuard>} />
           <Route path="/account" element={<AuthGuard><AccountPage /></AuthGuard>} />

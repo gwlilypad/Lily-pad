@@ -39,6 +39,15 @@ export interface AppState {
   addingExtraPad: boolean;
   openAcctOnFind: boolean;
   apPhotoUrl: string;
+  apPhotoUrls: string[];
+  apAvailability: {
+    active: boolean;
+    blockedDates: string[];
+    blockHours: "All day" | "Certain hours";
+    blockFrom: number;
+    blockTo: number;
+    resetTomorrow: boolean;
+  } | null;
   bookings: BookingRec[];
   adminPreview: boolean;
   adminPreviewRole: "admin" | "staff" | null;
@@ -48,7 +57,7 @@ export const DEFAULT_STATE: AppState = {
   suAns: {}, apAns: {}, drAns: {}, bizAns: {},
   bizPhotoCount: 0, apNumPads: 1, apLogoUrl: "", apSpotId: "", apLat: 0, apLng: 0,
   accountType: "renter", hasBothAccounts: true,
-  profilePhotoUrl: "", addingExtraPad: false, openAcctOnFind: false, apPhotoUrl: "",
+  profilePhotoUrl: "", addingExtraPad: false, openAcctOnFind: false, apPhotoUrl: "", apPhotoUrls: [], apAvailability: null,
   bookings: [], adminPreview: false, adminPreviewRole: null,
 };
 

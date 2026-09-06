@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
 import type { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import { authenticatedHeaders } from "@/lib/apiAuth";
 
 export interface UserProfile {
   id: string;
@@ -50,7 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const res = await fetch("/api/beta/check", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await authenticatedHeaders("application/json"),
         body: JSON.stringify({ email }),
       });
       if (res.ok) {
@@ -64,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function fetchProfile(userId: string) {
     try {
-      const res = await fetch(`/api/profile/${userId}`);
+      const res = await fetch(`/api/profile/${userId}`, { headers: await authenticatedHeaders() });
       if (res.ok) {
         const data = await res.json();
         if (data) {

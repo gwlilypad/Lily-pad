@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
+import { authenticatedHeaders } from "@/lib/apiAuth";
 
 const NAVY = "#0E1F40";
 const GREEN = "#8DD63F";
@@ -61,9 +62,10 @@ export default function ListerBookingsPage() {
   const [expandedId, setExpandedId]   = useState<string | null>(null);
   const [tab, setTab]                 = useState<"new" | "current" | "past">("new");
 
-  const fetchBookings = useCallback(() => {
+  const fetchBookings = useCallback(async () => {
     if (!user?.id) return;
-    fetch(`/api/bookings/lister/${user.id}`)
+    const headers = await authenticatedHeaders();
+    fetch(`/api/bookings/lister/${user.id}`, { headers })
       .then(r => r.ok ? r.json() : [])
       .then(data => { if (Array.isArray(data)) setBookings(data); })
       .catch(() => {})
@@ -75,7 +77,7 @@ export default function ListerBookingsPage() {
   async function handleApprove(id: string) {
     setActingOn(id);
     try {
-      await fetch(`/api/bookings/${id}/approve`, { method: "PATCH" });
+      await fetch(`/api/bookings/${id}/approve`, { method: "PATCH", headers: await authenticatedHeaders() });
       setBookings(prev => prev.map(b => b.id === id ? { ...b, status: "approved" } : b));
       setExpandedId(null);
     } catch { /* non-blocking */ }
@@ -84,7 +86,7 @@ export default function ListerBookingsPage() {
   async function handleDeny(id: string) {
     setActingOn(id);
     try {
-      await fetch(`/api/bookings/${id}/deny`, { method: "PATCH" });
+      await fetch(`/api/bookings/${id}/deny`, { method: "PATCH", headers: await authenticatedHeaders() });
       setBookings(prev => prev.map(b => b.id === id ? { ...b, status: "denied" } : b));
     } catch { /* non-blocking */ }
     setActingOn(null);
@@ -92,7 +94,7 @@ export default function ListerBookingsPage() {
   async function handleExtApprove(id: string) {
     setExtActingOn(id);
     try {
-      const r = await fetch(`/api/bookings/${id}/extension-approve`, { method: "PATCH" });
+      const r = await fetch(`/api/bookings/${id}/extension-approve`, { method: "PATCH", headers: await authenticatedHeaders() });
       const data = await r.json();
       if (r.ok) {
         setBookings(prev => prev.map(b => b.id === id
@@ -105,7 +107,7 @@ export default function ListerBookingsPage() {
   async function handleExtDeny(id: string) {
     setExtActingOn(id);
     try {
-      await fetch(`/api/bookings/${id}/extension-deny`, { method: "PATCH" });
+      await fetch(`/api/bookings/${id}/extension-deny`, { method: "PATCH", headers: await authenticatedHeaders() });
       setBookings(prev => prev.map(b => b.id === id
         ? { ...b, extend_request: { ...b.extend_request!, status: "denied" } }
         : b));

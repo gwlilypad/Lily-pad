@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { authenticatedHeaders } from "@/lib/apiAuth";
 
 const PAD_COLORS = ["#8DD63F", "#F59E0B", "#4A6FA5"];
 const PAD_NAMES  = ["Pad 1", "Pad 2", "Pad 3"];
@@ -71,7 +72,7 @@ async function uploadAnnotated(dataUrl: string, userId: string): Promise<string>
   const blob = await new Promise<Blob>((res,rej) =>
     c.toBlob(b=>b?res(b):rej(new Error("export failed")),"image/jpeg",0.82));
   const r = await fetch("/api/upload-photo", {
-    method:"POST", headers:{"Content-Type":"image/jpeg","X-User-Id":userId}, body:blob,
+    method:"POST", headers:{ ...(await authenticatedHeaders("image/jpeg")), "X-User-Id":userId }, body:blob,
   });
   if (!r.ok) throw new Error(await r.text());
   const { url } = await r.json();
@@ -312,7 +313,7 @@ export default function SpotDrawModal({ photoUrl, rawPhotoUrl, spotId, userId, n
       const newUrl    = await uploadAnnotated(annotated, userId);
       await fetch(`/api/spots/${spotId}`, {
         method:"PATCH",
-        headers:{"Content-Type":"application/json"},
+        headers:await authenticatedHeaders("application/json"),
         body:JSON.stringify({ photo_url: newUrl, raw_photo_url: rawUrl, photo_urls: [newUrl] }),
       });
       onSaved(newUrl, rawUrl);

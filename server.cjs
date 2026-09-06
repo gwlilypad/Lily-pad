@@ -3287,21 +3287,45 @@ app.get('/api/admin/stats', async (req, res) => {
 app.get('/api/admin/users', async (req, res) => {
   if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });
   try {
-    const [profRes, bookRes] = await Promise.all([
+    const [profRes, bookRes, authRes] = await Promise.all([
       fetch(`${SUPABASE_URL}/rest/v1/profiles?select=*&order=created_at.desc`, { headers: SVC_HEADERS }),
       fetch(`${SUPABASE_URL}/rest/v1/bookings?select=user_id`, { headers: SVC_HEADERS }),
+      fetch(`${SUPABASE_URL}/auth/v1/admin/users?page=1&per_page=1000`, {
+        headers: { apikey: SVC_KEY, Authorization: `Bearer ${SVC_KEY}` },
+      }),
     ]);
     const profiles = await profRes.json();
     const bookings = await bookRes.json();
+    const authData = await authRes.json();
     if (!profRes.ok) return res.status(profRes.status).json({ error: profiles });
+    if (!authRes.ok) return res.status(authRes.status).json({ error: authData });
     const counts = {};
     if (Array.isArray(bookings)) bookings.forEach(b => { if (b.user_id) counts[b.user_id] = (counts[b.user_id] || 0) + 1; });
-    const result = Array.isArray(profiles)
-      ? profiles
-          .filter(p => !String(p.email || '').toLowerCase().endsWith('@lilypadparking.com'))
-          .filter(p => String(p.email || '').includes('@'))
-          .map(p => ({ ...p, booking_count: counts[p.id] || 0 }))
-      : [];
+    const profilesById = new Map(
+      (Array.isArray(profiles) ? profiles : []).map(profile => [profile.id, profile])
+    );
+    const authUsers = Array.isArray(authData.users) ? authData.users : [];
+    const result = authUsers
+      .map(authUser => {
+        const profile = profilesById.get(authUser.id) || {};
+        const metadata = authUser.user_metadata || {};
+        return {
+          id: authUser.id,
+          email: profile.email || authUser.email || '',
+          full_name: profile.full_name || metadata.full_name || metadata.name || '',
+          phone: profile.phone || authUser.phone || '',
+          account_type: profile.account_type || metadata.account_type || 'driver',
+          status: profile.status || (authUser.banned_until ? 'suspended' : 'active'),
+          created_at: profile.created_at || authUser.created_at,
+          updated_at: profile.updated_at || authUser.updated_at,
+          spend_total: profile.spend_total || 0,
+          booking_count: counts[authUser.id] || 0,
+          profile_missing: !profilesById.has(authUser.id),
+        };
+      })
+      .filter(user => !String(user.email).toLowerCase().endsWith('@lilypadparking.com'))
+      .filter(user => String(user.email).includes('@'))
+      .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
     res.json(result);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

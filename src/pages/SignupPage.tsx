@@ -292,7 +292,18 @@ export default function SignupPage() {
                 <button className="cta-btn" disabled={!acceptedTerms || !acceptedPrivacy || !acceptedHostAgreement} style={!acceptedTerms || !acceptedPrivacy || !acceptedHostAgreement ? { opacity: 0.45, cursor: "not-allowed" } : undefined} onClick={async () => {
                   setLocked(true);
                   setSignupError("");
-                  const result = await signUp(ans[2] || "", ans[4] || "", `${ans[0] || ""} ${ans[1] || ""}`.trim(), "host");
+                  if (!acceptedTerms || !acceptedPrivacy || !acceptedHostAgreement) {
+                    setSignupError("You must accept the Terms, Privacy Policy, and Host Agreement to continue.");
+                    setLocked(false);
+                    return;
+                  }
+                  const result = await signUp(
+                    ans[2] || "",
+                    ans[4] || "",
+                    `${ans[0] || ""} ${ans[1] || ""}`.trim(),
+                    "host",
+                    { terms: acceptedTerms, privacy: acceptedPrivacy, hostAgreement: acceptedHostAgreement },
+                  );
                   if (result.error) { setSignupError(result.error); setLocked(false); return; }
                   if (result.confirmEmail) { setCheckEmail(true); return; }
                   goTo("addpad");

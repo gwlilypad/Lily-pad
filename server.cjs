@@ -748,7 +748,7 @@ app.get('/api/health', (req, res) => {
     stripe: {
        initialised: !!getStripe(),
       secret_key_source: stripeSecretSource || 'NOT FOUND — check Railway variable names',
-      secret_key_prefix: STRIPE_SECRET_KEY ? STRIPE_SECRET_KEY.slice(0, 8) + '…' : null,
+      secret_key_prefix: getStripeKeys().secret ? getStripeKeys().secret.slice(0, 8) + '…' : null,
       publishable_key_source: stripePubSource || 'NOT FOUND',
       publishable_key_prefix: getStripePubKey() ? getStripePubKey().slice(0, 8) + '…' : null,
     },

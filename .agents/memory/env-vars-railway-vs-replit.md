@@ -3,7 +3,7 @@ name: Env vars — Railway (prod) vs Replit (dev)
 description: This project deploys to Railway for production; Replit is dev/preview only. Env vars must be set in both places independently.
 ---
 
-Production for this app runs on Railway (lily-pad-production.up.railway.app, repo
+Production for this app runs on Railway (www.lilypadparking.com, repo
 github.com/gwlilypad/Lily-pad), not on Replit's own deployment. Replit is used
 only for local dev/preview.
 

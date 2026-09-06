@@ -946,8 +946,16 @@ app.post('/api/auth/refresh', async (req, res) => {
 
 // ── Auth: customer signup — uses admin API to pre-confirm email (no SMTP required) ──
 app.post('/api/auth/signup', async (req, res) => {
-  const { email, password, full_name, account_type } = req.body || {};
+  const { email, password, full_name, account_type, consents } = req.body || {};
   if (!email || !password) return res.status(400).json({ error: 'email and password required' });
+  const isHostSignup = account_type === 'host';
+  if (consents?.terms !== true || consents?.privacy !== true || (isHostSignup && consents?.hostAgreement !== true)) {
+    return res.status(400).json({
+      error: isHostSignup
+        ? 'Terms, Privacy Policy, and Host Agreement acceptance are required'
+        : 'Terms and Privacy Policy acceptance are required',
+    });
+  }
   try {
     // Create user via admin API with email pre-confirmed — bypasses Supabase SMTP entirely
     const r = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
@@ -965,8 +973,51 @@ app.post('/api/auth/signup', async (req, res) => {
       return res.status(r.status).json({ error: msg });
     }
 
-    // Upsert profile row
+    // Persist server-generated legal evidence before allowing signup to finish.
+    // If this fails, remove the new Auth user so there is no account without
+    // its required consent audit record.
     if (data.id) {
+      const acceptedAt = new Date().toISOString();
+      const context = isHostSignup ? 'host_signup' : 'driver_signup';
+      const ipAddress = String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '')
+        .split(',')[0].trim() || null;
+      const userAgent = String(req.headers['user-agent'] || '').slice(0, 1000) || null;
+      const consentRows = [
+        { policy_type: 'terms', policy_version: '2025-02-20', policy_url: '/terms' },
+        { policy_type: 'privacy', policy_version: '2025-02-20', policy_url: '/privacy' },
+        ...(isHostSignup
+          ? [{ policy_type: 'host_agreement', policy_version: '2025-02-20', policy_url: '/host-agreement' }]
+          : []),
+      ].map((item) => ({
+        user_id: data.id,
+        policy_type: item.policy_type,
+        policy_version: item.policy_version,
+        accepted_at: acceptedAt,
+        context,
+        ip_address: ipAddress,
+        user_agent: userAgent,
+        evidence: {
+          policy_url: item.policy_url,
+          affirmative_action: 'required_checkbox',
+          account_type: account_type || 'driver',
+        },
+      }));
+      const consentR = await fetch(`${SUPABASE_URL}/rest/v1/legal_consents`, {
+        method: 'POST',
+        headers: { ...SVC_HEADERS, 'Prefer': 'return=minimal' },
+        body: JSON.stringify(consentRows),
+      });
+      if (!consentR.ok) {
+        const consentError = await consentR.text();
+        await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${encodeURIComponent(data.id)}`, {
+          method: 'DELETE',
+          headers: { 'apikey': SVC_KEY, 'Authorization': `Bearer ${SVC_KEY}` },
+        }).catch(() => {});
+        console.error('[Auth] consent audit insert failed:', consentError);
+        return res.status(500).json({ error: 'Could not securely record required legal acceptance. Please try again.' });
+      }
+
+      // Upsert profile row
       await fetch(`${SUPABASE_URL}/rest/v1/profiles`, {
         method : 'POST',
         headers: { ...SVC_HEADERS, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
@@ -2806,10 +2857,13 @@ app.post('/api/create-payment-intent', async (req, res) => {
 app.post('/api/bookings', async (req, res) => {
   const caller = await verifyBearerToken(req);
   if (!caller) return res.status(401).json({ error: 'Authentication required' });
-  const { user_id, spot_id, start_ts, end_ts, price_per_hr, total_price, booking_data, payment_intent_id } = req.body || {};
+  const { user_id, spot_id, start_ts, end_ts, price_per_hr, total_price, booking_data, payment_intent_id, consents } = req.body || {};
   if (!user_id) return res.status(400).json({ error: 'user_id required' });
   // Caller may only create bookings for themselves
   if (caller.id !== user_id) return res.status(403).json({ error: 'Forbidden' });
+  if (consents?.cancellationPolicy !== true || consents?.paymentAuthorization !== true) {
+    return res.status(400).json({ error: 'Cancellation Policy and payment authorization acceptance are required' });
+  }
 
   try {
     // If a payment intent was supplied, verify it actually succeeded before
@@ -2958,6 +3012,51 @@ app.post('/api/bookings', async (req, res) => {
       }
       const overlap = JSON.stringify(data).includes('bookings_no_actionable_overlap');
       return res.status(overlap ? 409 : r.status).json({ error: overlap ? 'This spot is no longer available for that time.' : data });
+    }
+
+    const savedBooking = Array.isArray(data) ? data[0] : data;
+    const acceptedAt = new Date().toISOString();
+    const ipAddress = String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '')
+      .split(',')[0].trim() || null;
+    const userAgent = String(req.headers['user-agent'] || '').slice(0, 1000) || null;
+    const bookingConsentRows = [
+      { policy_type: 'cancellation_policy', policy_version: '2025-02-20', policy_url: '/cancellation-policy' },
+      { policy_type: 'payment_authorization', policy_version: '2025-02-20', policy_url: null },
+    ].map((item) => ({
+      user_id: caller.id,
+      policy_type: item.policy_type,
+      policy_version: item.policy_version,
+      accepted_at: acceptedAt,
+      context: 'booking_checkout',
+      booking_id: savedBooking?.id || null,
+      ip_address: ipAddress,
+      user_agent: userAgent,
+      evidence: {
+        policy_url: item.policy_url,
+        affirmative_action: 'required_checkbox',
+        payment_intent_id: verifiedPaymentIntentId,
+        total_price: Number(total_price || 0),
+        currency: 'usd',
+      },
+    }));
+    const consentR = await fetch(`${SUPABASE_URL}/rest/v1/legal_consents`, {
+      method: 'POST',
+      headers: { ...SVC_HEADERS, 'Prefer': 'return=minimal' },
+      body: JSON.stringify(bookingConsentRows),
+    });
+    if (!consentR.ok) {
+      const consentError = await consentR.text();
+      console.error('[Booking] consent audit insert failed:', consentError);
+      // A paid reservation already exists, so do not delete it or refund it.
+      // Fail explicitly and flag the record for staff review.
+      await fetch(`${SUPABASE_URL}/rest/v1/bookings?id=eq.${encodeURIComponent(savedBooking?.id || '')}`, {
+        method: 'PATCH',
+        headers: { ...SVC_HEADERS, 'Prefer': 'return=minimal' },
+        body: JSON.stringify({
+          booking_data: { ...data_payload, consent_audit_error: true },
+        }),
+      }).catch(() => {});
+      return res.status(500).json({ error: 'Booking saved, but legal acceptance needs staff verification. Contact support with your payment confirmation.' });
     }
 
     // Email lister about the new booking (non-blocking)

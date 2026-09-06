@@ -41,6 +41,9 @@ export default function SignupPage() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [checkEmail, setCheckEmail] = useState(false);
   const [signupError, setSignupError] = useState("");
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [acceptedPrivacy, setAcceptedPrivacy] = useState(false);
+  const [acceptedHostAgreement, setAcceptedHostAgreement] = useState(false);
   const [fieldError, setFieldError] = useState("");
   const [otpDigits, setOtpDigits] = useState(["","","","","",""]);
   const [otpError, setOtpError]   = useState("");
@@ -278,10 +281,15 @@ export default function SignupPage() {
               </div>
               <div className="cta-area">
                 <p className="cta-nudge">Let's set up your lily pad.</p>
+                <div style={{ textAlign: "left", fontSize: 12, color: "rgba(14,31,64,0.68)", lineHeight: 1.45, marginBottom: 12 }}>
+                  <label style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 8, cursor: "pointer" }}><input type="checkbox" checked={acceptedTerms} onChange={e => setAcceptedTerms(e.target.checked)} /> <span>I agree to the <a href="/terms">Terms of Service</a>.</span></label>
+                  <label style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 8, cursor: "pointer" }}><input type="checkbox" checked={acceptedPrivacy} onChange={e => setAcceptedPrivacy(e.target.checked)} /> <span>I acknowledge the <a href="/privacy">Privacy Policy</a>.</span></label>
+                  <label style={{ display: "flex", gap: 8, alignItems: "flex-start", cursor: "pointer" }}><input type="checkbox" checked={acceptedHostAgreement} onChange={e => setAcceptedHostAgreement(e.target.checked)} /> <span>I agree to the <a href="/host-agreement">Host Agreement</a>.</span></label>
+                </div>
                 {signupError && (
                   <p style={{ fontSize: 12.5, color: "#ef4444", fontWeight: 600, textAlign: "center", margin: "0 0 10px", lineHeight: 1.4 }}>{signupError}</p>
                 )}
-                <button className="cta-btn" onClick={async () => {
+                <button className="cta-btn" disabled={!acceptedTerms || !acceptedPrivacy || !acceptedHostAgreement} style={!acceptedTerms || !acceptedPrivacy || !acceptedHostAgreement ? { opacity: 0.45, cursor: "not-allowed" } : undefined} onClick={async () => {
                   setLocked(true);
                   setSignupError("");
                   const result = await signUp(ans[2] || "", ans[4] || "", `${ans[0] || ""} ${ans[1] || ""}`.trim(), "host");

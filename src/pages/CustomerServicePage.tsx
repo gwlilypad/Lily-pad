@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { authenticatedHeaders } from "@/lib/apiAuth";
 
 const NAVY  = "#0E1F40";
 const GREEN = "#8DD63F";
@@ -25,7 +26,7 @@ export default function CustomerServicePage() {
     try {
       const res  = await fetch("/api/contact", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await authenticatedHeaders("application/json"),
         body: JSON.stringify({ name: name.trim(), email: email.trim(), phone: phone.trim(), message: message.trim() }),
       });
       const data = await res.json();

@@ -22,7 +22,13 @@ interface AuthCtx {
   role: string | null;
   isBetaTester: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
-  signUp: (email: string, password: string, fullName: string, role?: string) => Promise<{ error: string | null; confirmEmail?: boolean }>;
+  signUp: (
+    email: string,
+    password: string,
+    fullName: string,
+    role?: string,
+    consents?: { terms: boolean; privacy: boolean; hostAgreement?: boolean },
+  ) => Promise<{ error: string | null; confirmEmail?: boolean }>;
   verifyOtp: (email: string, token: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   forgotPassword: (email: string) => Promise<{ error: string | null }>;
@@ -163,12 +169,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const signUp = async (email: string, password: string, fullName: string, userRole = "driver") => {
+  const signUp = async (
+    email: string,
+    password: string,
+    fullName: string,
+    userRole = "driver",
+    consents?: { terms: boolean; privacy: boolean; hostAgreement?: boolean },
+  ) => {
     try {
       const res = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, full_name: fullName, account_type: userRole }),
+        body: JSON.stringify({
+          email,
+          password,
+          full_name: fullName,
+          account_type: userRole,
+          consents,
+        }),
       });
       const data = await res.json();
       if (!res.ok || data.error) return { error: data.error || "Signup failed. Please try again." };

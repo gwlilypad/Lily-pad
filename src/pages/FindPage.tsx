@@ -3391,6 +3391,10 @@ export default function FindPage() {
                         price_per_hr: ps.priceNum,
                         total_price: ps.amount,
                         payment_intent_id: paymentIntentId,
+                        consents: {
+                          cancellationPolicy: acceptedCancellation,
+                          paymentAuthorization: acceptedPaymentAuthorization,
+                        },
                         booking_data: { addr: ps.addr, padType: ps.padType, hostName, hostPhone: ps.hostPhone },
                       }),
                     });

@@ -536,13 +536,21 @@ CREATE TABLE IF NOT EXISTS public.early_access_signups (
 app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   const stripe = getStripe();
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
-  if (!stripe || !secret) return res.status(503).json({ error: 'Stripe webhook is not configured' });
+  if (!stripe) return res.status(503).json({ error: 'Stripe webhook is not configured' });
   const signature = req.headers['stripe-signature'];
   let event;
   try {
-    event = stripe.webhooks.constructEvent(req.body, signature, secret);
+    if (secret) {
+      event = stripe.webhooks.constructEvent(req.body, signature, secret);
+    } else {
+      const envelope = JSON.parse(req.body.toString('utf8'));
+      if (!envelope?.id || !String(envelope.id).startsWith('evt_')) throw new Error('Invalid Stripe event');
+      // A forged request cannot pass this lookup because the server retrieves
+      // the canonical event using its own Stripe secret key.
+      event = await stripe.events.retrieve(envelope.id);
+    }
   } catch (err) {
-    return res.status(400).json({ error: `Webhook signature verification failed: ${err.message}` });
+    return res.status(400).json({ error: `Webhook verification failed: ${err.message}` });
   }
   try {
     if (event.type === 'account.updated') {
@@ -602,6 +610,45 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
   } catch (err) {
     // Return 500 so Stripe retries a transient DB/API failure.
     console.error('[Stripe webhook]', err.message);
+    res.status(500).json({ error: 'Webhook processing failed' });
+  }
+});
+
+// Stripe signs connected-account events with a separate endpoint secret.
+app.post('/api/stripe/connect-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  const stripe = getStripe();
+  const secret = process.env.STRIPE_CONNECT_WEBHOOK_SECRET;
+  if (!stripe) return res.status(503).json({ error: 'Stripe Connect webhook is not configured' });
+  const signature = req.headers['stripe-signature'];
+  let event;
+  try {
+    if (secret) {
+      event = stripe.webhooks.constructEvent(req.body, signature, secret);
+    } else {
+      const envelope = JSON.parse(req.body.toString('utf8'));
+      if (!envelope?.id || !String(envelope.id).startsWith('evt_')) throw new Error('Invalid Stripe event');
+      event = await stripe.events.retrieve(envelope.id);
+    }
+  } catch (err) {
+    return res.status(400).json({ error: `Webhook verification failed: ${err.message}` });
+  }
+  try {
+    if (event.type === 'account.updated') {
+      const account = event.data.object;
+      const status = account.charges_enabled && account.payouts_enabled
+        ? 'active'
+        : account.requirements?.disabled_reason
+          ? 'restricted'
+          : 'pending';
+      await fetch(`${SUPABASE_URL}/rest/v1/profiles?stripe_connect_account_id=eq.${encodeURIComponent(account.id)}`, {
+        method: 'PATCH',
+        headers: { ...SVC_HEADERS, 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ stripe_connect_status: status }),
+      });
+    }
+    res.json({ received: true });
+  } catch (err) {
+    console.error('[Stripe Connect webhook]', err.message);
     res.status(500).json({ error: 'Webhook processing failed' });
   }
 });

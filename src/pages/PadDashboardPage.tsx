@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/context/AuthContext";
+import { authenticatedHeaders } from "@/lib/apiAuth";
 import { supabase } from "@/lib/supabase";
 import SpotDrawModal from "@/components/SpotDrawModal";
 import BookingChatDrawer from "@/components/BookingChatDrawer";
@@ -184,18 +185,20 @@ export default function PadDashboardPage() {
     goTo("addpad");
   }
 
-  const fetchListerBookings = useCallback(() => {
+  const fetchListerBookings = useCallback(async () => {
     if (!user?.id) return;
-    fetch(`/api/bookings/lister/${user.id}`)
+    const headers = await authenticatedHeaders();
+    fetch(`/api/bookings/lister/${user.id}`, { headers })
       .then(r => r.ok ? r.json() : [])
       .then(data => { if (Array.isArray(data)) setListerBookings(data); })
       .catch(() => {});
   }, [user?.id]);
 
-  const fetchHostInbox = useCallback(() => {
+  const fetchHostInbox = useCallback(async () => {
     if (!user?.id) return;
     setInboxLoading(true);
-    fetch(`/api/booking-chat/host-inbox/${user.id}`)
+    const headers = await authenticatedHeaders();
+    fetch(`/api/booking-chat/host-inbox/${user.id}`, { headers })
       .then(r => r.ok ? r.json() : [])
       .then(data => { if (Array.isArray(data)) setHostInbox(data); })
       .catch(() => {})
@@ -208,7 +211,7 @@ export default function PadDashboardPage() {
 
   useEffect(() => {
     if (!user?.id) { setLoadingPads(false); return; }
-    fetch(`/api/spots/user/${user.id}`)
+    authenticatedHeaders().then(headers => fetch(`/api/spots/user/${user.id}`, { headers }))
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (Array.isArray(data) && data.length > 0) {
@@ -316,13 +319,13 @@ export default function PadDashboardPage() {
       if (nameChanged) {
         if (trimmedName.length < 2) { setEditError("Pad name must be at least 2 characters."); setEditSaving(false); return; }
         const chkUrl = `/api/spots/check-name?name=${encodeURIComponent(trimmedName)}${openPad.spotId ? `&excludeId=${openPad.spotId}` : ""}`;
-        const chk = await fetch(chkUrl);
+        const chk = await fetch(chkUrl, { headers: await authenticatedHeaders() });
         const { available } = await chk.json();
         if (!available) { setEditError("That name is already taken. Try something unique."); setEditSaving(false); return; }
       }
       const r = await fetch(`/api/spots/${openPad.spotId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: await authenticatedHeaders("application/json"),
         body: JSON.stringify({
           ...(nameChanged ? { spot_name: trimmedName } : {}),
           price_per_hr: editDraft.price,
@@ -387,7 +390,7 @@ export default function PadDashboardPage() {
 
       await fetch("/api/support/conversations", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await authenticatedHeaders("application/json"),
         body: JSON.stringify({
           user_id: user.id,
           user_name: userProfile?.full_name || user.email || "Host",
@@ -417,7 +420,7 @@ export default function PadDashboardPage() {
     setRenameError("");
     try {
       const chkUrl = `/api/spots/check-name?name=${encodeURIComponent(trimmed)}${renamingPad.spotId ? `&excludeId=${renamingPad.spotId}` : ""}`;
-      const chk = await fetch(chkUrl);
+        const chk = await fetch(chkUrl, { headers: await authenticatedHeaders() });
       const { available } = await chk.json();
       if (!available) {
         setRenameError("That name is already taken across all Lily Pad accounts. Try something unique.");
@@ -426,7 +429,7 @@ export default function PadDashboardPage() {
       }
       const r = await fetch(`/api/spots/${renamingPad.spotId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: await authenticatedHeaders("application/json"),
         body: JSON.stringify({ spot_name: trimmed }),
       });
       if (!r.ok) {
@@ -469,7 +472,7 @@ export default function PadDashboardPage() {
     try {
       await fetch(`/api/spots/${pad.spotId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: await authenticatedHeaders("application/json"),
         body: JSON.stringify({ status: "archived" }),
       });
       updatePad(id, { status: "archived" });
@@ -491,7 +494,7 @@ export default function PadDashboardPage() {
     if (pad.spotId) {
       fetch(`/api/spots/${pad.spotId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: await authenticatedHeaders("application/json"),
         body: JSON.stringify({ auto_approve: newVal }),
       }).catch(() => {});
     }
@@ -546,7 +549,7 @@ export default function PadDashboardPage() {
     setPendingPauseId(null);
   }
 
-  function toggleService(id: number, service: string) {
+  async function toggleService(id: number, service: string) {
     let newServices: string[] = [];
     let spotId = "";
     setPads(prev => prev.map(p => {
@@ -560,7 +563,7 @@ export default function PadDashboardPage() {
     if (spotId) {
       fetch(`/api/spots/${spotId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: await authenticatedHeaders("application/json"),
         body: JSON.stringify({ services: newServices }),
       }).then(() => {
         if (serviceToastTimer.current) clearTimeout(serviceToastTimer.current);

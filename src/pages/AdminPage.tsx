@@ -1695,7 +1695,7 @@ export default function AdminPage() {
       });
       const d = await r.json();
       if (!r.ok) { setForgotError(d.error || "Something went wrong. Try again."); return; }
-      const { error: otpErr } = await supabase.auth.signInWithOtp({ email: e, options: { shouldCreateUser: true } });
+      const { error: otpErr } = await supabase.auth.signInWithOtp({ email: e, options: { shouldCreateUser: false } });
       if (otpErr) { setForgotError(otpErr.message || "Failed to send code. Try again."); return; }
       setForgotStep("otp");
     } catch { setForgotError("Network error. Try again."); }

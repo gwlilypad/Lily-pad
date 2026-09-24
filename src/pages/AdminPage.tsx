@@ -3070,23 +3070,23 @@ export default function AdminPage() {
           {usersSection === "padqueue" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,0.50)", letterSpacing: 0.8, textTransform: "uppercase" }}>
+                <span style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(14,31,64,0.65)", letterSpacing: 0.8, textTransform: "uppercase" }}>
                   {pendingSpots.length} spot{pendingSpots.length !== 1 ? "s" : ""} awaiting review
                 </span>
-                <button onClick={fetchPendingSpots} style={{ background: "rgba(255,255,255,0.08)", border: "none", borderRadius: 8, padding: "5px 10px", color: "rgba(255,255,255,0.70)", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: '"DM Sans",sans-serif' }}>↻ Refresh</button>
+                <button onClick={fetchPendingSpots} style={{ background: "#fff", border: "1px solid rgba(14,31,64,0.12)", borderRadius: 8, padding: "5px 10px", color: NAVY, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: '"DM Sans",sans-serif' }}>↻ Refresh</button>
               </div>
 
               {loadingPending ? (
-                <div style={{ textAlign: "center", padding: "40px 0", color: "rgba(255,255,255,0.4)", fontSize: 13 }}>Loading…</div>
+                <div style={{ textAlign: "center", padding: "40px 0", color: "rgba(14,31,64,0.65)", fontSize: 13 }}>Loading…</div>
               ) : pendingError ? (
-                <div role="alert" style={{ textAlign: "center", padding: "32px 20px", color: "#fca5a5", fontSize: 13 }}>
+                <div role="alert" style={{ textAlign: "center", padding: "32px 20px", color: "#b42318", fontSize: 13 }}>
                   {pendingError}<br />Use Refresh to try again, or sign in to Admin again.
                 </div>
               ) : pendingSpots.length === 0 ? (
                 <div style={{ textAlign: "center", padding: "48px 20px" }}>
                   <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
-                  <p style={{ color: "rgba(255,255,255,0.55)", fontSize: 14, fontWeight: 600, margin: 0 }}>No spots awaiting approval</p>
-                  <p style={{ color: "rgba(255,255,255,0.35)", fontSize: 12, margin: "6px 0 0" }}>New listings will appear here for review</p>
+                  <p style={{ color: NAVY, fontSize: 14, fontWeight: 600, margin: 0 }}>No spots awaiting approval</p>
+                  <p style={{ color: "rgba(14,31,64,0.6)", fontSize: 12, margin: "6px 0 0" }}>New listings will appear here for review</p>
                 </div>
               ) : pendingSpots.map(s => (
                 <div

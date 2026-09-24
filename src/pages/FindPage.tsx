@@ -430,7 +430,7 @@ function MapRefSetter({ mapRef }: { mapRef: React.MutableRefObject<L.Map | null>
   return null;
 }
 
-interface ArcPath { id: number; x1: number; y1: number; x2: number; y2: number; }
+interface ArcPath { id: string; x1: number; y1: number; x2: number; y2: number; }
 
 function NearbyArcBridge({ active, origin, spots, onPaths }: {
   active: boolean;
@@ -476,7 +476,6 @@ function MapMoveDetector({ onUserMove }: { onUserMove: () => void }) {
   const interacted = useRef(false);
   useMapEvents({
     dragstart:  () => { interacted.current = true; },
-    touchstart: () => { interacted.current = true; },
     moveend: () => {
       if (interacted.current) { interacted.current = false; onUserMove(); }
     },
@@ -876,7 +875,7 @@ function GlobeView({
   onFallback,
   onSpotPicked,
 }: {
-  spots: Array<{ lat: number; lng: number; id: number; price: string }>;
+  spots: Array<{ lat: number; lng: number; id: string; price: string }>;
   zoomTarget: [number, number] | null;
   onZoomedIn: () => void;
   onFallback: () => void;
@@ -1001,19 +1000,26 @@ export default function FindPage() {
   const { goTo, state, setState: setAppState } = useApp();
   const { user, profile, role, signOut: authSignOut } = useAuth();
   const navigate = useNavigate();
-  // Non-admin/staff users see a Coming Soon screen instead of the live map
-  const comingSoon = role !== "admin" && role !== "staff" && !state.adminPreview;
+  // The map is open to signed-in users; AuthGuard protects this route.
+  const comingSoon = false;
   const [spots, setSpots] = useState<SpotRecord[]>([]);
+  const [spotsLoading, setSpotsLoading] = useState(true);
+  const [spotsError, setSpotsError] = useState(false);
 
   useEffect(() => {
     fetch("/api/spots")
-      .then(r => r.ok ? r.json() : null)
+      .then(r => {
+        if (!r.ok) throw new Error("Could not load parking spots");
+        return r.json();
+      })
       .then((data: unknown) => {
-        if (Array.isArray(data) && data.length > 0) {
-          const mapped = (data as Record<string, unknown>[]).map(s => ({
+        if (Array.isArray(data)) {
+          const mapped = (data as Record<string, unknown>[])
+            .filter(s => Number(s.price_per_hr) > 0)
+            .map(s => ({
             id:        String(s.id),
-            price:     s.price_per_hr ? `$${s.price_per_hr}/hr` : "$4/hr",
-            addr:      String(s.address || s.addr || "Houston, TX"),
+            price:     `$${Number(s.price_per_hr)}/hr`,
+            addr:      String(s.address || s.addr || ""),
             meta:      `${s.pad_type || "Driveway"} · nearby`,
             lat:       Number(s.lat),
             lng:       Number(s.lng),
@@ -1022,11 +1028,15 @@ export default function FindPage() {
             photo_url:  String(s.photo_url || ""),
             photo_urls: Array.isArray(s.photo_urls) ? s.photo_urls as string[]
                         : (s.photo_url ? [String(s.photo_url)] : []),
-          }));
+          })).filter(s => s.id && s.addr && Number.isFinite(s.lat) && Number.isFinite(s.lng));
           setSpots(mapped);
+          setSpotsError(false);
+        } else {
+          throw new Error("Invalid parking spots response");
         }
       })
-      .catch(() => { /* keep static SPOTS fallback */ });
+      .catch(() => setSpotsError(true))
+      .finally(() => setSpotsLoading(false));
   }, []);
   const [filter, setFilter] = useState("All");
   const [suggestions, setSuggestions] = useState<NominatimResult[]>([]);
@@ -1056,7 +1066,7 @@ export default function FindPage() {
   } | null>(null);
   const [paymentStep, setPaymentStep] = useState<{
     clientSecret: string; publishableKey: string; amount: number;
-    spotId: string; addr: string; padType: string; hostPhone: string;
+    spotId: string; addr: string; padType: string; hostName: string; hostPhone: string;
     startTs: number; endTs: number; priceNum: number;
   } | null>(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
@@ -1080,8 +1090,11 @@ export default function FindPage() {
   });
   const [laterStart, setLaterStart] = useState<string>("09:00");
   const [laterEnd, setLaterEnd] = useState<string>("12:00");
-  const [savedSpots, setSavedSpots] = useState<number[]>(() => {
-    try { return JSON.parse(localStorage.getItem("lilypad_saved") ?? "[]") as number[]; } catch { return []; }
+  const [savedSpots, setSavedSpots] = useState<string[]>(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem("lilypad_saved") ?? "[]");
+      return Array.isArray(stored) ? stored.map(String) : [];
+    } catch { return []; }
   });
   const [acctView, setAcctView] = useState<"menu" | "saved" | "account" | "support" | "bookings" | "manage-spot" | "payments">("menu");
   const [drawerMode, setDrawerMode] = useState<"driver" | "lister">(() => {
@@ -1144,7 +1157,7 @@ export default function FindPage() {
     supabase.from("spots").select("*").eq("auth_user_id", user.id).then(({ data }) => {
       if (data && data.length > 0) {
         setMyHostSpots((data as Record<string, unknown>[]).map(s => ({
-          id: Number(s.id),
+          id: String(s.id),
           price: s.price_per_hr ? `$${s.price_per_hr}/hr` : "$4/hr",
           addr: String(s.address || s.addr || "Houston, TX"),
           meta: `${s.pad_type || "Driveway"} · nearby`,
@@ -1251,7 +1264,7 @@ export default function FindPage() {
   function setVehicle(value: string) {
     setAppState(s => ({ ...s, drAns: { ...s.drAns, 4: value } }));
   }
-  const toggleSave = (id: number) => {
+  const toggleSave = (id: string) => {
     setSavedSpots(prev => {
       const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
       localStorage.setItem("lilypad_saved", JSON.stringify(next));
@@ -1383,9 +1396,8 @@ export default function FindPage() {
       (a, b) => haversineKm(a.lat, a.lng, nearbyOrigin[0], nearbyOrigin[1]) - haversineKm(b.lat, b.lng, nearbyOrigin[0], nearbyOrigin[1])
     );
     const withinRadius = sorted.filter(s => haversineKm(s.lat, s.lng, nearbyOrigin[0], nearbyOrigin[1]) * 1000 <= nearbyRadius);
-    // Always show at least 6 closest spots so the list is never empty
-    return withinRadius.length >= 3 ? withinRadius : sorted.slice(0, 6);
-  }, [nearbyMode, nearbyRadius, nearbyOrigin]);
+    return withinRadius;
+  }, [nearbyMode, nearbyRadius, nearbyOrigin, spots]);
   const nearbyIds = useMemo(() => new Set(nearbySpots.map(s => s.id)), [nearbySpots]);
 
   const viewportSpots = useMemo(() => {
@@ -1396,9 +1408,9 @@ export default function FindPage() {
     }).sort((a, b) => {
       if (a.featured && !b.featured) return -1;
       if (!a.featured && b.featured) return 1;
-      return parseInt(a.price) - parseInt(b.price);
+      return Number(a.price.replace(/[^0-9.]/g, "")) - Number(b.price.replace(/[^0-9.]/g, ""));
     });
-  }, [mapBounds, filter]);
+  }, [mapBounds, filter, spots]);
 
   const searchNearbySpots = useMemo(() => {
     if (!searchPin) return [];
@@ -1407,7 +1419,7 @@ export default function FindPage() {
       .filter(s => s._dist <= 4.828)
       .sort((a, b) => a._dist - b._dist)
       .slice(0, 20);
-  }, [searchPin]);
+  }, [searchPin, spots]);
 
   const searchNearbyCount = searchNearbySpots.length;
 
@@ -2798,13 +2810,13 @@ export default function FindPage() {
               <div ref={cardsRef} style={{ flex: 1, minHeight: 0, overflowY: "auto", WebkitOverflowScrolling: "touch" as any, touchAction: "pan-y", padding: "4px 16px 16px" }}>
                 {pads.length === 0 ? (
                   <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: "36px 0" }}>
-                    <p style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.35)", margin: 0, letterSpacing: 0.1, textAlign: "center" }}>
-                      Pan or zoom the map<br />to find pads
+                    <p style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.55)", margin: 0, letterSpacing: 0.1, textAlign: "center" }}>
+                      {spotsLoading ? "Loading parking spots…" : spotsError ? "Could not load parking spots. Please refresh and try again." : spots.length === 0 ? "No approved parking spots yet. Check back soon." : <>Pan or zoom the map<br />to find pads</>}
                     </p>
                   </div>
                 ) : (() => {
                   type Avail = { kind: "open" | "soon" | "later"; openMin: number; closeMin: number; openLabel: string };
-                  const computeAvail = (_id: number): Avail => {
+                  const computeAvail = (_id: string): Avail => {
                     return { kind: "open", openMin: 0, closeMin: 24 * 60, openLabel: "" };
                   };
                   const padsWithAvail = pads.map(s => ({ spot: s, avail: computeAvail(s.id) }));
@@ -3013,7 +3025,7 @@ export default function FindPage() {
 
               {/* Save + Share action row */}
               {(() => {
-                const isSaved = savedSpots.includes(spot.id as unknown as number);
+                const isSaved = savedSpots.includes(spot.id);
                 const handleShare = () => {
                   const url = `${window.location.origin}/find`;
                   const text = `Check out this parking spot on Lily Pad: ${spot.addr}`;
@@ -3032,7 +3044,7 @@ export default function FindPage() {
                 return (
                   <div style={{ display: "flex", gap: 10, padding: "0 16px 14px", flexShrink: 0 }}>
                     <button
-                      onClick={() => toggleSave(spot.id as unknown as number)}
+                      onClick={() => toggleSave(spot.id)}
                       style={{
                         flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
                         minHeight: 48, borderRadius: 100,
@@ -3261,8 +3273,6 @@ export default function FindPage() {
                     if (bookStartTs == null || bookEndTs == null || isBooked || conflict || paymentLoading) return;
                     const priceNum = Number(spot.price.replace(/[^0-9.]/g, "")) || 0;
                     const padType = (spot.meta.split("·")[0] || "Spot").trim();
-                    const uuidDigits = spot.id.replace(/[^0-9]/g, "").padEnd(10, "5");
-                    const hostPhone = `(${uuidDigits.slice(0,3)}) ${uuidDigits.slice(3,6)}-${uuidDigits.slice(6,10)}`;
 
                     if (!user) return;
 
@@ -3298,7 +3308,7 @@ export default function FindPage() {
                         clientSecret: pi.clientSecret,
                         publishableKey: cfg.publishableKey,
                         amount: pi.amount,
-                        spotId: spot.id, addr: spot.addr, padType, hostPhone,
+                        spotId: spot.id, addr: spot.addr, padType, hostName: spot.host_name || "Host", hostPhone: "",
                         startTs: bookStartTs, endTs: bookEndTs, priceNum,
                       });
                     } catch (e: any) {
@@ -3395,7 +3405,7 @@ export default function FindPage() {
                           cancellationPolicy: acceptedCancellation,
                           paymentAuthorization: acceptedPaymentAuthorization,
                         },
-                        booking_data: { addr: ps.addr, padType: ps.padType, hostName, hostPhone: ps.hostPhone },
+                        booking_data: { addr: ps.addr, padType: ps.padType, hostName: ps.hostName, hostPhone: ps.hostPhone },
                       }),
                     });
                     if (r.ok) {
@@ -3419,7 +3429,7 @@ export default function FindPage() {
                       id: newId, uuid: bookingUuid,
                       spotId: ps.spotId, addr: ps.addr, city: "Houston, TX", padType: ps.padType,
                       startTs: ps.startTs, endTs: ps.endTs, pricePerHr: ps.priceNum,
-                      hostName, hostPhone: ps.hostPhone, status: "confirmed" as const,
+                      hostName: ps.hostName, hostPhone: ps.hostPhone, status: "active" as const,
                     };
                     return { ...s, bookings: [...s.bookings, rec] };
                   });

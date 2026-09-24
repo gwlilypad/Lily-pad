@@ -1005,14 +1005,17 @@ export default function FindPage() {
   const [spots, setSpots] = useState<SpotRecord[]>([]);
   const [spotsLoading, setSpotsLoading] = useState(true);
   const [spotsError, setSpotsError] = useState(false);
+  const centeredOnFirstSpot = useRef(false);
 
   useEffect(() => {
-    fetch("/api/spots")
+    let mounted = true;
+    const loadSpots = () => fetch("/api/spots")
       .then(r => {
         if (!r.ok) throw new Error("Could not load parking spots");
         return r.json();
       })
       .then((data: unknown) => {
+        if (!mounted) return;
         if (Array.isArray(data)) {
           const mapped = (data as Record<string, unknown>[])
             .filter(s => Number(s.price_per_hr) > 0)
@@ -1031,12 +1034,20 @@ export default function FindPage() {
           })).filter(s => s.id && s.addr && Number.isFinite(s.lat) && Number.isFinite(s.lng));
           setSpots(mapped);
           setSpotsError(false);
+          if (!_savedLoc && mapped.length && !centeredOnFirstSpot.current) {
+            centeredOnFirstSpot.current = true;
+            setMapCenter([mapped[0].lat, mapped[0].lng]);
+            setMapZoom(NEIGHBORHOOD_ZOOM);
+          }
         } else {
           throw new Error("Invalid parking spots response");
         }
       })
-      .catch(() => setSpotsError(true))
-      .finally(() => setSpotsLoading(false));
+      .catch(() => { if (mounted) setSpotsError(true); })
+      .finally(() => { if (mounted) setSpotsLoading(false); });
+    void loadSpots();
+    window.addEventListener("focus", loadSpots);
+    return () => { mounted = false; window.removeEventListener("focus", loadSpots); };
   }, []);
   const [filter, setFilter] = useState("All");
   const [suggestions, setSuggestions] = useState<NominatimResult[]>([]);

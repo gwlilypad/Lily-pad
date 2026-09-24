@@ -773,11 +773,7 @@ app.post('/api/auth/signin', async (req, res) => {
     // Block admin/staff from using the customer sign-in portal
     if (SVC_KEY) {
       const emailLower = email.toLowerCase().trim();
-      const adminCheck = await fetch(
-        `${SUPABASE_URL}/rest/v1/admin_users?email=eq.${encodeURIComponent(emailLower)}&select=role`,
-        { headers: SVC_HEADERS }
-      ).then(r2 => r2.json()).catch(() => []);
-      if (Array.isArray(adminCheck) && adminCheck.length > 0) {
+      if (await resolveStaffRole(emailLower)) {
         return res.status(403).json({ staff_redirect: true });
       }
     }
@@ -1673,34 +1669,8 @@ app.post('/api/staff/signin', async (req, res) => {
     const data = await r.json();
     if (!r.ok) return res.status(r.status).json({ error: data.error_description || data.message || 'Invalid credentials' });
 
-    // Check admin_users table
-    const adminRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/admin_users?email=eq.${encodeURIComponent(emailLower)}&select=role,status`,
-      { headers: SVC_HEADERS }
-    );
-    const adminRows = await adminRes.json().catch(() => []);
-
-    let role = 'staff';
-    if (adminRes.ok && Array.isArray(adminRows) && adminRows.length) {
-      if (adminRows[0].status === 'suspended') return res.status(403).json({ error: 'This admin account is suspended.' });
-      // Existing staff/admin record — use stored role
-      role = adminRows[0].role || 'staff';
-      fetch(`${SUPABASE_URL}/rest/v1/admin_users?email=eq.${encodeURIComponent(emailLower)}`,
-        { method: 'PATCH', headers: SVC_HEADERS, body: JSON.stringify({ last_login_at: new Date().toISOString() }) }
-      ).catch(() => {});
-    } else if (ADMIN_EMAILS.includes(emailLower)) {
-      // Bootstrap: email is in ADMIN_EMAILS env var — auto-create admin record on first login
-      role = 'admin';
-      await fetch(`${SUPABASE_URL}/rest/v1/admin_users`, {
-        method : 'POST',
-        headers: { ...SVC_HEADERS, 'Prefer': 'resolution=ignore-duplicates' },
-        body   : JSON.stringify({ email: emailLower, role: 'admin', auth_user_id: data.user?.id || null, last_login_at: new Date().toISOString() }),
-      }).catch(() => {});
-      console.log(`[Admin] Bootstrapped admin: ${emailLower}`);
-    } else {
-      return res.status(403).json({ error: 'Not authorized as staff. Contact your administrator.' });
-    }
-
+    const role = await resolveStaffRole(emailLower);
+    if (!role) return res.status(403).json({ error: 'Not authorized as staff. Contact your administrator.' });
     res.json({ session: data, role });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -2285,21 +2255,49 @@ async function verifyBearerToken(req) {
   } catch { return null; }
 }
 
-// Verifies a JWT AND checks that the caller is in the admin_users table (role=admin or staff).
-// Returns the role string on success, or null on failure.
-async function verifyAdminBearerToken(req) {
-  const caller = await verifyBearerToken(req);
-  if (!caller?.email) return null;
+// The live staff directory is the admin/staff whitelists. An older admin_users
+// table is optional; when present, its role/suspension takes precedence.
+async function resolveStaffRole(email) {
+  if (!SVC_KEY || !email) return null;
+  const normalizedEmail = email.toLowerCase().trim();
+  let savedRole = null;
   try {
-    const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/admin_users?email=eq.${encodeURIComponent(caller.email)}&select=role,status`,
+    const adminRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/admin_users?email=eq.${encodeURIComponent(normalizedEmail)}&select=role,status`,
       { headers: SVC_HEADERS }
     );
-    const rows = await r.json();
-    if (!r.ok || !Array.isArray(rows) || rows.length === 0) return null;
-    if (rows[0].status === 'suspended') return null;
-    return rows[0].role || 'staff'; // 'admin' | 'staff'
+    if (adminRes.ok) {
+      const rows = await adminRes.json();
+      if (!Array.isArray(rows)) return null;
+      if (rows.length) {
+        if (rows[0].status === 'suspended') return null;
+        if (rows[0].role === 'admin' || rows[0].role === 'staff') savedRole = rows[0].role;
+      }
+    } else if (adminRes.status !== 400 && adminRes.status !== 404) {
+      return null;
+    }
+
+    for (const [table, role] of [['admin_whitelist', 'admin'], ['staff_whitelist', 'staff']]) {
+      const response = await fetch(
+        `${SUPABASE_URL}/rest/v1/${table}?email=eq.${encodeURIComponent(normalizedEmail)}&select=id`,
+        { headers: SVC_HEADERS }
+      );
+      if (!response.ok) return null;
+      const rows = await response.json();
+      if (!Array.isArray(rows)) return null;
+      if (rows.length) {
+        if (getStaffStatus(table, rows[0].id) === 'suspended') return null;
+        return savedRole || role;
+      }
+    }
+    return savedRole || (ADMIN_EMAILS.includes(normalizedEmail) ? 'admin' : null);
   } catch { return null; }
+}
+
+// Verifies a Supabase JWT and checks the signed-in email against staff access.
+async function verifyAdminBearerToken(req) {
+  const caller = await verifyBearerToken(req);
+  return caller?.email ? resolveStaffRole(caller.email) : null;
 }
 
 async function getOrCreateStripeCustomer(caller) {

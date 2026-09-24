@@ -33,7 +33,7 @@ const CONNECT_THRESHOLD = 0.72;
 
 export default function HomePage() {
   const { goTo, setState } = useApp();
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const navigate = useNavigate();
   const [modalOpen, setModalOpen] = useState(false);
   const [modalSuccess, setModalSuccess] = useState(false);
@@ -128,6 +128,27 @@ export default function HomePage() {
       ref={containerRef}
       style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden", background: "#0E1F40", userSelect: "none", fontFamily: '"DM Sans", sans-serif' }}
     >
+      <button
+        type="button"
+        onClick={() => navigate(user ? (role === "host" ? "/account" : "/driveraccount") : "/signin")}
+        style={{
+          position: "absolute",
+          top: "calc(env(safe-area-inset-top) + 16px)",
+          right: 18,
+          zIndex: 20,
+          border: "1px solid rgba(255,255,255,0.75)",
+          borderRadius: 999,
+          padding: "9px 15px",
+          background: "#0E1F40",
+          color: "#fff",
+          fontSize: 13,
+          fontWeight: 700,
+          fontFamily: '"DM Sans", sans-serif',
+          cursor: "pointer",
+        }}
+      >
+        {user ? "My Account" : "Sign in"}
+      </button>
 
       {/* ── NAVY SECTION ── */}
       <div style={{

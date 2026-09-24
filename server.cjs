@@ -1065,47 +1065,16 @@ app.post('/api/staff/check-whitelist', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── Staff/admin forgot password — checks all three tables before sending reset ─
+// ── Staff/admin forgot password — use the same authorization as sign-in ───────
 app.post('/api/staff/forgot-password', async (req, res) => {
   if (!SVC_KEY) return res.status(500).json({ error: 'Service key not configured' });
   const { email } = req.body || {};
-  if (!email) return res.status(400).json({ error: 'email required' });
+  if (typeof email !== 'string' || !email.trim()) return res.status(400).json({ error: 'email required' });
   const emailLower = email.toLowerCase().trim();
   try {
-    // 1. Check admin_users (activated accounts)
-    const auRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/admin_users?email=eq.${encodeURIComponent(emailLower)}&select=email,status&limit=1`,
-      { headers: SVC_HEADERS }
-    );
-    const auRows = await auRes.json();
-    if (Array.isArray(auRows) && auRows.length > 0) {
-      if (auRows[0].status === 'suspended') {
-        return res.status(403).json({ error: 'This account is suspended. Contact an admin for access.' });
-      }
-      // Found and active — send reset
-    } else {
-      // 2. Check admin_whitelist
-      const awRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/admin_whitelist?email=eq.${encodeURIComponent(emailLower)}&select=email&limit=1`,
-        { headers: SVC_HEADERS }
-      );
-      const awRows = await awRes.json();
-      const inAdminWl = Array.isArray(awRows) && awRows.length > 0;
-
-      // 3. Check staff_whitelist
-      const swRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/staff_whitelist?email=eq.${encodeURIComponent(emailLower)}&select=email&limit=1`,
-        { headers: SVC_HEADERS }
-      );
-      const swRows = await swRes.json();
-      const inStaffWl = Array.isArray(swRows) && swRows.length > 0;
-
-      if (!inAdminWl && !inStaffWl) {
-        return res.status(404).json({ error: 'No staff or admin account matches that email.' });
-      }
+    if (!await resolveStaffRole(emailLower)) {
+      return res.status(404).json({ error: 'No active staff or admin account matches that email.' });
     }
-
-    console.log(`[Staff ForgotPassword] Email verified for reset: ${emailLower}`);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

@@ -33,7 +33,7 @@ const CONNECT_THRESHOLD = 0.72;
 
 export default function HomePage() {
   const { goTo, setState } = useApp();
-  const { user, role } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [modalOpen, setModalOpen] = useState(false);
   const [modalSuccess, setModalSuccess] = useState(false);
@@ -130,7 +130,7 @@ export default function HomePage() {
     >
       <button
         type="button"
-        onClick={() => navigate(user ? (role === "host" ? "/account" : "/driveraccount") : "/signin")}
+        onClick={() => navigate("/signin")}
         style={{
           position: "absolute",
           top: "calc(env(safe-area-inset-top) + 16px)",
@@ -147,7 +147,7 @@ export default function HomePage() {
           cursor: "pointer",
         }}
       >
-        {user ? "My Account" : "Sign in"}
+        Sign in
       </button>
 
       {/* ── NAVY SECTION ── */}

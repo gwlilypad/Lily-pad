@@ -1879,37 +1879,85 @@ app.get('/api/reverse-geocode', async (req, res) => {
   }
 });
 
-// ── Geocode: validate address via Google Maps and return lat/lng + city/state ──
+// Nominatim is a low-volume backup when Google geocoding is unavailable.
+// Respect the public service's 1-request/second limit and cache repeat lookups.
+const backupGeocodeCache = new Map();
+let lastBackupGeocodeRequest = 0;
+async function backupGeocode(address) {
+  const key = address.trim().toLowerCase();
+  const cached = backupGeocodeCache.get(key);
+  if (cached && cached.expires > Date.now()) return cached.value;
+  if (Date.now() - lastBackupGeocodeRequest < 1100) {
+    throw new Error('Address lookup is busy. Please wait a moment and try again.');
+  }
+  lastBackupGeocodeRequest = Date.now();
+  const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=5&q=${encodeURIComponent(address)}`;
+  const r = await fetch(url, {
+    headers: {
+      'User-Agent': 'LilyPadParking/1.0 (https://www.lilypadparking.com)',
+      'Referer': 'https://www.lilypadparking.com/',
+      'Accept': 'application/json',
+    },
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!r.ok) throw new Error('Address lookup is temporarily unavailable. Please try again.');
+  const results = await r.json();
+  const requestedNumber = address.trim().match(/^\d+[A-Za-z]?\b/)?.[0]?.toLowerCase();
+  const match = results.find(item => {
+    const parts = item.address || {};
+    return parts.house_number && (!requestedNumber || parts.house_number.toLowerCase() === requestedNumber)
+      && parts.road && Number.isFinite(Number(item.lat)) && Number.isFinite(Number(item.lon));
+  });
+  const value = match ? {
+    lat: Number(match.lat), lng: Number(match.lon),
+    formatted_address: match.display_name,
+    city: match.address.city || match.address.town || match.address.village || match.address.municipality || '',
+    state: (match.address['ISO3166-2-lvl4'] || '').replace(/^US-/, '') || match.address.state || '',
+    zip: match.address.postcode || '',
+  } : null;
+  if (backupGeocodeCache.size >= 500) backupGeocodeCache.delete(backupGeocodeCache.keys().next().value);
+  backupGeocodeCache.set(key, { value, expires: Date.now() + 24 * 60 * 60 * 1000 });
+  return value;
+}
+
+// ── Geocode: validate address and return lat/lng + city/state ───────────────
 app.get('/api/geocode', async (req, res) => {
   const { address } = req.query;
-  if (!address) return res.status(400).json({ error: 'address required' });
+  if (typeof address !== 'string' || address.length > 300 || !/^\s*\d+[A-Za-z]?\b/.test(address)) {
+    return res.status(400).json({ error: 'Enter a street number, street name, city, and state.' });
+  }
   const GMAPS_KEY = process.env.GOOGLE_MAPS_API_KEY;
-  if (!GMAPS_KEY) return res.status(500).json({ error: 'Geocoding not configured' });
   try {
-    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${GMAPS_KEY}`;
-    const r = await fetch(url);
-    const data = await r.json();
-    if (data.status !== 'OK' || !data.results || data.results.length === 0) {
-      return res.status(404).json({ error: 'Address not found — please enter a valid street address.' });
+    if (GMAPS_KEY) {
+      try {
+        const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${GMAPS_KEY}`;
+        const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+        const data = await r.json();
+        if (r.ok && data.status === 'OK' && data.results?.length) {
+          const result = data.results.find(item => item.address_components?.some(c => c.types.includes('street_number')));
+          if (result) {
+            const comps = result.address_components;
+            const get = type => comps.find(c => c.types.includes(type))?.long_name || '';
+            const getS = type => comps.find(c => c.types.includes(type))?.short_name || '';
+            const { lat, lng } = result.geometry.location;
+            return res.json({
+              lat, lng, formatted_address: result.formatted_address,
+              city: get('locality') || get('sublocality_level_1') || get('administrative_area_level_3'),
+              state: getS('administrative_area_level_1'), zip: get('postal_code'),
+            });
+          }
+        } else if (data.status !== 'ZERO_RESULTS') {
+          console.warn('[Geocode] Google lookup unavailable:', data.status || r.status);
+        }
+      } catch (error) {
+        console.warn('[Geocode] Google lookup failed:', error.message);
+      }
     }
-    const result = data.results[0];
-    const types = result.types || [];
-    const comps = result.address_components || [];
-    const get  = (type) => comps.find(c => c.types.includes(type))?.long_name  || '';
-    const getS = (type) => comps.find(c => c.types.includes(type))?.short_name || '';
-    // Must be a street-level result
-    const hasStreetNumber = comps.some(c => c.types.includes('street_number'));
-    const isVague = types.includes('country') || types.includes('administrative_area_level_1') || types.includes('locality');
-    if (isVague || !hasStreetNumber) {
-      return res.status(422).json({ error: 'Address not found — please enter a valid street address.' });
-    }
-    const { lat, lng } = result.geometry.location;
-    const city  = get('locality') || get('sublocality_level_1') || get('administrative_area_level_3');
-    const state = getS('administrative_area_level_1');
-    const zip   = get('postal_code');
-    res.json({ lat, lng, formatted_address: result.formatted_address, city, state, zip });
+    const backup = await backupGeocode(address);
+    if (!backup) return res.status(404).json({ error: 'Address not found. Check the street number and name, or pin your location on the map.' });
+    res.json(backup);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(503).json({ error: e.message || 'Address lookup is temporarily unavailable. Please try again.' });
   }
 });
 

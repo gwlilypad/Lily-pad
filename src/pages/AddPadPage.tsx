@@ -103,11 +103,14 @@ export default function AddPadPage() {
       const enteredState   = addrState.trim().toUpperCase();
       const returnedState  = (data.state || "").toUpperCase();
 
-      const cityOk  = returnedCity.includes(enteredCity) || enteredCity.includes(returnedCity);
+      const enteredZip = addrZip.trim();
+      const returnedZip = String(data.zip || "").trim();
+      const zipOk = !!enteredZip && !!returnedZip && enteredZip === returnedZip.slice(0, 5);
+      const cityOk = zipOk || (!!returnedCity && (returnedCity.includes(enteredCity) || enteredCity.includes(returnedCity)));
       const stateOk = !enteredState || enteredState === returnedState;
 
       if (!cityOk || !stateOk) {
-        setAddrError("Address not found — please enter a valid street address.");
+        setAddrError("The city, state, or ZIP doesn't match this address. Check the details or pin your location on the map.");
         return;
       }
 
@@ -118,7 +121,7 @@ export default function AddPadPage() {
       // version silently rename streets (e.g. "Frst" → "First", "Frst Ln" → "Forest Ln")
       advance(fullAddr);
     } catch {
-      setAddrError("Address not found — please enter a valid street address.");
+      setAddrError("Address lookup is temporarily unavailable. Please try again or pin your location on the map.");
     } finally {
       setAddrValidating(false);
     }

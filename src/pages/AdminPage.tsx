@@ -80,8 +80,6 @@ interface MockUser {
 }
 
 // ── localStorage keys ───────────────────────────────────────────────────────
-const ADMIN_LOGIN_KEY   = "lilypad.admin.loggedIn.v1";
-const ADMIN_ROLE_KEY    = "lilypad.admin.role.v1";
 const ADMIN_USERS_KEY   = "lilypad.admin.users.v1";
 const STAFF_ACCOUNTS_KEY = "lilypad.admin.staff.v1";
 
@@ -880,17 +878,9 @@ interface PendingSpot {
 
 export default function AdminPage() {
   const { goTo, setState } = useApp();
-  const [loggedIn, setLoggedIn] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    try { return window.localStorage.getItem(ADMIN_LOGIN_KEY) === "1"; } catch { return false; }
-  });
-  const [role, setRole] = useState<AdminRole | null>(() => {
-    if (typeof window === "undefined") return null;
-    try {
-      const r = window.localStorage.getItem(ADMIN_ROLE_KEY);
-      return r === "admin" || r === "staff" ? (r as AdminRole) : null;
-    } catch { return null; }
-  });
+  const [loggedIn, setLoggedIn] = useState(false);
+  const [role, setRole] = useState<AdminRole | null>(null);
+  const [checkingSession, setCheckingSession] = useState(true);
   const [email, setEmail]         = useState("");
   const [password, setPassword]   = useState("");
   const [error, setError]         = useState("");
@@ -931,6 +921,7 @@ export default function AdminPage() {
   const [usersSection, setUsersSection]   = useState<"accounts" | "padqueue" | "pending">("accounts");
   const [pendingSpots, setPendingSpots]   = useState<PendingSpot[]>([]);
   const [loadingPending, setLoadingPending] = useState(false);
+  const [pendingError, setPendingError] = useState("");
   const [approvingSpotId, setApprovingSpotId] = useState<string | null>(null);
 
   // Early access signups (Pending tab)
@@ -1061,6 +1052,36 @@ export default function AdminPage() {
   const agentThreadEndRef = useRef<HTMLDivElement | null>(null);
 
   // Initial load + live sync.
+  useEffect(() => {
+    let mounted = true;
+    supabase.auth.getSession().then(async ({ data }) => {
+      const session = data.session;
+      if (!session) return;
+      const response = await fetch("/api/staff/session", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (!response.ok || !mounted) return;
+      const verified = await response.json();
+      if (!mounted || (verified.role !== "admin" && verified.role !== "staff")) return;
+      setAdminAccessToken(session.access_token);
+      setRole(verified.role);
+      setLoggedIn(true);
+    }).catch(() => {
+      // A failed session check must not grant admin access.
+    }).finally(() => {
+      if (mounted) setCheckingSession(false);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!mounted) return;
+      if (event === "TOKEN_REFRESHED" && session) setAdminAccessToken(session.access_token);
+      if (event === "SIGNED_OUT") {
+        setAdminAccessToken("");
+        setLoggedIn(false);
+        setRole(null);
+      }
+    });
+    return () => { mounted = false; subscription.unsubscribe(); };
+  }, []);
   useEffect(() => { refreshTickets(); }, []);
   useEffect(() => subscribeToSupport(() => refreshTickets()), []);
   useEffect(() => { if (view === "service") refreshTickets(); }, [view]);
@@ -1131,7 +1152,7 @@ export default function AdminPage() {
   useEffect(() => {
     if (view === "users" && usersSection === "padqueue") fetchPendingSpots();
     if (view === "users" && usersSection === "pending")  fetchEarlySignups();
-  }, [view, usersSection]);
+  }, [view, usersSection, adminAccessToken]);
 
   const [earlySignupsTableReady, setEarlySignupsTableReady] = useState<boolean | null>(null);
 
@@ -1205,11 +1226,16 @@ export default function AdminPage() {
 
   async function fetchPendingSpots() {
     setLoadingPending(true);
+    setPendingError("");
     try {
       const r = await fetch("/api/spots/pending", { headers: adminAuthHeaders() });
       const d = await r.json();
-      if (r.ok) setPendingSpots(Array.isArray(d) ? d : []);
-    } catch {}
+      if (!r.ok) throw new Error(typeof d?.error === "string" ? d.error : "Could not load the pad queue.");
+      if (!Array.isArray(d)) throw new Error("The pad queue returned an invalid response.");
+      setPendingSpots(d);
+    } catch (e) {
+      setPendingError(e instanceof Error ? e.message : "Could not load the pad queue.");
+    }
     finally { setLoadingPending(false); }
   }
 
@@ -1217,8 +1243,12 @@ export default function AdminPage() {
     setApprovingSpotId(spotId);
     try {
       const r = await fetch(`/api/spots/${spotId}/approve`, { method: "POST", headers: adminAuthHeaders() });
-      if (r.ok) { setPendingSpots(prev => prev.filter(s => s.id !== spotId)); setToast("Spot approved — host notified by email"); }
-    } catch {}
+      const d = await r.json();
+      if (!r.ok || !d?.approved) throw new Error(typeof d?.error === "string" ? d.error : "Could not approve the pad.");
+      setPendingSpots(prev => prev.filter(s => s.id !== spotId));
+      setAdminStats(prev => prev ? { ...prev, pendingSpots: Math.max(0, prev.pendingSpots - 1), activeSpots: prev.activeSpots + 1 } : prev);
+      setToast("Pad approved — now live on the map");
+    } catch (e) { setToast(e instanceof Error ? e.message : "Could not approve the pad."); }
     finally { setApprovingSpotId(null); }
   }
 
@@ -1226,8 +1256,12 @@ export default function AdminPage() {
     setRejectingSpotId(spotId);
     try {
       const r = await fetch(`/api/spots/${spotId}/reject`, { method: "POST", headers: adminAuthHeaders() });
-      if (r.ok) { setPendingSpots(prev => prev.filter(s => s.id !== spotId)); setToast("Listing rejected"); }
-    } catch {}
+      const d = await r.json();
+      if (!r.ok || !d?.rejected) throw new Error(typeof d?.error === "string" ? d.error : "Could not reject the pad.");
+      setPendingSpots(prev => prev.filter(s => s.id !== spotId));
+      setAdminStats(prev => prev ? { ...prev, pendingSpots: Math.max(0, prev.pendingSpots - 1) } : prev);
+      setToast("Listing rejected");
+    } catch (e) { setToast(e instanceof Error ? e.message : "Could not reject the pad."); }
     finally { setRejectingSpotId(null); }
   }
 
@@ -1501,27 +1535,6 @@ export default function AdminPage() {
   useEffect(() => {
     if (view === "staff" && role !== "admin") setView("dashboard");
   }, [view, role]);
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try { window.localStorage.setItem(ADMIN_LOGIN_KEY, loggedIn ? "1" : "0"); } catch {}
-  }, [loggedIn]);
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      if (role) window.localStorage.setItem(ADMIN_ROLE_KEY, role);
-      else window.localStorage.removeItem(ADMIN_ROLE_KEY);
-    } catch {}
-  }, [role]);
-  // Safety: if localStorage says "logged in" but role couldn't be restored
-  // (e.g. stale data from before ADMIN_ROLE_KEY was defined), force re-login
-  // so the role-chooser + sign-in screen appear correctly.
-  useEffect(() => {
-    if (loggedIn && !role) {
-      setLoggedIn(false);
-      try { window.localStorage.setItem(ADMIN_LOGIN_KEY, "0"); } catch {}
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // Auto-dismiss toast.
   useEffect(() => {
@@ -1614,15 +1627,29 @@ export default function AdminPage() {
       });
       const data = await r.json();
       if (!r.ok) { setError(data.error || "Invalid credentials. Contact your administrator."); return; }
+      if (!data.session?.access_token || !data.session?.refresh_token) {
+        setError("Could not start a secure admin session. Please try again.");
+        return;
+      }
+      const { data: authData, error: authError } = await supabase.auth.setSession({
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token,
+      });
+      if (authError || !authData.session) {
+        setError("Could not start a secure admin session. Please try again.");
+        return;
+      }
       const serverRole: AdminRole = data.role === "admin" ? "admin" : "staff";
       setRole(serverRole);
       setLoggedIn(true);
-      if (data.session?.access_token) setAdminAccessToken(data.session.access_token);
+      setAdminAccessToken(authData.session.access_token);
     } catch { setError("Network error. Please try again."); }
     finally { setLoginLoading(false); }
   }
 
   function handleSignOut() {
+    void supabase.auth.signOut();
+    setAdminAccessToken("");
     setLoggedIn(false);
     setRole(null);
     setEmail("");
@@ -1803,7 +1830,9 @@ export default function AdminPage() {
       </div>
 
       {/* ── Content ── */}
-      {showActivate ? (
+      {checkingSession ? (
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff" }}>Checking admin session…</div>
+      ) : showActivate ? (
         /* ── ACCOUNT ACTIVATION (pre-login, accessible from role picker or sign-in) ── */
         <div style={{ flex: 1, overflowY: "auto", padding: "24px 20px 32px", display: "flex", flexDirection: "column", gap: 20, justifyContent: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -3049,6 +3078,10 @@ export default function AdminPage() {
 
               {loadingPending ? (
                 <div style={{ textAlign: "center", padding: "40px 0", color: "rgba(255,255,255,0.4)", fontSize: 13 }}>Loading…</div>
+              ) : pendingError ? (
+                <div role="alert" style={{ textAlign: "center", padding: "32px 20px", color: "#fca5a5", fontSize: 13 }}>
+                  {pendingError}<br />Use Refresh to try again, or sign in to Admin again.
+                </div>
               ) : pendingSpots.length === 0 ? (
                 <div style={{ textAlign: "center", padding: "48px 20px" }}>
                   <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>

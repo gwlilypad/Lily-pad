@@ -1675,13 +1675,14 @@ app.post('/api/staff/signin', async (req, res) => {
 
     // Check admin_users table
     const adminRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/admin_users?email=eq.${encodeURIComponent(emailLower)}&select=role`,
+      `${SUPABASE_URL}/rest/v1/admin_users?email=eq.${encodeURIComponent(emailLower)}&select=role,status`,
       { headers: SVC_HEADERS }
     );
     const adminRows = await adminRes.json().catch(() => []);
 
     let role = 'staff';
     if (adminRes.ok && Array.isArray(adminRows) && adminRows.length) {
+      if (adminRows[0].status === 'suspended') return res.status(403).json({ error: 'This admin account is suspended.' });
       // Existing staff/admin record — use stored role
       role = adminRows[0].role || 'staff';
       fetch(`${SUPABASE_URL}/rest/v1/admin_users?email=eq.${encodeURIComponent(emailLower)}`,
@@ -1702,6 +1703,13 @@ app.post('/api/staff/signin', async (req, res) => {
 
     res.json({ session: data, role });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Restore the admin UI only after verifying the current Supabase session.
+app.get('/api/staff/session', async (req, res) => {
+  const role = await verifyAdminBearerToken(req);
+  if (!role) return res.status(403).json({ error: 'Admin authentication required' });
+  res.json({ role });
 });
 
 // ── Profile: upsert (service key stays server-side) ───────────────────────────
@@ -2174,7 +2182,7 @@ app.post('/api/spots/:id/approve', async (req, res) => {
   const RESEND_KEY = process.env.RESEND_API_KEY || '';
   try {
     // 1. Activate the spot
-    const patchR = await fetch(`${SUPABASE_URL}/rest/v1/spots?id=eq.${id}`, {
+    const patchR = await fetch(`${SUPABASE_URL}/rest/v1/spots?id=eq.${encodeURIComponent(id)}&status=eq.pending`, {
       method: 'PATCH',
       headers: { ...SVC_HEADERS, 'Prefer': 'return=representation' },
       body: JSON.stringify({ status: 'active' }),
@@ -2182,6 +2190,7 @@ app.post('/api/spots/:id/approve', async (req, res) => {
     const patchData = await patchR.json();
     if (!patchR.ok) return res.status(patchR.status).json({ error: patchData });
     const spot = Array.isArray(patchData) ? patchData[0] : patchData;
+    if (!spot) return res.status(409).json({ error: 'This listing is no longer pending. Refresh the queue.' });
 
     // 2. Decode description JSON
     let photo_url = '', description = '';
